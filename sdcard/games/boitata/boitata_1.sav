@@ -1,0 +1,10 @@
+name=BRU
+score=50
+dir_x=0
+dir_y=1
+food_x=18
+food_y=2
+speed_type=progressiva
+speed_level=2
+arena_mode=trancado
+snake=10,4;10,3;10,2;10,1;11,1;12,1;13,1;14,1
