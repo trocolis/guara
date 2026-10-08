@@ -1,694 +1,611 @@
--- BOITATA - VIRTUAL CONSOLE EDITION (REFINED)
-local STATE_MENU        = 1
-local STATE_PLAY        = 2
-local STATE_PAUSE       = 3
-local STATE_CONFIG      = 4
-local STATE_GAMEOVER    = 5
-local STATE_RANKING     = 6
-local STATE_NAME_ENTRY  = 7
-local STATE_SLOT_SELECT = 8
+-- ==========================================================================
+-- BOITATÁ — jogo de referência do console virtual do Guará
+--
+-- A serpente de fogo do folclore cresce a cada brasa que come. As telas de
+-- menu, configuração, ranking, pausa e fim de jogo usam os componentes do
+-- sistema (módulo `ui`), então seguem o mesmo visual do resto do aparelho.
+--
+-- Controles: direcional move a serpente; B pausa; A confirma nos menus.
+-- Arquivos na pasta do jogo (via storage): boitata_user.sav (configuração),
+-- boitata_rnk.sav (ranking) e boitata_<slot>.sav (jogos salvos).
+-- ==========================================================================
 
-local current_state = STATE_MENU
+-- Telas do jogo. Os modais do sistema (escolhas, alertas, teclado) abrem por
+-- cima delas e devolvem a resposta em funções de retorno.
+local SCREEN_MENU    = 1
+local SCREEN_PLAY    = 2
+local SCREEN_CONFIG  = 3
+local SCREEN_RANKING = 4
+local SCREEN_OVER    = 5 -- fim de jogo: tabuleiro congelado por trás do modal
 
+local current_screen = SCREEN_MENU
+
+-- Tabuleiro: 25 x 12 células de 5 px, com margem de 2 px
 local GRID_W = 25
 local GRID_H = 12
-local CELL_SZ = 5
+local CELL_SIZE = 5
 local OFFSET_X = 2
 local OFFSET_Y = 2
 
-local cfg = {
-    speed_type = "progressiva",
-    speed_level = 2,
-    arena_mode = "trancado",
-    last_name = "BOI"
+local SLOT_COUNT = 3
+local RANKING_SIZE = 5
+local NAME_LENGTH = 3
+
+-- Chaves de save (storage grava <chave>.sav na pasta do jogo)
+local CONFIG_KEY = "boitata_user"
+local RANKING_KEY = "boitata_rnk"
+local LEGACY_SAVE_KEY = "boitata" -- save único das primeiras versões, lido como slot 1
+
+-- Configuração persistente. Os valores em texto são os mesmos gravados pelas
+-- versões anteriores, para manter a compatibilidade dos saves.
+local config = {
+  speed_type = "progressiva", -- "progressiva" (acelera com os pontos) ou "fixa"
+  speed_level = 2,            -- 1..4, usado na velocidade fixa
+  arena_mode = "trancado",    -- "trancado" (bater na borda perde) ou "infinito"
+  last_name = "BOI",
 }
 
+-- Estado da partida
 local snake = {}
 local dir_x, dir_y = 1, 0
 local next_dir_x, next_dir_y = 1, 0
 local food = {x = 10, y = 6}
 local score = 0
 local move_timer = 0
-local current_speed_delay = 5
-local current_player_name = "BOI"
+local move_delay = 5 -- quadros entre cada passo da serpente
+local player_name = "BOI"
 local current_slot = 1
-local slot_mode = "new"
 
+-- Cursores das listas desenhadas com ui.list (começam em 1)
 local menu_cursor = 1
-local menu_opts = {"Novo Jogo", "Continuar", "Configurar", "Ranking", "Sair"}
-
-local pause_cursor = 1
-local pause_opts = {"Continuar", "Salvar", "Sair"}
-local pause_msg = ""
-local pause_timer = 0
-
-local gameover_cursor = 1
-local slot_cursor = 1
 local config_cursor = 1
-
-local ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789"
-local ALPHABET_LEN = #ALPHABET
-local name_chars = {2, 15, 9} -- B, O, I
-local name_cursor = 1
+local ranking_cursor = 1
 
 local ranking = {
-    {name = "BOI", score = 150},
-    {name = "PET", score = 100},
-    {name = "SNA", score = 70},
-    {name = "LUA", score = 40},
-    {name = "DEV", score = 20}
+  {name = "BOI", score = 150},
+  {name = "PET", score = 100},
+  {name = "SNA", score = 70},
+  {name = "LUA", score = 40},
+  {name = "DEV", score = 20},
 }
 
-local status_msg = ""
-local status_timer = 0
+-- Cache com nome e pontuação de cada slot (evita ler o cartão a cada quadro)
+local slot_cache = {}
 
-local function center_x(text, container_w, container_x)
-    container_w = container_w or 128
-    container_x = container_x or 0
-    local x = container_x + math.floor((container_w - (#text * 6)) / 2)
-    return x < 0 and 0 or x
-end
-
--- Arquivos na pasta do jogo via storage.save/load (<chave>.sav)
-local CFG_KEY = "boitata_user"
-local RNK_KEY = "boitata_rnk"
-
-local function get_save_key(slot)
-    return string.format("boitata_%d", slot or 1)
-end
+-- --------------------------------------------------------------------------
+-- Utilitários
+-- --------------------------------------------------------------------------
 
 -- Itera as linhas de um save, ou retorna nil se ele não existir
 local function save_lines(key)
-    local data = storage.load(key)
-    if not data then return nil end
-    return data:gmatch("[^\r\n]+")
+  local data = storage.load(key)
+  if not data then return nil end
+  return data:gmatch("[^\r\n]+")
 end
 
-local function char_at(idx)
-    return ALPHABET:sub(idx, idx)
+-- Separa "chave=valor" (com espaços opcionais); retorna nil se a linha não for desse formato
+local function parse_pair(line)
+  local key, value = line:match("^%s*([^=]-)%s*=%s*(.-)%s*$")
+  return key, value
 end
 
-local function set_name_from_str(str)
-    str = (str or "BOI"):upper()
-    for i = 1, 3 do
-        local c = str:sub(i, i)
-        name_chars[i] = (c ~= "") and (ALPHABET:find(c, 1, true) or 1) or 27
-    end
+-- Deixa o nome no formato do ranking: 3 caracteres maiúsculos, só letras, números e espaço
+local function normalize_name(text)
+  text = (text or ""):upper():gsub("[^A-Z0-9 ]", "")
+  if #text == 0 then return nil end
+  return (text .. "   "):sub(1, NAME_LENGTH)
 end
 
-local function get_name_from_chars()
-    return char_at(name_chars[1]) .. char_at(name_chars[2]) .. char_at(name_chars[3])
+-- --------------------------------------------------------------------------
+-- Configuração e ranking
+-- --------------------------------------------------------------------------
+
+local function save_config()
+  storage.save(CONFIG_KEY, "[CONFIG]\nspeed_type=" .. config.speed_type ..
+                           "\nspeed_level=" .. tostring(config.speed_level) ..
+                           "\narena_mode=" .. config.arena_mode ..
+                           "\nlast_name=" .. config.last_name .. "\n")
 end
 
-local function save_configs()
-    storage.save(CFG_KEY, "[CONFIG]\nspeed_type=" .. cfg.speed_type ..
-                          "\nspeed_level=" .. tostring(cfg.speed_level) ..
-                          "\narena_mode=" .. cfg.arena_mode ..
-                          "\nlast_name=" .. (cfg.last_name or "BOI") .. "\n")
-end
-
-local function load_configs()
-    local lines = save_lines(CFG_KEY)
-    if not lines then return end
-    for line in lines do
-        local k, v = line:match("^([^=]+)%s*=%s*(.+)$")
-        if k and v then
-            k = k:match("^%s*(.-)%s*$"); v = v:match("^%s*(.-)%s*$")
-            if k == "speed_type" then cfg.speed_type = v
-            elseif k == "speed_level" then cfg.speed_level = tonumber(v) or 2
-            elseif k == "arena_mode" then cfg.arena_mode = v
-            elseif k == "last_name" and #v > 0 then cfg.last_name = v:sub(1, 3):upper() end
-        end
-    end
-    set_name_from_str(cfg.last_name)
+local function load_config()
+  local lines = save_lines(CONFIG_KEY)
+  if not lines then return end
+  for line in lines do
+    local key, value = parse_pair(line)
+    if key == "speed_type" then config.speed_type = value
+    elseif key == "speed_level" then config.speed_level = tonumber(value) or 2
+    elseif key == "arena_mode" then config.arena_mode = value
+    elseif key == "last_name" then config.last_name = normalize_name(value) or config.last_name end
+  end
 end
 
 local function save_ranking()
-    local out = {}
-    for i = 1, math.min(#ranking, 5) do
-        table.insert(out, ranking[i].name .. "=" .. tostring(ranking[i].score))
-    end
-    storage.save(RNK_KEY, table.concat(out, "\n") .. "\n")
+  local lines = {}
+  for i = 1, math.min(#ranking, RANKING_SIZE) do
+    table.insert(lines, ranking[i].name .. "=" .. tostring(ranking[i].score))
+  end
+  storage.save(RANKING_KEY, table.concat(lines, "\n") .. "\n")
 end
 
 local function load_ranking()
-    local lines = save_lines(RNK_KEY)
-    if not lines then return end
-    local loaded = {}
-    for line in lines do
-        local n, s = line:match("^([^=]+)=(%d+)$")
-        if n and s then table.insert(loaded, {name = n:sub(1, 3):upper(), score = tonumber(s)}) end
+  local lines = save_lines(RANKING_KEY)
+  if not lines then return end
+  local loaded = {}
+  for line in lines do
+    local name, points = line:match("^([^=]+)=(%d+)$")
+    if name then
+      table.insert(loaded, {name = normalize_name(name) or "???", score = tonumber(points)})
     end
-    if #loaded > 0 then ranking = loaded end
+  end
+  if #loaded > 0 then ranking = loaded end
 end
 
-local slot_cached_meta = {}
+-- Insere a pontuação atual no ranking (mantém só as 5 melhores)
+local function submit_score()
+  table.insert(ranking, {name = player_name, score = score})
+  table.sort(ranking, function(a, b) return a.score > b.score end)
+  while #ranking > RANKING_SIZE do table.remove(ranking) end
+  save_ranking()
+end
 
-local function read_slot_meta(slot)
-    local lines = save_lines(get_save_key(slot))
-    if not lines and slot == 1 then lines = save_lines("boitata") end
-    if not lines then return {exists = false, name = "---", score = 0} end
-    local meta = {exists = true, name = "BOI", score = 0}
-    for line in lines do
-        local k, v = line:match("^([^=]+)%s*=%s*(.+)$")
-        if k and v then
-            k = k:match("^%s*(.-)%s*$"); v = v:match("^%s*(.-)%s*$")
-            if k == "name" then meta.name = v:sub(1, 3):upper()
-            elseif k == "score" then meta.score = tonumber(v) or 0 end
-        end
-    end
-    return meta
+-- --------------------------------------------------------------------------
+-- Slots de jogo salvo
+-- --------------------------------------------------------------------------
+
+local function slot_key(slot)
+  return "boitata_" .. slot
+end
+
+-- Linhas do save de um slot (o slot 1 também aceita o save único antigo)
+local function slot_lines(slot)
+  return save_lines(slot_key(slot)) or (slot == 1 and save_lines(LEGACY_SAVE_KEY)) or nil
+end
+
+-- Lê só o nome e a pontuação de um slot, para as listas de escolha
+local function read_slot_summary(slot)
+  local lines = slot_lines(slot)
+  if not lines then return {exists = false} end
+  local summary = {exists = true, name = "BOI", score = 0}
+  for line in lines do
+    local key, value = parse_pair(line)
+    if key == "name" then summary.name = normalize_name(value) or "BOI"
+    elseif key == "score" then summary.score = tonumber(value) or 0 end
+  end
+  return summary
 end
 
 local function refresh_slot_cache()
-    for s = 1, 3 do
-        slot_cached_meta[s] = read_slot_meta(s)
-    end
-end
-
-local function get_slot_meta(slot)
-    slot = slot or 1
-    if not slot_cached_meta[slot] then
-        slot_cached_meta[slot] = read_slot_meta(slot)
-    end
-    return slot_cached_meta[slot]
+  for slot = 1, SLOT_COUNT do
+    slot_cache[slot] = read_slot_summary(slot)
+  end
 end
 
 local function any_save_exists()
-    for s = 1, 3 do
-        if get_slot_meta(s).exists then return true end
-    end
-    return false
+  for slot = 1, SLOT_COUNT do
+    if slot_cache[slot].exists then return true end
+  end
+  return false
 end
 
-local function save_game_state(slot)
-    slot = slot or current_slot or 1
-    local b = {}
-    for _, seg in ipairs(snake) do table.insert(b, seg.x .. "," .. seg.y) end
-    local ok = storage.save(get_save_key(slot), "name=" .. (current_player_name or "BOI") ..
-            "\nscore=" .. tostring(score) ..
-            "\ndir_x=" .. tostring(dir_x) ..
-            "\ndir_y=" .. tostring(dir_y) ..
-            "\nfood_x=" .. tostring(food.x) ..
-            "\nfood_y=" .. tostring(food.y) ..
-            "\nspeed_type=" .. cfg.speed_type ..
-            "\nspeed_level=" .. tostring(cfg.speed_level) ..
-            "\narena_mode=" .. cfg.arena_mode ..
-            "\nsnake=" .. table.concat(b, ";") .. "\n")
-    if not ok then return false end
-    slot_cached_meta[slot] = {
-        exists = true,
-        name = (current_player_name or "BOI"):sub(1, 3):upper(),
-        score = score or 0
-    }
-    return true
+-- Texto de um slot para o ui.choice (cabe nas 24 colunas do modal)
+local function slot_label(slot)
+  local summary = slot_cache[slot]
+  if not summary.exists then
+    return string.format("Slot %d: vazio", slot)
+  end
+  return string.format("Slot %d: %s %d pts", slot, summary.name, summary.score)
 end
 
-local function load_game_state(slot)
-    slot = slot or current_slot or 1
-    local lines = save_lines(get_save_key(slot))
-    if not lines and slot == 1 then lines = save_lines("boitata") end
-    if not lines then return false end
-
-    local loaded_snake = {}
-    for line in lines do
-        local k, v = line:match("^([^=]+)%s*=%s*(.+)$")
-        if k and v then
-            k = k:match("^%s*(.-)%s*$"); v = v:match("^%s*(.-)%s*$")
-            if k == "name" then current_player_name = v:sub(1, 3):upper()
-            elseif k == "score" then score = tonumber(v) or 0
-            elseif k == "dir_x" then dir_x = tonumber(v) or 1
-            elseif k == "dir_y" then dir_y = tonumber(v) or 0
-            elseif k == "food_x" then food.x = tonumber(v) or 10
-            elseif k == "food_y" then food.y = tonumber(v) or 6
-            elseif k == "speed_type" then cfg.speed_type = v
-            elseif k == "speed_level" then cfg.speed_level = tonumber(v) or 2
-            elseif k == "arena_mode" then cfg.arena_mode = v
-            elseif k == "snake" then
-                for p in v:gmatch("([^;]+)") do
-                    local sx, sy = p:match("^(%d+),(%d+)$")
-                    if sx and sy then table.insert(loaded_snake, {x = tonumber(sx), y = tonumber(sy)}) end
-                end
-            end
-        end
-    end
-
-    if #loaded_snake >= 3 then
-        snake = loaded_snake
-        if dir_x == 0 and dir_y == 0 then
-            dir_x = (snake[1].x >= snake[2].x) and 1 or -1
-            dir_y = 0
-        end
-        next_dir_x, next_dir_y = dir_x, dir_y
-        move_timer = 0
-        current_slot = slot
-        set_name_from_str(current_player_name)
-        return true
-    end
-    return false
+local function save_game(slot)
+  local body = {}
+  for _, segment in ipairs(snake) do
+    table.insert(body, segment.x .. "," .. segment.y)
+  end
+  local ok = storage.save(slot_key(slot),
+    "name=" .. player_name ..
+    "\nscore=" .. tostring(score) ..
+    "\ndir_x=" .. tostring(dir_x) ..
+    "\ndir_y=" .. tostring(dir_y) ..
+    "\nfood_x=" .. tostring(food.x) ..
+    "\nfood_y=" .. tostring(food.y) ..
+    "\nspeed_type=" .. config.speed_type ..
+    "\nspeed_level=" .. tostring(config.speed_level) ..
+    "\narena_mode=" .. config.arena_mode ..
+    "\nsnake=" .. table.concat(body, ";") .. "\n")
+  if ok then
+    slot_cache[slot] = {exists = true, name = player_name, score = score}
+  end
+  return ok
 end
 
-local function get_current_delay()
-    if cfg.speed_type == "fixa" then
-        local delays = {6, 4, 3, 2}
-        return delays[cfg.speed_level] or 4
-    end
-    local d = 6 - math.floor(score / 50)
-    return d < 2 and 2 or d
+-- Velocidade: na fixa vem do nível; na progressiva acelera a cada 50 pontos
+local function current_delay()
+  if config.speed_type == "fixa" then
+    local delays = {6, 4, 3, 2}
+    return delays[config.speed_level] or 4
+  end
+  return math.max(2, 6 - score // 50)
 end
 
+-- Carrega um slot; retorna false se ele não existir ou estiver corrompido
+local function load_game(slot)
+  local lines = slot_lines(slot)
+  if not lines then return false end
+  local loaded_snake = {}
+  for line in lines do
+    local key, value = parse_pair(line)
+    if key == "name" then player_name = normalize_name(value) or player_name
+    elseif key == "score" then score = tonumber(value) or 0
+    elseif key == "dir_x" then dir_x = tonumber(value) or 1
+    elseif key == "dir_y" then dir_y = tonumber(value) or 0
+    elseif key == "food_x" then food.x = tonumber(value) or 10
+    elseif key == "food_y" then food.y = tonumber(value) or 6
+    elseif key == "speed_type" then config.speed_type = value
+    elseif key == "speed_level" then config.speed_level = tonumber(value) or 2
+    elseif key == "arena_mode" then config.arena_mode = value
+    elseif key == "snake" then
+      for x, y in value:gmatch("(%d+),(%d+)") do
+        table.insert(loaded_snake, {x = tonumber(x), y = tonumber(y)})
+      end
+    end
+  end
+  if #loaded_snake < 3 then return false end
+  snake = loaded_snake
+  if dir_x == 0 and dir_y == 0 then
+    dir_x = snake[1].x >= snake[2].x and 1 or -1
+  end
+  next_dir_x, next_dir_y = dir_x, dir_y
+  move_timer = 0
+  move_delay = current_delay()
+  current_slot = slot
+  return true
+end
+
+-- --------------------------------------------------------------------------
+-- Partida
+-- --------------------------------------------------------------------------
+
+-- Sorteia uma posição livre para a brasa (desiste após 100 tentativas)
 local function spawn_food()
-    for _ = 1, 100 do
-        food.x = math.random(GRID_W) - 1
-        food.y = math.random(GRID_H) - 1
-        local ok = true
-        for _, s in ipairs(snake) do
-            if s.x == food.x and s.y == food.y then ok = false; break end
-        end
-        if ok then break end
+  for _ = 1, 100 do
+    food.x = math.random(GRID_W) - 1
+    food.y = math.random(GRID_H) - 1
+    local free = true
+    for _, segment in ipairs(snake) do
+      if segment.x == food.x and segment.y == food.y then free = false; break end
     end
+    if free then return end
+  end
 end
 
 local function start_new_game()
-    snake = { {x = 10, y = 6}, {x = 9, y = 6}, {x = 8, y = 6} }
-    dir_x, dir_y = 1, 0
-    next_dir_x, next_dir_y = 1, 0
-    score, move_timer = 0, 0
-    current_speed_delay = get_current_delay()
+  snake = {{x = 10, y = 6}, {x = 9, y = 6}, {x = 8, y = 6}}
+  dir_x, dir_y = 1, 0
+  next_dir_x, next_dir_y = 1, 0
+  score, move_timer = 0, 0
+  move_delay = current_delay()
+  spawn_food()
+  current_screen = SCREEN_PLAY
+  audio.beep(523, 30)
+end
+
+local open_game_over -- definida mais abaixo (usada por step_snake)
+
+-- Um passo da serpente: move, verifica colisões e come a brasa
+local function step_snake()
+  dir_x, dir_y = next_dir_x, next_dir_y
+  local new_x = snake[1].x + dir_x
+  local new_y = snake[1].y + dir_y
+
+  if config.arena_mode == "trancado" then
+    if new_x < 0 or new_x >= GRID_W or new_y < 0 or new_y >= GRID_H then
+      open_game_over()
+      return
+    end
+  else
+    new_x = new_x % GRID_W -- arena infinita: atravessa a borda
+    new_y = new_y % GRID_H
+  end
+
+  -- A ponta da cauda sai do lugar neste passo, exceto quando a serpente come
+  local eating = new_x == food.x and new_y == food.y
+  local last_checked = eating and #snake or #snake - 1
+  for i = 2, last_checked do
+    if snake[i].x == new_x and snake[i].y == new_y then
+      open_game_over()
+      return
+    end
+  end
+
+  table.insert(snake, 1, {x = new_x, y = new_y})
+  if eating then
+    score = score + 10
+    audio.beep(880, 35)
+    move_delay = current_delay()
     spawn_food()
-    current_state = STATE_PLAY
-    audio.beep(523, 30)
+  else
+    table.remove(snake)
+  end
 end
 
-local function check_and_submit_ranking()
-    local p = current_player_name or "BOI"
-    table.insert(ranking, {name = (p ~= "") and p or "BOI", score = score})
-    table.sort(ranking, function(a, b) return a.score > b.score end)
-    while #ranking > 5 do table.remove(ranking) end
-    save_ranking()
+-- --------------------------------------------------------------------------
+-- Fluxos com os modais do sistema
+-- --------------------------------------------------------------------------
+
+local function back_to_menu()
+  current_screen = SCREEN_MENU
+  refresh_slot_cache()
 end
 
-local function draw_food(fx, fy)
-    oled.pixel(fx + 1, fy, 1); oled.pixel(fx + 2, fy, 1)
-    oled.pixel(fx, fy + 1, 1); oled.pixel(fx + 1, fy + 1, 1); oled.pixel(fx + 2, fy + 1, 1); oled.pixel(fx + 3, fy + 1, 1)
-    oled.pixel(fx, fy + 2, 1); oled.pixel(fx + 1, fy + 2, 1); oled.pixel(fx + 2, fy + 2, 1); oled.pixel(fx + 3, fy + 2, 1)
-    oled.pixel(fx + 1, fy + 3, 1); oled.pixel(fx + 2, fy + 3, 1)
+-- Escolha de slot para começar um jogo novo (pode sobrescrever um save)
+local function choose_new_game_slot()
+  local options = {}
+  for slot = 1, SLOT_COUNT do options[slot] = slot_label(slot) end
+  ui.choice("SALVAR EM QUAL SLOT?", options, function(slot)
+    if slot then
+      current_slot = slot
+      start_new_game()
+    end
+  end)
 end
+
+-- Novo jogo: pede o nome no teclado do sistema e depois o slot
+local function ask_player_name()
+  ui.keyboard("Seu nome (3 letras)", config.last_name, NAME_LENGTH, function(text)
+    local name = normalize_name(text)
+    if not name then return end -- B no teclado: volta ao menu
+    player_name = name
+    config.last_name = name
+    save_config()
+    choose_new_game_slot()
+  end)
+end
+
+-- Continuar: lista os slots e carrega o escolhido
+local function choose_slot_to_load()
+  local options = {}
+  for slot = 1, SLOT_COUNT do options[slot] = slot_label(slot) end
+  ui.choice("CARREGAR JOGO", options, function(slot)
+    if not slot then return end
+    if slot_cache[slot].exists and load_game(slot) then
+      current_screen = SCREEN_PLAY
+      audio.beep(659, 40)
+    else
+      ui.alert("CARREGAR", "Este slot está vazio.", "save")
+    end
+  end)
+end
+
+-- Pausa (B durante a partida): o jogo fica parado enquanto o modal está aberto
+local function open_pause()
+  ui.choice("PAUSA", {"Continuar", "Salvar", "Sair para o menu"}, function(option)
+    if option == 2 then
+      if save_game(current_slot) then
+        ui.alert("PAUSA", "Salvo no slot " .. current_slot .. "!", "save")
+      else
+        ui.alert("PAUSA", "Erro ao salvar.", "save")
+      end
+    elseif option == 3 then
+      back_to_menu()
+    end
+  end)
+end
+
+-- Fim de jogo: o tabuleiro fica congelado por trás do modal de opções
+open_game_over = function()
+  audio.beep(180, 100)
+  current_screen = SCREEN_OVER
+  local has_save = slot_cache[current_slot] and slot_cache[current_slot].exists
+  local options = has_save and {"Voltar ao save", "Novo jogo", "Menu principal"}
+                            or {"Novo jogo", "Menu principal"}
+  ui.choice(string.format("FIM: %d PONTOS", score), options, function(option)
+    local choice = option and options[option] or "Menu principal"
+    if choice == "Voltar ao save" then
+      if not load_game(current_slot) then
+        ui.alert("FIM DE JOGO", "Erro ao recarregar o save.", "save")
+        submit_score()
+        back_to_menu()
+        return
+      end
+      current_screen = SCREEN_PLAY
+      return
+    end
+    submit_score()
+    if choice == "Novo jogo" then
+      start_new_game()
+    else
+      back_to_menu()
+    end
+  end)
+end
+
+-- --------------------------------------------------------------------------
+-- Menus desenhados com ui.list
+-- --------------------------------------------------------------------------
+
+-- Itens do menu principal, com ícones da VROM e o aviso de "sem save" à direita
+local function menu_items()
+  return {
+    {text = "Novo jogo", icon = "add"},
+    {text = "Continuar", icon = "save", info = any_save_exists() and "" or "--"},
+    {text = "Configurar", icon = "gear"},
+    {text = "Ranking", icon = "level"},
+    {text = "Sair", icon = "kill"},
+  }
+end
+
+-- Itens da configuração, com o valor atual na coluna da direita (até 4 letras)
+local function config_items()
+  local levels = {"LENT", "NORM", "RAPI", "TURB"}
+  return {
+    {text = "Velocidade", icon = "agility", info = config.speed_type == "fixa" and "FIXA" or "PROG"},
+    {text = "Nível", icon = "level", info = config.speed_type == "fixa" and (levels[config.speed_level] or "NORM") or "--"},
+    {text = "Arena", icon = "arena", info = config.arena_mode == "trancado" and "TRAN" or "INF"},
+    {text = "Voltar", icon = "up"},
+  }
+end
+
+-- Itens do ranking: posição e nome, pontuação à direita
+local function ranking_items()
+  local items = {}
+  for i = 1, RANKING_SIZE do
+    local entry = ranking[i]
+    items[i] = entry and {text = i .. ". " .. entry.name, info = tostring(entry.score)}
+                      or {text = i .. ". ---", info = "0"}
+  end
+  return items
+end
+
+-- Move um cursor de lista com Cima/Baixo, voltando ao início/fim
+local function move_cursor(cursor, count)
+  if btn.pressed("up") then
+    audio.beep(440, 15)
+    return (cursor - 2) % count + 1
+  elseif btn.pressed("down") then
+    audio.beep(440, 15)
+    return cursor % count + 1
+  end
+  return cursor
+end
+
+local function update_menu()
+  menu_cursor = move_cursor(menu_cursor, 5)
+  if not btn.pressed("a") then return end
+  audio.beep(523, 20)
+  if menu_cursor == 1 then
+    ask_player_name()
+  elseif menu_cursor == 2 then
+    if any_save_exists() then
+      choose_slot_to_load()
+    else
+      ui.alert("CONTINUAR", "Nenhum jogo salvo ainda.", "save")
+    end
+  elseif menu_cursor == 3 then
+    config_cursor = 1
+    current_screen = SCREEN_CONFIG
+  elseif menu_cursor == 4 then
+    ranking_cursor = 1
+    current_screen = SCREEN_RANKING
+  else
+    exit()
+  end
+end
+
+-- Configuração: ←/→/A mudam o valor da linha selecionada; B ou "Voltar" saem
+local function update_config()
+  config_cursor = move_cursor(config_cursor, 4)
+  local change = btn.pressed("left") and -1 or ((btn.pressed("right") or btn.pressed("a")) and 1 or 0)
+  if btn.pressed("b") or (config_cursor == 4 and btn.pressed("a")) then
+    save_config()
+    current_screen = SCREEN_MENU
+    audio.beep(330, 20)
+    return
+  end
+  if change == 0 then return end
+  if config_cursor == 1 then
+    config.speed_type = config.speed_type == "progressiva" and "fixa" or "progressiva"
+  elseif config_cursor == 2 and config.speed_type == "fixa" then
+    config.speed_level = (config.speed_level - 1 + change) % 4 + 1
+  elseif config_cursor == 3 then
+    config.arena_mode = config.arena_mode == "trancado" and "infinito" or "trancado"
+  else
+    return
+  end
+  save_config()
+  audio.beep(523, 20)
+end
+
+local function update_ranking()
+  ranking_cursor = move_cursor(ranking_cursor, RANKING_SIZE)
+  if btn.pressed("a") or btn.pressed("b") then
+    current_screen = SCREEN_MENU
+    audio.beep(440, 20)
+  end
+end
+
+local function update_play()
+  if btn.pressed("b") then
+    audio.beep(523, 25)
+    open_pause()
+    return
+  end
+  -- A serpente não pode dar meia-volta sobre o próprio corpo
+  if btn.pressed("up") and dir_y == 0 then next_dir_x, next_dir_y = 0, -1
+  elseif btn.pressed("down") and dir_y == 0 then next_dir_x, next_dir_y = 0, 1
+  elseif btn.pressed("left") and dir_x == 0 then next_dir_x, next_dir_y = -1, 0
+  elseif btn.pressed("right") and dir_x == 0 then next_dir_x, next_dir_y = 1, 0
+  end
+  move_timer = move_timer + 1
+  if move_timer >= move_delay then
+    move_timer = 0
+    step_snake()
+  end
+end
+
+-- --------------------------------------------------------------------------
+-- Desenho
+-- --------------------------------------------------------------------------
+
+-- Brasa: um losango de 4x4 px
+local function draw_food(x, y)
+  oled.fill(x + 1, y, 2, 4)
+  oled.fill(x, y + 1, 4, 2)
+end
+
+-- Tabuleiro: borda (só na arena trancada), brasa e serpente com a cabeça cheia
+local function draw_board()
+  if config.arena_mode == "trancado" then
+    oled.rect(0, 0, 128, 63)
+  end
+  draw_food(OFFSET_X + food.x * CELL_SIZE, OFFSET_Y + food.y * CELL_SIZE)
+  for i, segment in ipairs(snake) do
+    local x, y = OFFSET_X + segment.x * CELL_SIZE, OFFSET_Y + segment.y * CELL_SIZE
+    if i == 1 then
+      oled.fill(x, y, 4, 4)
+    else
+      oled.rect(x, y, 4, 4)
+    end
+  end
+end
+
+-- --------------------------------------------------------------------------
+-- Ciclo do console virtual
+-- --------------------------------------------------------------------------
 
 function init()
-    load_configs()
-    load_ranking()
-    refresh_slot_cache()
-    current_state = STATE_MENU
+  load_config()
+  load_ranking()
+  refresh_slot_cache()
+  player_name = config.last_name
+  current_screen = SCREEN_MENU
 end
 
+-- Chamado a 30 FPS; não é chamado enquanto um modal do sistema está aberto
 function update()
-    if status_timer > 0 then status_timer = status_timer - 1 end
-    if pause_timer > 0 then
-        pause_timer = pause_timer - 1
-        if pause_timer == 0 then pause_msg = "" end
-    end
-
-    if current_state == STATE_MENU then
-        if btn.pressed("up") then
-            menu_cursor = (menu_cursor - 2 + #menu_opts) % #menu_opts + 1; audio.beep(440, 15)
-        elseif btn.pressed("down") then
-            menu_cursor = menu_cursor % #menu_opts + 1; audio.beep(440, 15)
-        end
-
-        if btn.pressed("a") then
-            if menu_cursor == 1 then
-                set_name_from_str(cfg.last_name or "BOI")
-                name_cursor = 1
-                current_state = STATE_NAME_ENTRY
-                audio.beep(523, 20)
-            elseif menu_cursor == 2 then
-                if any_save_exists() then
-                    slot_cursor = 1; slot_mode = "load"
-                    current_state = STATE_SLOT_SELECT
-                    audio.beep(523, 20)
-                else
-                    status_msg = "Nenhum save encontrado!"
-                    status_timer = 45; audio.beep(220, 50)
-                end
-            elseif menu_cursor == 3 then
-                config_cursor = 1; current_state = STATE_CONFIG; audio.beep(523, 20)
-            elseif menu_cursor == 4 then
-                current_state = STATE_RANKING; audio.beep(523, 20)
-            elseif menu_cursor == 5 then
-                audio.beep(330, 40); exit()
-            end
-        end
-
-    elseif current_state == STATE_NAME_ENTRY then
-        if btn.pressed("down") then
-            name_chars[name_cursor] = name_chars[name_cursor] - 1
-            if name_chars[name_cursor] < 1 then name_chars[name_cursor] = ALPHABET_LEN end
-            audio.beep(523, 15)
-        elseif btn.pressed("up") then
-            name_chars[name_cursor] = name_chars[name_cursor] + 1
-            if name_chars[name_cursor] > ALPHABET_LEN then name_chars[name_cursor] = 1 end
-            audio.beep(523, 15)
-        end
-
-        if btn.pressed("left") and name_cursor > 1 then
-            name_cursor = name_cursor - 1; audio.beep(440, 15)
-        elseif btn.pressed("right") and name_cursor < 3 then
-            name_cursor = name_cursor + 1; audio.beep(440, 15)
-        end
-
-        if btn.pressed("a") then
-            if name_cursor < 3 then
-                name_cursor = name_cursor + 1; audio.beep(523, 20)
-            else
-                current_player_name = get_name_from_chars()
-                cfg.last_name = current_player_name
-                save_configs(); audio.beep(659, 30)
-                slot_cursor = 1; slot_mode = "new"
-                current_state = STATE_SLOT_SELECT
-            end
-        elseif btn.pressed("b") then
-            if name_cursor > 1 then
-                name_cursor = name_cursor - 1; audio.beep(440, 15)
-            else
-                current_state = STATE_MENU; audio.beep(330, 20)
-            end
-        end
-
-    elseif current_state == STATE_SLOT_SELECT then
-        if btn.pressed("up") then
-            slot_cursor = (slot_cursor - 2 + 3) % 3 + 1; audio.beep(440, 15)
-        elseif btn.pressed("down") then
-            slot_cursor = slot_cursor % 3 + 1; audio.beep(440, 15)
-        end
-
-        if btn.pressed("a") then
-            current_slot = slot_cursor
-            if slot_mode == "new" then
-                audio.beep(659, 40); start_new_game()
-            else
-                local meta = get_slot_meta(slot_cursor)
-                if meta.exists and load_game_state(slot_cursor) then
-                    current_speed_delay = get_current_delay()
-                    current_state = STATE_PLAY; audio.beep(659, 40)
-                else
-                    status_msg = "Slot vazio!"; status_timer = 40; audio.beep(220, 50)
-                end
-            end
-        elseif btn.pressed("b") then
-            current_state = (slot_mode == "new") and STATE_NAME_ENTRY or STATE_MENU
-            if slot_mode == "new" then name_cursor = 3 end
-            audio.beep(330, 20)
-        end
-
-    elseif current_state == STATE_PLAY then
-        if btn.pressed("b") then
-            pause_cursor = 1; pause_msg = ""; pause_timer = 0
-            current_state = STATE_PAUSE; audio.beep(523, 25)
-            return
-        end
-
-        if btn.pressed("up") and dir_y == 0 then next_dir_x = 0; next_dir_y = -1
-        elseif btn.pressed("down") and dir_y == 0 then next_dir_x = 0; next_dir_y = 1
-        elseif btn.pressed("left") and dir_x == 0 then next_dir_x = -1; next_dir_y = 0
-        elseif btn.pressed("right") and dir_x == 0 then next_dir_x = 1; next_dir_y = 0
-        end
-
-        move_timer = move_timer + 1
-        if move_timer >= current_speed_delay then
-            move_timer = 0
-            dir_x, dir_y = next_dir_x, next_dir_y
-
-            local head = snake[1]
-            local new_x = head.x + dir_x
-            local new_y = head.y + dir_y
-
-            if cfg.arena_mode == "trancado" then
-                if new_x < 0 or new_x >= GRID_W or new_y < 0 or new_y >= GRID_H then
-                    audio.beep(180, 100); gameover_cursor = 1; current_state = STATE_GAMEOVER; return
-                end
-            else
-                if new_x < 0 then new_x = GRID_W - 1 elseif new_x >= GRID_W then new_x = 0 end
-                if new_y < 0 then new_y = GRID_H - 1 elseif new_y >= GRID_H then new_y = 0 end
-            end
-
-            local check_end = (new_x == food.x and new_y == food.y) and #snake or (#snake - 1)
-            for i = 2, check_end do
-                if snake[i].x == new_x and snake[i].y == new_y then
-                    audio.beep(180, 100); gameover_cursor = 1; current_state = STATE_GAMEOVER; return
-                end
-            end
-
-            table.insert(snake, 1, {x = new_x, y = new_y})
-            if new_x == food.x and new_y == food.y then
-                score = score + 10; audio.beep(880, 35)
-                current_speed_delay = get_current_delay()
-                spawn_food()
-            else
-                table.remove(snake)
-            end
-        end
-
-    elseif current_state == STATE_PAUSE then
-        if btn.pressed("up") then
-            pause_cursor = (pause_cursor - 2 + #pause_opts) % #pause_opts + 1; audio.beep(440, 15)
-        elseif btn.pressed("down") then
-            pause_cursor = pause_cursor % #pause_opts + 1; audio.beep(440, 15)
-        end
-
-        if btn.pressed("a") then
-            if pause_cursor == 1 then
-                current_state = STATE_PLAY; audio.beep(523, 20)
-            elseif pause_cursor == 2 then
-                if save_game_state(current_slot) then
-                    pause_msg = "Salvo no Slot " .. current_slot .. "!"
-                    pause_timer = 50; audio.beep(659, 40)
-                else
-                    pause_msg = "Erro ao salvar!"
-                    pause_timer = 50; audio.beep(220, 60)
-                end
-            elseif pause_cursor == 3 then
-                current_state = STATE_MENU; audio.beep(330, 30)
-            end
-        elseif btn.pressed("b") then
-            current_state = STATE_PLAY; audio.beep(523, 20)
-        end
-
-    elseif current_state == STATE_CONFIG then
-        if btn.pressed("up") then
-            config_cursor = (config_cursor - 2 + 4) % 4 + 1; audio.beep(440, 15)
-        elseif btn.pressed("down") then
-            config_cursor = config_cursor % 4 + 1; audio.beep(440, 15)
-        end
-
-        if config_cursor == 1 and (btn.pressed("left") or btn.pressed("right") or btn.pressed("a")) then
-            cfg.speed_type = (cfg.speed_type == "progressiva") and "fixa" or "progressiva"
-            save_configs(); audio.beep(523, 20)
-        elseif config_cursor == 2 and cfg.speed_type == "fixa" then
-            if btn.pressed("left") then
-                cfg.speed_level = (cfg.speed_level - 2 + 4) % 4 + 1; save_configs(); audio.beep(523, 20)
-            elseif btn.pressed("right") or btn.pressed("a") then
-                cfg.speed_level = cfg.speed_level % 4 + 1; save_configs(); audio.beep(523, 20)
-            end
-        elseif config_cursor == 3 and (btn.pressed("left") or btn.pressed("right") or btn.pressed("a")) then
-            cfg.arena_mode = (cfg.arena_mode == "trancado") and "infinito" or "trancado"
-            save_configs(); audio.beep(523, 20)
-        elseif config_cursor == 4 and (btn.pressed("a") or btn.pressed("b")) then
-            save_configs(); current_state = STATE_MENU; audio.beep(659, 30)
-        end
-
-        if btn.pressed("b") and config_cursor ~= 4 then
-            save_configs(); current_state = STATE_MENU; audio.beep(330, 20)
-        end
-
-    elseif current_state == STATE_GAMEOVER then
-        local has_save = get_slot_meta(current_slot).exists
-        local max_opts = has_save and 3 or 2
-
-        if btn.pressed("up") then
-            gameover_cursor = (gameover_cursor - 2 + max_opts) % max_opts + 1; audio.beep(440, 15)
-        elseif btn.pressed("down") then
-            gameover_cursor = gameover_cursor % max_opts + 1; audio.beep(440, 15)
-        end
-
-        if btn.pressed("a") then
-            if has_save then
-                if gameover_cursor == 1 then
-                    if load_game_state(current_slot) then
-                        current_speed_delay = get_current_delay()
-                        current_state = STATE_PLAY; audio.beep(659, 40)
-                    else
-                        status_msg = "Erro ao recarregar!"; status_timer = 40; audio.beep(220, 50)
-                    end
-                elseif gameover_cursor == 2 then
-                    check_and_submit_ranking(); audio.beep(523, 30); start_new_game()
-                elseif gameover_cursor == 3 then
-                    check_and_submit_ranking(); audio.beep(440, 20); current_state = STATE_MENU
-                end
-            else
-                if gameover_cursor == 1 then
-                    check_and_submit_ranking(); audio.beep(523, 30); start_new_game()
-                elseif gameover_cursor == 2 then
-                    check_and_submit_ranking(); audio.beep(440, 20); current_state = STATE_MENU
-                end
-            end
-        elseif btn.pressed("b") then
-            check_and_submit_ranking(); current_state = STATE_MENU; audio.beep(330, 20)
-        end
-
-    elseif current_state == STATE_RANKING and (btn.pressed("a") or btn.pressed("b")) then
-        current_state = STATE_MENU; audio.beep(440, 20)
-    end
+  if current_screen == SCREEN_MENU then
+    update_menu()
+  elseif current_screen == SCREEN_PLAY then
+    update_play()
+  elseif current_screen == SCREEN_CONFIG then
+    update_config()
+  elseif current_screen == SCREEN_RANKING then
+    update_ranking()
+  end
+  -- SCREEN_OVER: as opções estão no modal de fim de jogo
 end
 
 function draw()
-    oled.clear()
-
-    if current_state == STATE_MENU then
-        oled.fill(0, 0, 128, 11, 1)
-        oled.text(center_x("BOITATA"), 2, "BOITATA", 0)
-
-        for i, opt in ipairs(menu_opts) do
-            local y = 14 + (i - 1) * 9
-            local label = (opt == "Continuar" and not any_save_exists()) and "Continuar (-)" or opt
-            local tx = center_x(label)
-            if i == menu_cursor then
-                oled.fill(14, y - 1, 100, 9, 1); oled.text(tx, y, label, 0)
-            else
-                oled.text(tx, y, label, 1)
-            end
-        end
-
-        if status_timer > 0 and #status_msg > 0 then
-            oled.fill(8, 53, 112, 10, 1)
-            oled.text(center_x(status_msg), 54, status_msg, 0)
-        end
-
-    elseif current_state == STATE_NAME_ENTRY then
-        oled.fill(0, 0, 128, 11, 1)
-        oled.text(center_x("NOVO JOGO"), 2, "NOVO JOGO", 0)
-        oled.text(center_x("DIGITE SEU NOME:"), 17, "DIGITE SEU NOME:", 1)
-
-        for i = 1, 3 do
-            local ch = char_at(name_chars[i])
-            local sx = 41 + (i - 1) * 16
-            if i == name_cursor then
-                oled.fill(sx, 30, 13, 14, 1)
-                if ch == " " then oled.line(sx + 3, 40, sx + 9, 40, 0) else oled.text(sx + 4, 33, ch, 0) end
-            else
-                oled.rect(sx, 30, 13, 14, 1)
-                if ch == " " then oled.line(sx + 3, 40, sx + 9, 40, 1) else oled.text(sx + 4, 33, ch, 1) end
-            end
-        end
-        local tip = "[D-PAD] Altera  [A] OK"
-        oled.text(center_x(tip), 52, tip, 1)
-
-    elseif current_state == STATE_SLOT_SELECT then
-        oled.fill(0, 0, 128, 11, 1)
-        local hdr = (slot_mode == "new") and "SALVAR EM QUAL SLOT?" or "CARREGAR JOGO SALVO"
-        oled.text(center_x(hdr), 2, hdr, 0)
-
-        for s = 1, 3 do
-            local y = 16 + (s - 1) * 12
-            local m = get_slot_meta(s)
-            local lbl = m.exists and string.format("Slot %d: [%s] %04d pts", s, m.name, m.score)
-                                 or string.format("Slot %d: [ Vazio ]", s)
-            local tx = center_x(lbl)
-            if s == slot_cursor then
-                oled.fill(4, y - 1, 120, 11, 1); oled.text(tx, y + 1, lbl, 0)
-            else
-                oled.rect(4, y - 1, 120, 11, 1); oled.text(tx, y + 1, lbl, 1)
-            end
-        end
-        local tip = (slot_mode == "new") and "[A] Iniciar  [B] Voltar" or "[A] Carregar  [B] Voltar"
-        oled.text(center_x(tip), 53, tip, 1)
-
-    elseif current_state == STATE_PLAY then
-        if cfg.arena_mode == "trancado" then oled.rect(0, 0, 128, 63, 1) end
-        draw_food(OFFSET_X + food.x * CELL_SZ, OFFSET_Y + food.y * CELL_SZ)
-        for _, s in ipairs(snake) do
-            oled.rect(OFFSET_X + s.x * CELL_SZ, OFFSET_Y + s.y * CELL_SZ, 4, 4, 1)
-        end
-
-    elseif current_state == STATE_PAUSE then
-        if cfg.arena_mode == "trancado" then oled.rect(0, 0, 128, 63, 1) end
-        draw_food(OFFSET_X + food.x * CELL_SZ, OFFSET_Y + food.y * CELL_SZ)
-        for _, s in ipairs(snake) do
-            oled.rect(OFFSET_X + s.x * CELL_SZ, OFFSET_Y + s.y * CELL_SZ, 4, 4, 1)
-        end
-
-        oled.fill(14, 5, 100, 54, 0); oled.rect(14, 5, 100, 54, 1)
-        oled.fill(16, 7, 96, 10, 1)
-        oled.text(center_x("PAUSA", 96, 16), 8, "PAUSA", 0)
-
-        local slot_info = string.format("Slot %d: %s | %d pts", current_slot, current_player_name or "BOI", score)
-        oled.text(center_x(slot_info, 100, 14), 19, slot_info, 1)
-
-        if pause_timer > 0 and #pause_msg > 0 then
-            oled.fill(18, 27, 92, 9, 1)
-            oled.text(center_x(pause_msg, 96, 16), 28, pause_msg, 0)
-        end
-
-        for i, opt in ipairs(pause_opts) do
-            local y = 30 + (i - 1) * 9
-            local tx = center_x(opt, 96, 16)
-            if i == pause_cursor then
-                oled.fill(18, y - 1, 92, 9, 1); oled.text(tx, y, opt, 0)
-            else
-                oled.text(tx, y, opt, 1)
-            end
-        end
-
-    elseif current_state == STATE_CONFIG then
-        oled.fill(0, 0, 128, 11, 1)
-        oled.text(center_x("CONFIGURACOES"), 2, "CONFIGURACOES", 0)
-        local spd_names = {"Lenta", "Normal", "Rapida", "Turbo"}
-        local rows = {
-            (cfg.speed_type == "progressiva") and "Velocidade: Progressiva" or "Velocidade: Fixa",
-            (cfg.speed_type == "fixa") and ("Nivel: " .. (spd_names[cfg.speed_level] or "Normal")) or "Nivel: ---",
-            (cfg.arena_mode == "trancado") and "Arena: Trancada" or "Arena: Infinita",
-            "Salvar e Voltar"
-        }
-        for i, text in ipairs(rows) do
-            local y = 16 + (i - 1) * 11
-            local tx = center_x(text)
-            if i == config_cursor then
-                oled.fill(6, y - 1, 116, 10, 1); oled.text(tx, y, text, 0)
-            else
-                oled.text(tx, y, text, 1)
-            end
-        end
-
-    elseif current_state == STATE_GAMEOVER then
-        local has_save = get_slot_meta(current_slot).exists
-        oled.fill(10, 4, 108, 56, 0); oled.rect(10, 4, 108, 56, 1)
-        oled.fill(12, 6, 104, 10, 1)
-        oled.text(center_x("FIM DE JOGO!", 104, 12), 7, "FIM DE JOGO!", 0)
-
-        local s_str = string.format("[%s] Pontos: %d", current_player_name or "BOI", score)
-        oled.text(center_x(s_str, 108, 10), 18, s_str, 1)
-
-        local go_opts = has_save and {"Retornar ao Save", "Novo Jogo", "Menu Principal"}
-                                 or {"Novo Jogo", "Menu Principal"}
-        for i, opt in ipairs(go_opts) do
-            local y = 28 + (i - 1) * 9
-            local tx = center_x(opt, 104, 12)
-            if i == gameover_cursor then
-                oled.fill(14, y - 1, 100, 9, 1); oled.text(tx, y, opt, 0)
-            else
-                oled.text(tx, y, opt, 1)
-            end
-        end
-
-    elseif current_state == STATE_RANKING then
-        oled.fill(0, 0, 128, 11, 1)
-        oled.text(center_x("=== RANKING ==="), 2, "=== RANKING ===", 0)
-        for i = 1, 5 do
-            local y = 16 + (i - 1) * 9
-            local r = ranking[i]
-            local line_str = r and string.format("%d. %-3s ..... %04d", i, r.name, r.score)
-                               or string.format("%d. --- ..... 0000", i)
-            oled.text(center_x(line_str), y, line_str, 1)
-        end
-    end
+  oled.clear()
+  if current_screen == SCREEN_MENU then
+    ui.title("BOITATA")
+    ui.list(menu_items(), menu_cursor)
+  elseif current_screen == SCREEN_CONFIG then
+    ui.title("CONFIGURACOES")
+    ui.list(config_items(), config_cursor)
+  elseif current_screen == SCREEN_RANKING then
+    ui.title("RANKING")
+    ui.list(ranking_items(), ranking_cursor)
+  else
+    draw_board() -- jogando, ou congelado por trás dos modais de pausa/fim
+  end
 end

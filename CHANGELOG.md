@@ -18,6 +18,12 @@ Cada escopo executado gera um commit e uma entrada aqui.
 ## Não publicado
 
 ### Exemplos
+- Boitatá usa os componentes do sistema:
+  - menu, configurações e ranking com `ui.title` e `ui.list`;
+  - nome do jogador pelo `ui.keyboard`;
+  - slots, pausa e fim de jogo com `ui.choice` e `ui.alert`.
+  
+  Os saves continuam no mesmo formato. O código ganhou comentários em português.
 - Boitatá movido de `sdcard/games/` para `examples/sdcard/games/boitata/`: passa a ser o jogo de referência do projeto, evoluído junto com o console.
 
 ## v0.2.1 — 2026-10-08
