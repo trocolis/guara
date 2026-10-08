@@ -33,6 +33,7 @@ static struct {
     uint32_t happy_at, happy_until;
     uint32_t emotion_at, emotion_until;
     uint32_t wink_until;
+    uint32_t bite_happy_until; /* olhar feliz logo após cada mordida */
 } anim;
 
 /* Intervalo aleatório em milissegundos. */
@@ -79,6 +80,7 @@ static const char *current_eye(uint32_t now)
     const guara_t *g = &g_guara;
     if (guara_has_state(g, ST_FAINTED)) return EYE_FAINTED;
     if (guara_has_state(g, ST_SLEEPING)) return EYE_CLOSED;
+    if (now < anim.bite_happy_until) return EYE_HAPPY;
     if (now < anim.wink_until) return EYE_WINK;
     if (guara_has_state(g, ST_POISONED) || guara_has_state(g, ST_BURNED) || guara_has_state(g, ST_FROZEN)) return EYE_SCARED;
     if (guara_has_state(g, ST_HUNGRY) || guara_has_state(g, ST_TIRED) || guara_has_state(g, ST_CONFUSED) ||
@@ -235,7 +237,7 @@ static struct {
     int last_frame;
 } usage;
 
-#define FRAME_BITE_MS 300
+#define FRAME_BITE_MS 450 /* duração de cada quadro da mordida */
 #define BLINK_MS 1600
 
 /* Prepara a animação do item usado. */
@@ -272,7 +274,9 @@ static void item_use_on_draw(gfx_t *g, uint32_t now)
             snprintf(name, sizeof(name), "bite_%d", frame);
             ui_icon_mode(g, name, ITEM_X, ITEM_Y, GFX_MASK, 0);
             if (frame != usage.last_frame) {
+                /* cada mordida: som e olhar feliz por meio quadro, depois volta ao normal */
                 audio_bite();
+                anim.bite_happy_until = now + FRAME_BITE_MS / 2;
             }
         }
         usage.last_frame = frame;

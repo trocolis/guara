@@ -3,6 +3,12 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.4.1 — 2026-10-08
+
+### Animação
+- Mordidas mais lentas: 450 ms por quadro (antes 300 ms).
+- A cada mordida, o Guará fica com o olhar feliz por meio quadro e volta ao normal.
+
 ## v0.4.0 — 2026-10-08
 
 ### Catálogo

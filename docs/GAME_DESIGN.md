@@ -58,6 +58,7 @@ Legenda: **PROVISÓRIO** = valor escolhido na implementação, não vem do READM
   |---|---|
   | Desmaiado | `fainted` |
   | Dormindo | `closed` |
+  | Durante a animação de comer, logo após cada mordida (225 ms) | `happy` |
   | Logo após comer ou usar item | `wink` |
   | Veneno, queimadura ou gelo | `scared` |
   | Fome, cansaço, confusão ou paralisia | `dazed` |
