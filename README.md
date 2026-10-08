@@ -17,6 +17,7 @@ ___
 5. **Alimentação** - O dispositivo será alimentado por uma bateria de LiPo de 3.7V 1200mAh, com modulo de controle de carga e descarga e um modulo step-down para 3.3v (TP4056 + S09 DC-DC). O step-down S09 fornece até 1100 mA, bem acima do consumo medido do sistema (ver *Gerenciamento de Energia e Bateria*).
 6. **Controles** - Serão utilizados 6 botoes ligados as portas com pull-up interno do ESP32, Cima, Baixo, Esquerda, Direita, A (Confirmar) e B (Voltar/Cancelar) (Chaves Tates ).
 7. **Conectividade** - O dispositivo possui conexão Wifi e Bluetooth já presentes no modulo da CPU (Node MCU ESP32). 
+8. **Relógio (RTC)** - Módulo RTC DS3231 (I2C, endereço 0x68) com bateria própria (CR2032), compartilhando o barramento I2C do display. É a fonte de hora do sistema: mantém a hora com precisão em Deep Sleep e mesmo com a bateria LiPo descarregada. O RTC interno do ESP32 não é usado como referência de tempo, pois os pinos do cristal de 32 kHz (GPIO32/33) estão ocupados pelos botões e o oscilador RC interno deriva vários minutos por hora.
 
 ### Esquema
 
@@ -32,16 +33,16 @@ ___
 | 8   | GPIO5 / VSPI_CS                      | CS                            | Micro SD SPI TF    | Chip Select (SS) do barramento SPI para o MicroSD                                  |
 | 9   | GPIO18 / SCK / VSPI_CLK              | SCK / CLK                     | Micro SD SPI TF    | Clock do barramento SPI (VSPI)                                                     |
 | 10  | GPIO19 / MISO / VSPI_MISO            | MISO / DO                     | Micro SD SPI TF    | Master In Slave Out (dados do MicroSD para o ESP32)                                |
-| 11  | GPIO21 / SDA                         | SDA                           | SH1106 1.3" I2C    | Linha de dados seriais do barramento I2C                                           |
+| 11  | GPIO21 / SDA                         | SDA                           | SH1106 1.3" I2C / DS3231 | Linha de dados seriais do barramento I2C (compartilhado entre display e RTC) |
 | 12  | GPIO3 / U0_RXD / CLK2                | RX (USB-Serial CP2102)        | CPU / Gravação USB | UART0 RX: recepção serial, upload de firmware e logs                               |
 | 13  | GPIO1 / U0_TXD / CLK3                | TX (USB-Serial CP2102)        | CPU / Gravação USB | UART0 TX: transmissão serial para log de console                                   |
-| 14  | GPIO22 / SCL                         | SCL                           | SH1106 1.3" I2C    | Linha de clock serial do barramento I2C                                            |
+| 14  | GPIO22 / SCL                         | SCL                           | SH1106 1.3" I2C / DS3231 | Linha de clock serial do barramento I2C (400 kHz, compartilhado entre display e RTC) |
 | 15  | GPIO23 / MOSI / VSPI_MOSI            | MOSI / DI                     | Micro SD SPI TF    | Master Out Slave In (dados do ESP32 para o MicroSD)                                |
 | 16  | EN                                   | NC                            |                    |                                                                                    |
 | 17  | GPIO36 / ADC1_0 / SensVP             | NC                            |                    |                                                                                    |
 | 18  | GPIO39 / ADC1_3 / SensVN             | NC                            |                    |                                                                                    |
 | 19  | GPIO34 / ADC1_6                      | Divisor 100kΩ / 100kΩ         | Monitor de Bateria | Entrada ADC1_CH6 para leitura de tensão da bateria LiPo (funciona com Wi-Fi ativo) |
-| 20  | GPIO35 / ADC1_7                      | NC                            |                    |                                                                                    |
+| 20  | GPIO35 / ADC1_7                      | CHRG (pull-up externo 100kΩ)  | TP4056             | Detecção de carga: nível baixo enquanto a bateria carrega pelo USB (GPIO35 é só entrada e não tem pull-up interno) |
 | 21  | GPIO32 / ADC1_4 / Touch9 / XTAL32    | Botão Cima (Pull-up int.)     | Controles          | Direcional Cima (conecta ao GND; pino RTC para Deep Sleep Wake-up)                 |
 | 22  | GPIO33 / ADC1_5 / Touch8 / XTAL32    | Botão Baixo (Pull-up int.)    | Controles          | Direcional Baixo (conecta ao GND; pino RTC para Deep Sleep Wake-up)                |
 | 23  | GPIO25 / ADC2_8 / DAC1               | Buzzer / Transistor           | Áudio (Buzzer)     | Saída de áudio PWM (LEDC canal 0) para buzzer piezoelétrico                        |
@@ -59,29 +60,37 @@ Como o pino VIN do Node MCU sera ligado no modulo de recarga de bateria e o pino
 
 A montagem dos protótipo sere feito em uma estrutura modelada e impressa em 3D, com os módulos inteigados por cabo paralelos estilo IDE,  posteriormente sera desenvolvida uma PCB que comporte todos os modulos.
 
-O protótipo usado nos testes utiliza um display OLED SH1106 1.3" I2C (GPIO 21 SDA / GPIO 22 SCL). O suporte a displays OLED SPI (compartilhando barramento VSPI) e circuitos dedicados de medição avançada de bateria serão implementados em revisões futuras de hardware e mantidos em branches dedicadas.
+O protótipo usado nos testes utiliza um display OLED SH1106 1.3" I2C (GPIO 21 SDA / GPIO 22 SCL) e o RTC DS3231 no mesmo barramento I2C. O pino CHRG do TP4056 (saída open-drain) é ligado ao GPIO 35 com resistor de pull-up externo de 100 kΩ para o 3.3V. O suporte a displays OLED SPI (compartilhando barramento VSPI) e circuitos dedicados de medição avançada de bateria serão implementados em revisões futuras de hardware e mantidos em branches dedicadas.
 
 ### Gerenciamento de Energia e Bateria
 
 O sistema possui um subsistema dedicado de gerenciamento de energia para maximizar a autonomia da bateria LiPo de 3.7V 1200mAh:
+- **Detecção de Carga:** O pino CHRG do TP4056 no GPIO 35 indica quando a bateria está sendo carregada pelo USB (nível baixo). Com a carga completa, o CHRG volta ao nível alto, então nesse estado o sistema exibe apenas a porcentagem da bateria.
 - **Monitoramento Analógico:** Utiliza um divisor de tensão resistivo (100 kΩ / 100 kΩ) conectado ao pino GPIO 34 (ADC1 canal 6). Como o canal pertence ao ADC1, as medições de tensão funcionam perfeitamente mesmo com o rádio Wi-Fi ligado e transmitindo.
 - **Curva de Descarga LiPo:** Mapeamento não-linear calibrado entre 3.27V (0% de carga) e 4.20V (100% de carga completa).
 - **Estados de Operação e Economia:**
 	1. **Modo Ativo (Normal):** Consumo entre 80 mA e 120 mA, tela OLED ativa a 20 FPS (30 FPS em jogos).
 	2. **Light Sleep:** Modulação de clock e suspensão de periféricos para momentos de breve espera.
-	3. **Deep Sleep (Hibernação Total):** Desligamento da CPU principal e dos rádios, preservando unicamente o coprocessador RTC e a memória RTC Fast RAM (8 KB) com o estado completo do Guará e da mochila, resultando em consumo residual de apenas ~10 µA.
+	3. **Deep Sleep (Hibernação Total):** Desligamento da CPU principal e dos rádios, preservando unicamente o coprocessador RTC e a memória RTC Fast RAM (8 KB) com o estado completo do Guará e da mochila, com o display e o cartão SD em modo de espera.
+	   > ⏳ Pendente (decisão D7 em `docs/PLANO.md`): o consumo real em Deep Sleep ainda precisa ser medido. Com a montagem atual (divisor de bateria ligado direto, conversor USB-serial do NodeMCU, OLED e SD sem corte de energia) ele fica bem acima dos ~10 µA do ESP32 isolado.
 	4. **Despertar (*Wake-up*):** O sistema acorda automaticamente por interrupção externa nos pinos de hardware RTC (Botão Cima GPIO 32 e Botão Baixo GPIO 33) ou por alarme temporizado configurado no RTC (`esp_sleep_enable_timer_wakeup`) para acionamento de despertadores e temporizadores.
 - **Proteção Crítica contra Queda de Energia (*Emergency Flush*):** Quando a tensão da bateria atinge o limite crítico (< 10% / 3.45V), o sistema dispara um salvamento de emergência forçado para os setores rotativos da Flash (*Pilar 3*) e entra em suspensão profunda indefinida com display e periféricos desenergizados, prevenindo corrupção de dados.
-- **Recuperação Temporal Pós-Sono / Reinício (Cálculo de Desgaste Acumulado):** Ao inicializar ou acordar de um longo período de repouso, o sistema recupera o último Save State válido (da RTC Fast RAM ou do setor rotativo da Flash) e calcula o $\Delta t$ (tempo decorrido em minutos entre o timestamp atual do RTC/NTP e o timestamp do último save). O motor do ciclo de vida projeta o desgaste acumulado de Necessidades (Alimentação, Energia, Humor e Saúde) de forma gradual e segura, aplicando travas de proteção que evitam que o Guará desmaie imediatamente sem chance de reação do jogador.
+- **Recuperação Temporal Pós-Sono / Reinício (Cálculo de Desgaste Acumulado):** Ao inicializar ou acordar de um longo período de repouso, o sistema recupera o último Save State válido (da RTC Fast RAM ou do setor rotativo da Flash) e calcula o $\Delta t$ (tempo decorrido em minutos entre o timestamp atual do DS3231 e o timestamp do último save). O motor do ciclo de vida projeta o desgaste acumulado de Necessidades (Alimentação, Energia, Humor e Saúde) de forma gradual e segura, aplicando travas de proteção que evitam que o Guará desmaie imediatamente sem chance de reação do jogador.
 
 ### Memória e Armazenamento
 
-A arquitetura do sistema divide o armazenamento físico do ESP32 e periféricos em 4 domínios:
+A Flash interna de 4 MB é dividida pela tabela de partições `partitions.csv`:
 
-1. **Partição de Firmware OTA 0 (`ota_0` - 1.472 KB):** Imagem ativa de execução do firmware.
-2. **Partição de Firmware OTA 1 (`ota_1` - 1.472 KB):** Partição secundária para atualizações seguras de firmware via Wi-Fi sem fio (Dual OTA com rollback).
-3. **Partição Raw Storage (`storage` - 1.024 KB, subtipo `0x99`):** Setores físicos alocados em blocos fixos de 4 KB para configurações, catálogos de itens, Equipamentos e habilidades, VROM contendo todos os gráficos usados pelo sistema, e save state rotativo.
-4. **Cartão MicroSD (FAT32 SPI):** Armazenamento em massa para mídias externas, jogos do console virtual, músicas MIDI, livros e backups.
+| Partição | Tipo | Subtipo | Offset | Tamanho | Conteúdo |
+|---|---|---|---|---|---|
+| `nvs` | data | nvs | 0x9000 | 20 KB | Configurações do sistema (Wi-Fi e redes salvas, mudo, tempo de economia, hora de dormir, fuso horário) |
+| `otadata` | data | ota | 0xE000 | 8 KB | Controle de qual partição OTA está ativa |
+| `ota_0` | app | ota_0 | 0x10000 | 1.472 KB | Imagem ativa do firmware |
+| `ota_1` | app | ota_1 | 0x180000 | 1.472 KB | Imagem secundária para atualização segura (Dual OTA com rollback) |
+| `storage` | data | 0x99 | 0x2F0000 | 1.024 KB | VROM e catálogo binário, **somente leitura** em execução |
+| `save` | data | 0x9A | 0x3F0000 | 8 KB | Save State rotativo (Pilar 3) |
+
+Além da Flash interna, o **Cartão MicroSD (FAT32 SPI)** é o armazenamento em massa para mídias externas, jogos do console virtual, músicas MIDI, livros, despertadores e backups.
 
 #### Proteção da Memória Flash: Os 3 Pilares
 
@@ -94,7 +103,7 @@ graph TD
     end
 
     subgraph "Camada 2: Hibernação Sem Desgaste"
-        RTC["ESP32 RTC Fast RAM (8 KB)<br/>Mantém Guará + Inventário em Deep Sleep<br/>Consumo: 10 µA | Desgaste: ZERO"]
+        RTC["ESP32 RTC Fast RAM (8 KB)<br/>Mantém Guará + Inventário em Deep Sleep<br/>Desgaste: ZERO"]
     end
 
     subgraph "Camada 3: Cofre Não-Volátil (Flash)"
@@ -111,50 +120,56 @@ graph TD
 
 1. **Pilar 1: Memória RTC Fast RAM (`RTC_DATA_ATTR`)**
    - O **Save State compacto de 512 bytes** fica residente na RTC Fast RAM do ESP32.
-   - Durante a rotina normal do jogador (alimentar, brincar, hibernar/Deep Sleep), **nenhum ciclo de Flash é gasto**. A bateria mantém os dados preservados com consumo de apenas 10 µA.
+   - Durante a rotina normal do jogador (alimentar, brincar, hibernar/Deep Sleep), **nenhum ciclo de Flash é gasto**. A bateria mantém os dados preservados enquanto o ESP32 dorme.
 2. **Pilar 2: Gravação Inteligente por Eventos Críticos (*Event-Driven Flush* com *Dirty Flag*)**
    - A gravação física na Flash não ocorre por ciclos de tempo rápidos ou decaimento natural de fome.
    - É disparada apenas em eventos de alto valor: *Level Up*, evolução, saída de telas com alterações pendentes (*Dirty Flag* ao sair da mochila) e emergência de bateria fraca (< 10% / 3,45V).
 3. **Pilar 3: Setores Rotativos com Nivelamento de Desgaste (*Wear-Leveling Ping-Pong*)**
-   - São reservados **2 setores físicos de 4.096 bytes** (8 KB no total: Setor 2 e Setor 3 da partição `storage`).
+   - São reservados **2 setores físicos de 4.096 bytes** (8 KB no total), que formam a partição dedicada `save`.
    - Cada setor abriga 8 slots de 512 bytes, totalizando **16 posições rotativas sequenciais**.
    - Cada salvamento avança para o próximo slot livre; um setor só é apagado após o preenchimento de seus 8 slots.
    - Isso multiplica a vida útil da Flash por 16: **1.600.000 gravações suportadas (> 87 anos de uso diário)**.
 
-#### Arquitetura Bipartida: Separação entre Firmware e Storage
+#### Arquitetura em Camadas: Firmware, Storage e Dados do Jogador
 
-O sistema é estritamente dividido em duas camadas desacopladas que podem ser atualizadas de forma independente:
+O sistema é estritamente dividido em três camadas desacopladas. Firmware e storage podem ser atualizados de forma independente, e nenhuma das duas atualizações apaga os dados do jogador:
 
 1. **Camada 1 — Lógica do Firmware (Partições `ota_0` e `ota_1` - 1.472 KB cada):**
-   - Contém o código executável C/C++ compilado pelo PlatformIO: kernel do sistema, FreeRTOS tasks, drivers de periféricos (I2C, SPI, ADC, PWM LEDC), máquina de estados da UI, motor de RPG/combate e a máquina virtual Lua 5.x.
-   - Atualizada via compilação/upload de firmware ou Dual OTA via Wi-Fi sem afetar os dados da partição `storage`.
+   - Contém o código executável C/C++ compilado pelo PlatformIO: kernel do sistema, FreeRTOS tasks, drivers de periféricos (I2C, SPI, ADC, PWM LEDC), máquina de estados da UI, motor de RPG/combate e a máquina virtual Lua 5.4.
+   - Atualizada via compilação/upload de firmware ou Dual OTA via Wi-Fi sem afetar as partições `storage`, `save` e `nvs`.
 
 2. **Camada 2 — Dados, VROM e Catálogos (Partição `storage` - 1.024 KB, subtipo `0x99`):**
    - Contém os ativos empacotados em binário dedicados:
-     - **VROM (Virtual ROM de Gráficos):** Setor da partição que armazena todos os bitmaps monocromáticos de 1-bit do sistema (ícones 16x16, poses modulares de 32x32, manequim de 32x56 e telas).
+     - **VROM (Virtual ROM de Gráficos):** Setor da partição que armazena todos os bitmaps monocromáticos de 1-bit do sistema (ícones 16x16, partes modulares dos sprites do Guará, manequim de 32x56 e telas).
      - **Catálogo Binário:** Banco de dados imutável com as definições, tipos, efeitos e afinidades dos 64 itens, 64 equipamentos e 64 habilidades.
-     - **Setores Rotativos de Save State (8 KB):** Os dois setores de 4 KB para salvamento com wear-leveling (Pilar 3).
-     - **Configurações do Sistema.**
-   - **Atualização Independente:** A partição `storage` pode ser regravada ou atualizada via imagem binária (`storage.bin`) separadamente, permitindo expandir o catálogo com novos itens, trocar ou corrigir sprites e ícones da VROM sem precisar recompilar ou alterar o executável do firmware (e vice-versa).
+   - **Atualização Independente:** A partição `storage` pode ser regravada ou atualizada via imagem binária (`storage.bin`) separadamente, permitindo expandir o catálogo com novos itens, trocar ou corrigir sprites e ícones da VROM sem precisar recompilar ou alterar o executável do firmware (e vice-versa). Como os saves ficam em outra partição, regravar o `storage` não apaga o Guará.
+   - Em execução, a partição é mapeada na memória (`esp_partition_mmap`) e lida diretamente, sem cópia para a RAM.
+
+3. **Camada 3 — Dados do Jogador (Partições `save` e `nvs`):**
+   - **`save` (8 KB, subtipo `0x9A`):** Os dois setores de 4 KB do Save State com wear-leveling (Pilar 3).
+   - **`nvs`:** Configurações do sistema, gravadas pela API NVS do ESP-IDF, que já faz o próprio nivelamento de desgaste.
+   - Só são apagadas pela opção **Reiniciar** (*Factory Rebirth*) ou por uma gravação completa da Flash.
 
 #### Domínios do Save State (512 Bytes)
 
-O Save State é modelado através de **Domínios Modulares** serializáveis que totalizam ~240 bytes úteis, cabendo folgadamente no bloco fixo de 512 bytes:
+O Save State é um bloco fixo de 512 bytes (little-endian) com domínios em offsets fixos, serializado por `lib/nucleo/src/save.c`. São 190 bytes úteis; o restante fica reservado para expansão:
 
-| Domínio | Tamanho | Descrição dos Dados |
-|---|---|---|
-| **HeaderDomain** | 12 bytes | Magic (`GUARA`), versão do formato, timestamp UNIX e contador sequencial de escrita |
-| **IdentityDomain** | 18 bytes | Nome (máx. 10 chars), UID (4 bytes), variante da cabeça (1..9), cor (0/1), naturezas |
-| **VitalsDomain** | 12 bytes | Status vitais atuais e máximos: HP, MP, Energia, Humor, Alimentação, Saúde |
-| **StatsDomain** | 18 bytes | Nível (1..99), XP (uint32), Idade em minutos totais, ATK, DEF, FOR, AGI, INT, SOR |
-| **GaugesDomain** | 8 bytes | Medidores ocultos com balanço bipolar (Vitórias×Derrotas, Cuidado×Negligência, etc.) |
-| **AffinitiesDomain** | 10 bytes | Porcentagens calibradas de afinidade elemental (Fogo, Terra, Água, Ar, Neutro) |
-| **InventoryDomain** | 128 bytes | Mochila compacta de consumíveis (1 byte por item, armazenando quantidade 0..255) |
-| **EquipmentDomain** | 15 bytes | Máscara de bits de 64 itens possuídos (8 bytes) + 7 slots equipados (7 bytes) |
-| **SkillsDomain** | 4 bytes | Identificadores das 4 habilidades ativas equipadas |
-| **StatusFlagsDomain** | 4 bytes | Máscara de bits de estados físicos e emocionais ativos (envenenado, dormindo, etc.) |
-| **ChecksumDomain** | 4 bytes | CRC32 de integridade para validação e descarte de saves corrompidos |
-| *Reservado/Padding* | ~277 bytes | Espaço de expansão futura preservando o bloco de 512 bytes |
+| Offset | Domínio | Tamanho | Descrição dos Dados |
+|---|---|---|---|
+| 0 | **HeaderDomain** | 16 bytes | Magic (`GUARA`, 5 bytes), versão do formato (u8), flags (u16), timestamp UNIX (u32) e contador sequencial de escrita (u32) |
+| 16 | **IdentityDomain** | 20 bytes | Nome (10 chars + terminador), UID (u32), variante da cabeça (1..9), cor (0/1), natureza de nascimento, natureza atual, estágio de evolução |
+| 36 | **VitalsDomain** | 16 bytes | HP, HP máx., MP, MP máx. (u16) e Energia, Humor, Alimentação, Saúde em centésimos de % (u16, 10000 = 100%) |
+| 52 | **StatsDomain** | 21 bytes | Nível (1..99), XP (u32), idade em minutos (u32), ATK, DEF, FOR, AGI, INT, SOR (u16) |
+| 73 | **GaugesDomain** | 8 bytes | Medidores ocultos com balanço bipolar (4 × i16: Vitórias×Derrotas, Cuidado×Negligência, Raiva×Tristeza, Dia×Noite) |
+| 81 | **AffinitiesDomain** | 10 bytes | Afinidade elemental em centésimos de % (Fogo, Terra, Água, Ar, Neutro) |
+| 91 | **InventoryDomain** | 64 bytes | Quantidade (0..255) de cada um dos 64 itens do catálogo, indexada pelo ID |
+| 155 | **EquipmentDomain** | 15 bytes | Máscara de bits dos 64 equipamentos possuídos (8 bytes) + 7 slots equipados (0xFF = vazio) |
+| 170 | **SkillsDomain** | 12 bytes | Máscara de bits das 64 habilidades possuídas (8 bytes) + 4 habilidades ativas |
+| 182 | **StatusFlagsDomain** | 8 bytes | Máscara de estados físicos/emocionais (u32), minutos desmaiado (u16), minutos sem interação (u16) |
+| 190 | *Reservado* | 318 bytes | Expansão futura (zeros) |
+| 508 | **ChecksumDomain** | 4 bytes | CRC32 dos 508 bytes anteriores; saves corrompidos são descartados |
+
+Os números de jogo que o README não define (taxas de desgaste, curva de XP, níveis dos estágios, fórmulas complementares de combate) estão em [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
 
 ___
 
@@ -167,21 +182,44 @@ O desenvolvimento, gerenciamento de dependências e compilação do firmware do 
 - **Gerenciador de Build:** PlatformIO (`platformio.ini` na raiz do projeto).
 - **Plataforma:** `espressif32`.
 - **Placa Alvo:** `nodemcu-32s` (ESP32 WROOM-32, 4MB Flash interna).
-- **Framework:** ESP-IDF (ou Arduino como componente do ESP-IDF com FreeRTOS nativo).
-- **Mapeamento de Partições:** Tabela customizada `partitions.csv` (alocando `nvs`, `otadata`, `ota_0` de 1472 KB, `ota_1` de 1472 KB e `storage` de 1024 KB subtipo `0x99`).
+- **Framework:** ESP-IDF 6.1 puro (`framework = espidf`, plataforma `espressif32@7.1.3` fixada no `platformio.ini`), com FreeRTOS nativo e drivers próprios para os periféricos. O Arduino não é usado.
+- **Máquina Virtual:** Lua 5.4 embutida como componente.
+- **Mapeamento de Partições:** Tabela customizada `partitions.csv` (`nvs`, `otadata`, `ota_0` e `ota_1` de 1472 KB, `storage` de 1024 KB subtipo `0x99` e `save` de 8 KB subtipo `0x9A`; ver *Memória e Armazenamento*).
+- **Ambientes:** `esp32` para o firmware do aparelho e `native` para os testes unitários da lógica de jogo e de serialização, executados no computador.
+- **Gravação do Storage:** A imagem `storage.bin` gerada por `tools/storage-packer` é gravada apenas no offset da partição `storage` (0x2F0000), sem tocar no firmware nem nos saves.
 - **Comunicação Serial:** Velocidade de monitor serial em 115200 baud e upload via UART0 (CP2102).
+
+### Comandos de Desenvolvimento
+
+O `pio` fica em `~/.platformio/penv/bin/pio` quando instalado pela extensão PlatformIO IDE.
+
+```bash
+pio run -e esp32                          # compila o firmware
+pio run -e esp32 -t upload                # grava bootloader, tabela de partições e firmware
+pio run -e esp32 -t upload_storage        # gera e grava só a partição storage (VROM + catálogo)
+pio run -e esp32 -t monitor               # monitor serial (115200)
+pio test -e native                        # testes unitários no computador
+python3 tools/console.py roteiro "espera 4" "teclas jj" "tela tela.png"   # console de depuração
+```
+
+- **Catálogo:** itens, equipamentos e habilidades ficam em `catalog/*.csv` e entram no `storage.bin` pelo `tools/storage-packer`.
+- **Fonte:** a fonte 5x8 (com acentos) é desenhada em `tools/font-builder/fonte_5x8.txt` e gerada com `build_font.py`.
+- **Console de depuração:** pela serial aceita teclas (`w` `s` `a` `d` = direcional, `j` = A, `k` = B), `P` para capturar a tela e `S` para o estado do Guará.
 
 ### Versionamento e Política de Releases
 
-O projeto adota o padrão de Versionamento Semântico (**`MAJOR.MINOR.PATCH`** / `#.#.#`), documentado em [[CHANGELOG]]:
+O projeto adota o padrão de Versionamento Semântico (**`MAJOR.MINOR.PATCH`** / `#.#.#`), documentado em [CHANGELOG](CHANGELOG.md):
 - **PATCH (`#.#.+1`):** Correções de bugs, ajustes de estabilidade e hotfixes pontuais no firmware ou nos dados do storage.
 - **MINOR (`#.+1.0`):** Inclusão ou modificação substancial de novas funcionalidades, novas mecânicas de gameplay ou novos itens no catálogo/VROM.
 - **MAJOR (`+1.0.0`):** Lançamentos e marcos oficiais (releases consolidadas da plataforma).
+- **Versões de desenvolvimento (`0.x.x`):** o Guará tem todo o catálogo liberado: todos os itens com 255 unidades no inventário e todos os equipamentos e habilidades possuídos. A liberação é feita no nascimento e a cada boot, para facilitar os testes. A regra deixa de valer a partir da `1.0.0`.
 - **Critério de Incremento de Versão:** A numeração de versão é atualizada **exclusivamente** mediante alterações funcionais no **Firmware** (código compilado C/C++) e/ou no **Storage** (VROM, catálogo binário, formato de save state). Alterações puramente conceituais ou em arquivos de documentação Markdown geram apenas commit de histórico sem incrementar a versão do sistema.
 
 ### UI
 
 #### Padões do sistema:
+
+ - **Referência de lados** - Em todo este documento, "direita" e "esquerda" são do ponto de vista do aparelho: a direita do aparelho é a esquerda do usuário olhando para a tela. Coordenadas de pixel (X, Y) são de tela, com X=0 na borda esquerda do usuário e Y=0 no topo. **Exceção:** nos botões direcionais, Direita e Esquerda indicam a direção do movimento na tela, do ponto de vista do usuário (o botão Direita move o cursor para a direita de quem olha).
 
  - **Barra de título** - As barras de títulos devem ser brancas com letras pretas, texto centralizado no máximo 20 caractere, quando maior, deve ser usado o efeito marquee, nem toda tela terá barra de título.
 - **Abas** - As telas com abas devem ser preta com contorno branco e texto branco e um espaço, linha divisória  e espaço, os cantos superiores do contorno de cada divisão deve ser arredondado. Quando não seleciona o texto deve ser truncado com 4 caracteres, quando selecionado preenchimento branco e texto preto, mostrado com no maximo 10 caracteres, se maior que isso deve ser usado o efeito marquee, empurrando as outra abas para os lados, se o tamanho das abas forem maior que a tela a extremidade que sai da tela  deve apresentar uma pequena ceta toda preenchida ocultando o conteúdo atras: Exemplo: `| ABA1 | ABA2 |___________`  e  `< A1 | ABA2 | ABA SELECIONA | ABA >`
@@ -206,11 +244,11 @@ A tela principal, é a onde é exibido o guará e suas animações, e a barra su
 
 ##### Barra superior
 
-A barra superior tem no canto superior direito, o relogio no formato `HH:MM`, se a hora não estiver configurada deme exibir `--:--`,  e no canto superior esquerdo tem os indicadore de: Mudo ![Mudo](./bitmaps/ui/mute.bmp) Temporizador ![Temporizador](./bitmaps/ui/timer.bmp), Despertador ![Despertador](./bitmaps/ui/alarm.bmp), Bluetooth ![Bluetooth](./bitmaps/ui/bluetooth.bmp), Wifi ![Wifi_1](./bitmaps/ui/wifi_1.bmp) ![Wifi_2](./bitmaps/ui/wifi_2.bmp) ![Wifi_3](./bitmaps/ui/wifi_3.bmp), Bateria![Bateria_0](./bitmaps/ui/battery_0.bmp) ![Bateria_1](./bitmaps/ui/battery_1.bmp) ![Bateria_2](./bitmaps/ui/battery_2.bmp) ![Bateria_3](./bitmaps/ui/battery_3.bmp). 
+A barra superior tem no canto superior direito, o relogio no formato `HH:MM`, se a hora não estiver configurada deme exibir `--:--`,  e no canto superior esquerdo tem os indicadore de: Mudo ![Mudo](./bitmaps/ui/status_mute.bmp) Temporizador ![Temporizador](./bitmaps/ui/status_timer.bmp), Despertador ![Despertador](./bitmaps/ui/status_alarm.bmp), Bluetooth ![Bluetooth](./bitmaps/ui/status_bluetooth.bmp), Wifi ![Wifi_1](./bitmaps/ui/wifi_1.bmp) ![Wifi_2](./bitmaps/ui/wifi_2.bmp) ![Wifi_3](./bitmaps/ui/wifi_3.bmp), Bateria![Bateria_0](./bitmaps/ui/battery_0.bmp) ![Bateria_1](./bitmaps/ui/battery_1.bmp) ![Bateria_2](./bitmaps/ui/battery_2.bmp) ![Bateria_3](./bitmaps/ui/battery_3.bmp). 
 
 ##### Area do Guará
 
-Na área do guará é onde é exibido o sprite do guará, no centro horizontal da tela e a 2 pixel limita inferior do seu limite inferior.
+Na área do guará é onde é exibido o sprite do guará, escalonado em 2x, no centro horizontal da tela e a 2 pixel limita inferior do seu limite inferior.
 
 O sprite do guará e composto de acordo vo ceu DNA, Estado ou Emoção.
 
@@ -330,7 +368,7 @@ O lançador de Jogos (*Games Launcher*) é o ambiente de execução do console v
 		- Afinidade elemental periódica.
 		- Drops periódicos de itens do catálogo diretamente para o inventário.
 
-O Guará conta com um subsistema de console virtual com máquina virtual Lua 5.x para execução de jogos leves a 30 FPS diretamente do cartão Micro SD:
+O Guará conta com um subsistema de console virtual com máquina virtual Lua 5.4 para execução de jogos leves a 30 FPS diretamente do cartão Micro SD:
 
 ###### Estrutura de um Jogo
 
@@ -386,7 +424,20 @@ A máquina virtual Lua roda a 30 FPS gerenciada pelo FreeRTOS e expõe as seguin
 	- `guara.add_exp(pontos)`: Concede experiência ao Guará com cálculo de *Level Up*.
 	- `guara.add_affinity(elemento, pontos)`: Incrementa a afinidade com uma natureza elemental, seguindo as regras de *Afinidades* (`luz`/`sombra` movem o medidor Dia × Noite; `mente`, os pontos mentais).
 	- `guara.report_result(vitoria)`: Registra o resultado de um minijogo ou batalha (`true` = vitória) no medidor Vitórias × Derrotas.
-- **Módulo `storage`:** Funções de gravação e leitura de arquivos de save isolados dentro da pasta do jogo (`GAME_DIR`), impedindo que jogos sobrescrevam dados uns dos outros.
+- **Módulo `storage`:** Funções de gravação e leitura de arquivos de save isolados dentro da pasta do jogo (`GAME_DIR`), impedindo que jogos sobrescrevam dados uns dos outros: `storage.save(chave, texto)` e `storage.load(chave)` (chave com letras, números e `_`).
+
+Referência completa da API implementada (cores: `1` = branco, `0` = preto, `2` = inverter; coordenadas podem ser fracionárias):
+
+| Módulo | Funções |
+|---|---|
+| `oled` | `clear()`, `pixel(x,y[,c])`, `line(x0,y0,x1,y1[,c])`, `rect(x,y,l,a[,c])`, `fill(x,y,l,a[,c])`, `circle(x,y,r[,c])`, `fillcircle(x,y,r[,c])`, `text(x,y,s[,c])` → largura, `textwidth(s)`, `icon(nome,x,y[,espelhar])` (bitmap da VROM), `load(arquivo.bmp)` → id, `sprite(id,sx,sy,l,a,x,y[,espelhar])` (recorte de spritesheet) |
+| `btn` | `up()`, `down()`, `left()`, `right()`, `a()`, `b()` (segurando), `pressed(nome)` (só no quadro em que desceu) |
+| `audio` | `beep(freq,ms)`, `note(nota_midi,ms)`, `play_midi(arquivo)`, `stop()` |
+| `guara` / `pet` | `get_status()`, `give_item(id\|slug,qtd)`, `add_stat(nome,valor)`, `add_exp(pontos)`, `add_affinity(elemento,pontos)`, `report_result(vitoria)` |
+| `storage` | `save(chave,texto)`, `load(chave)` |
+| globais | `sair()`, `millis()`, `WIDTH`, `HEIGHT` |
+
+O jogo termina ao chamar `sair()` ou segurando **B** por 2 segundos. Há um exemplo completo em `exemplos/sdcard/games/pega_maca/` (copie a pasta para `/games` no cartão).
 
 
 ##### Músicas ![Musicas](./bitmaps/icons/music.bmp)
@@ -630,7 +681,7 @@ O corpo sóa varia entre preto e branco, ele possui 3 frame de animação rodand
 - ![Preto 1](./bitmaps/sprites/sprite_yong_c_black_1.bmp), ![Preto 2](./bitmaps/sprites/sprite_yong_c_black_2.bmp)  e ![Branco1](./bitmaps/sprites/sprite_yong_c_white_1.bmp),  ![Branco1](./bitmaps/sprites/sprite_yong_c_white_2.bmp).
 - ![Preto 1](./bitmaps/sprites/sprite_adult_a_black_1.bmp), ![Preto 2](./bitmaps/sprites/sprite_adult_a_black_2.bmp)  e ![Branco1](./bitmaps/sprites/sprite_adult_a_white_1.bmp),  ![Branco1](./bitmaps/sprites/sprite_adult_a_white_2.bmp).
 
-A ultima parte que compõe o sprite, são os olhos, eles se sobrepõe ao sprite do corpo centralizado com margem superir de 1px, nos frames 1 e 2, e de 2px no frame 2, e os olhos podem variar de acorco com o estado emocional do gurá, são eles:
+A ultima parte que compõe o sprite, são os olhos, eles se sobrepõe ao sprite do corpo centralizado com margem superior de 1px em relação ao topo do frame 1, nos frames 1 e 2 (como o corpo do frame 2 é 1px mais alto, a margem fica de 2px), e no frame 3 os olhos sobem 1px, e os olhos podem variar de acorco com o estado emocional do gurá, são eles:
 - Normal: ![Preto](./bitmaps/sprites/sprite_eye_black_standard.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_standard.bmp), o gurá fica com esse olhar na maior parte do tempo em que não esta sobre nenhum estado especifico.
 - Raiva: ![Preto](./bitmaps/sprites/sprite_eye_black_anger.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_anger.bmp)
 - Chateado: ![Preto](./bitmaps/sprites/sprite_eye_black_bored.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_bored.bmp)

@@ -1,0 +1,9 @@
+{
+  "name": "lua",
+  "version": "5.4.7",
+  "description": "Lua 5.4.7 (lua.org), sem as bibliotecas io/os/package/debug, configurado com LUA_32BITS para o console virtual do Guará.",
+  "license": "MIT",
+  "build": {
+    "flags": ["-w"]
+  }
+}

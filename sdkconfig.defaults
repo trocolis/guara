@@ -1,0 +1,22 @@
+# Valores padrão do sdkconfig do Guará (o sdkconfig gerado não é versionado)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# A UI, a VM Lua e o laço principal rodam na task principal
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+
+# Cartão SD: nomes longos e acentos (UTF-8, página de código latina)
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+CONFIG_FATFS_API_ENCODING_UTF_8=y
+CONFIG_FATFS_CODEPAGE_850=y
+
+# Fuso horário e NTP
+CONFIG_LWIP_SNTP_MAX_SERVERS=1
+
+# Chip de flash Boya detectado no NodeMCU do protótipo
+CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y

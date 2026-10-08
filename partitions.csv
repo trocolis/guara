@@ -1,0 +1,8 @@
+# Tabela de partições do Guará (Flash de 4 MB) — ver README, "Memória e Armazenamento"
+# Name,    Type, SubType, Offset,   Size
+nvs,       data, nvs,     0x9000,   0x5000
+otadata,   data, ota,     0xE000,   0x2000
+ota_0,     app,  ota_0,   0x10000,  0x170000
+ota_1,     app,  ota_1,   0x180000, 0x170000
+storage,   data, 0x99,    0x2F0000, 0x100000
+save,      data, 0x9A,    0x3F0000, 0x2000

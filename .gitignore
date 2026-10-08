@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+
+# Build do bmp-builder nativo (C++)
+*.o
+tools/bmp-builder/bmp-builder-native
+
+# Imagem gerada pelo storage-packer
+storage.bin
+
+# PlatformIO
+.pio/
+
+# sdkconfig gerado pelo ESP-IDF (versionamos apenas sdkconfig.defaults)
+sdkconfig
+sdkconfig.*
+!sdkconfig.defaults
