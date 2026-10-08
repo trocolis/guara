@@ -1,120 +1,136 @@
+/*
+ * Pilha de telas: abrir, voltar (preservando o estado da tela de baixo), desenhar
+ * as camadas (modais sobre a tela de baixo) e despachar as teclas para o topo.
+ */
 #include "ui.h"
 
 #include <stddef.h>
 
-#define PROFUNDIDADE_MAX 16
+#define DEPTH_MAX 16
 
-static const tela_t *pilha[PROFUNDIDADE_MAX];
-static int topo = -1;
-static int camada;
+static const screen_t *stack[DEPTH_MAX];
+static int top = -1;
+static int layer;
 
-int ui_camada_atual(void)
+/* Índice da tela cujo callback está executando (estado por camada dos modais). */
+int ui_current_layer(void)
 {
-    return camada;
+    return layer;
 }
 
-void ui_abrir(const tela_t *t, void *param)
+/* Empilha uma tela e chama seu on_open. */
+void ui_open(const screen_t *t, void *param)
 {
-    if (topo + 1 >= PROFUNDIDADE_MAX) {
+    if (top + 1 >= DEPTH_MAX) {
         return;
     }
-    pilha[++topo] = t;
-    camada = topo;
-    if (t->abrir) {
-        t->abrir(param);
+    stack[++top] = t;
+    layer = top;
+    if (t->on_open) {
+        t->on_open(param);
     }
 }
 
-static void desempilhar(void)
+/* Desempilha a tela do topo e chama seu on_close. */
+static void pop(void)
 {
-    if (topo < 0) {
+    if (top < 0) {
         return;
     }
-    camada = topo;
-    const tela_t *t = pilha[topo--];
-    if (t->fechar) {
-        t->fechar();
+    layer = top;
+    const screen_t *t = stack[top--];
+    if (t->on_close) {
+        t->on_close();
     }
 }
 
-void ui_voltar(void)
+/* Volta para a tela anterior (a base nunca sai) e a retoma. */
+void ui_back(void)
 {
-    if (topo <= 0) {
+    if (top <= 0) {
         return; /* a tela base (principal) nunca sai */
     }
-    desempilhar();
-    camada = topo;
-    if (topo >= 0 && pilha[topo]->retomar) {
-        pilha[topo]->retomar();
+    pop();
+    layer = top;
+    if (top >= 0 && stack[top]->on_resume) {
+        stack[top]->on_resume();
     }
 }
 
-void ui_substituir(const tela_t *t, void *param)
+/* Troca a tela do topo por outra. */
+void ui_replace(const screen_t *t, void *param)
 {
-    desempilhar();
-    ui_abrir(t, param);
+    pop();
+    ui_open(t, param);
 }
 
-void ui_voltar_ate(const tela_t *t)
+/* Desempilha até `screen` ficar no topo. */
+void ui_back_until(const screen_t *t)
 {
-    while (topo > 0 && pilha[topo] != t) {
-        desempilhar();
+    while (top > 0 && stack[top] != t) {
+        pop();
     }
-    camada = topo;
-    if (topo >= 0 && pilha[topo]->retomar) {
-        pilha[topo]->retomar();
-    }
-}
-
-void ui_limpar_pilha(const tela_t *base, void *param)
-{
-    while (topo >= 0) {
-        desempilhar();
-    }
-    ui_abrir(base, param);
-}
-
-const tela_t *ui_topo(void)
-{
-    return topo >= 0 ? pilha[topo] : NULL;
-}
-
-int ui_profundidade(void)
-{
-    return topo + 1;
-}
-
-void ui_processar_tecla(const evento_tecla_t *ev)
-{
-    const tela_t *t = ui_topo();
-    camada = topo;
-    if (t && t->tecla) {
-        t->tecla(ev);
+    layer = top;
+    if (top >= 0 && stack[top]->on_resume) {
+        stack[top]->on_resume();
     }
 }
 
-void ui_desenhar(gfx_t *g, uint32_t agora)
+/* Esvazia a pilha e abre `base` como única tela. */
+void ui_clear_stack(const screen_t *base, void *param)
 {
-    if (topo < 0) {
+    while (top >= 0) {
+        pop();
+    }
+    ui_open(base, param);
+}
+
+/* Tela no topo da pilha. */
+const screen_t *ui_top(void)
+{
+    return top >= 0 ? stack[top] : NULL;
+}
+
+/* Quantidade de telas na pilha. */
+int ui_depth(void)
+{
+    return top + 1;
+}
+
+/* Entrega o evento de tecla à tela do topo. */
+void ui_process_key(const key_event_t *ev)
+{
+    const screen_t *t = ui_top();
+    layer = top;
+    if (t && t->on_key) {
+        t->on_key(ev);
+    }
+}
+
+/* Desenha a tela do topo; se for modal, desenha antes as telas de baixo. */
+void ui_draw(gfx_t *g, uint32_t now)
+{
+    if (top < 0) {
         return;
     }
-    int base = topo;
-    while (base > 0 && pilha[base]->modal) {
+    int base = top;
+    while (base > 0 && stack[base]->modal) {
         base--;
     }
-    gfx_limpar(g);
-    for (int i = base; i <= topo; i++) {
-        gfx_sem_recorte(g);
-        camada = i;
-        if (pilha[i]->desenhar) {
-            pilha[i]->desenhar(g, agora);
+    gfx_clear(g);
+    for (int i = base; i <= top; i++) {
+        gfx_reset_clip(g);
+        layer = i;
+        if (stack[i]->on_draw) {
+            stack[i]->on_draw(g, now);
         }
     }
-    gfx_sem_recorte(g);
+    gfx_reset_clip(g);
 }
 
+/* Taxa de quadros pedida pela tela do topo. */
 int ui_fps(void)
 {
-    const tela_t *t = ui_topo();
-    return t && t->fps ? t->fps : UI_FPS_PADRAO;
+    const screen_t *t = ui_top();
+    return t && t->fps ? t->fps : UI_FPS_DEFAULT;
 }

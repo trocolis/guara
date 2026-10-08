@@ -68,14 +68,14 @@ function update()
             reset_snake()
         elseif btn.pressed("b") then
             audio.beep(400, 80)
-            sair()
+            exit()
         end
         return
     end
 
     if btn.pressed("b") then
         audio.beep(400, 80)
-        sair()
+        exit()
         return
     end
 

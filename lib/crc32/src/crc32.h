@@ -11,6 +11,6 @@
  *
  * Para calcular em partes: crc = guara_crc32(0, a, n); crc = guara_crc32(crc, b, m);
  */
-uint32_t guara_crc32(uint32_t crc, const void *dados, size_t tamanho);
+uint32_t guara_crc32(uint32_t crc, const void *data, size_t size);
 
 #endif

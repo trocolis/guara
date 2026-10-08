@@ -12,40 +12,40 @@
  * (percussão) é ignorado.
  */
 
-#define MIDI_MAX_TRILHAS 16
+#define MIDI_MAX_TRACKS 16
 
 typedef struct {
-    const uint8_t *ini, *fim, *pos;
-    uint32_t proximo_tick;
+    const uint8_t *ini, *end, *pos;
+    uint32_t next_tick;
     uint8_t status;
-    bool acabou;
-} midi_trilha_t;
+    bool done;
+} midi_track_t;
 
 typedef struct {
-    const uint8_t *dados;
-    size_t tamanho;
-    uint16_t divisao;      /* ticks por semínima */
-    uint32_t tempo_us;     /* microssegundos por semínima */
-    int n_trilhas;
-    midi_trilha_t trilhas[MIDI_MAX_TRILHAS];
-    uint8_t ativas[128];
-    uint32_t tick_atual;
-    uint64_t resto_us;     /* tempo acumulado ainda não emitido (em us * divisao) */
-    int nota_atual;        /* -1 = pausa */
-    bool terminou;
+    const uint8_t *data;
+    size_t size;
+    uint16_t division; /* ticks por semínima */
+    uint32_t time_us;  /* microssegundos por semínima */
+    int n_tracks;
+    midi_track_t tracks[MIDI_MAX_TRACKS];
+    uint8_t active_skills[128];
+    uint32_t current_tick;
+    uint64_t remainder_us; /* tempo acumulado ainda não emitido (em us * divisao) */
+    int current_note;      /* -1 = pausa */
+    bool ended;
 } midi_t;
 
 typedef struct {
     uint16_t freq; /* 0 = pausa */
     uint16_t ms;
-} midi_nota_t;
+} midi_note_t;
 
-bool midi_abrir(midi_t *m, const uint8_t *dados, size_t tamanho);
-void midi_reiniciar(midi_t *m);
+bool midi_open(midi_t *m, const uint8_t *data, size_t size);
+void midi_restart(midi_t *m);
 /* Próximo trecho com nota constante. Retorna false no fim da música. */
-bool midi_proxima(midi_t *m, midi_nota_t *saida);
+bool midi_next(midi_t *m, midi_note_t *output);
 /* Duração total (percorre o arquivo numa cópia do estado). */
-uint32_t midi_duracao_ms(const uint8_t *dados, size_t tamanho);
-uint16_t midi_frequencia(int nota);
+uint32_t midi_duration_ms(const uint8_t *data, size_t size);
+uint16_t midi_frequency(int note);
 
 #endif

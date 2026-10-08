@@ -1,0 +1,329 @@
+#include <string.h>
+#include <unity.h>
+
+#include "../common/test_storage.h"
+#include "combat.h"
+#include "guara.h"
+#include "rules.h"
+#include "save.h"
+
+static rng_t rng;
+
+void setUp(void) { rng_seed(&rng, 1234); }
+void tearDown(void) {}
+
+#define REQUIRE_STORAGE() \
+    if (!load_test_storage()) TEST_IGNORE_MESSAGE("rode tools/storage-packer/pack_storage.py")
+
+/* ---------------- Storage ---------------- */
+
+static void test_storage_catalog_and_vrom(void)
+{
+    REQUIRE_STORAGE();
+    TEST_ASSERT_EQUAL_INT(2, catalog_record_count(CAT_ITEMS));
+    catalog_record_t apple;
+    TEST_ASSERT_TRUE(catalog_read(CAT_ITEMS, 0, &apple));
+    TEST_ASSERT_EQUAL_STRING("test_food", apple.slug);
+    TEST_ASSERT_EQUAL_STRING("Comida de teste", apple.name);
+    TEST_ASSERT_EQUAL_INT(3, apple.n_effects);
+    TEST_ASSERT_EQUAL_INT(VITAL_SATIETY, apple.effects[0].target);
+    TEST_ASSERT_EQUAL_INT(15, apple.effects[0].value);
+    TEST_ASSERT_EQUAL_INT(1, catalog_find_slug(CAT_ITEMS, "test_potion"));
+
+    gfx_bitmap_t b;
+    TEST_ASSERT_TRUE(vrom_lookup(apple.icon, &b));
+    TEST_ASSERT_EQUAL_INT(16, b.width);
+    TEST_ASSERT_TRUE(vrom_lookup("bitart_logo", &b));
+    TEST_ASSERT_EQUAL_INT(112, b.width);
+    TEST_ASSERT_FALSE(vrom_lookup("nao_existe", &b));
+    TEST_ASSERT_FALSE(vrom_lookup("main_menu", &b)); /* mockups ficam fora da VROM */
+}
+
+/* ---------------- Save ---------------- */
+
+static void test_save_round_trip(void)
+{
+    guara_t g, bytes_read;
+    guara_birth(&g, "Tico", &rng, 1700000000);
+    g.gauges[GAUGE_ANGER] = -1234;
+    g.inventory[63] = 200;
+    g.owned_skills = 0x8000000000000001ull;
+    uint8_t block[SAVE_SIZE];
+    uint32_t counter;
+    save_serialize(&g, 77, block);
+    TEST_ASSERT_TRUE(save_deserialize(block, &bytes_read, &counter));
+    TEST_ASSERT_EQUAL_UINT32(77, counter);
+    TEST_ASSERT_EQUAL_MEMORY(&g, &bytes_read, sizeof(g));
+
+    block[100] ^= 1;
+    TEST_ASSERT_FALSE(save_deserialize(block, &bytes_read, &counter));
+}
+
+typedef struct {
+    uint8_t mem[RING_SECTOR * RING_SECTORS];
+    int erases[RING_SECTORS];
+} fake_flash_t;
+
+static bool flash_read(void *ctx, uint32_t off, void *buf, size_t n)
+{
+    memcpy(buf, ((fake_flash_t *)ctx)->mem + off, n);
+    return true;
+}
+
+static bool flash_write(void *ctx, uint32_t off, const void *buf, size_t n)
+{
+    /* NOR flash: só transforma 1 em 0 */
+    for (size_t i = 0; i < n; i++) {
+        ((fake_flash_t *)ctx)->mem[off + i] &= ((const uint8_t *)buf)[i];
+    }
+    return true;
+}
+
+static bool flash_erase_sector(void *ctx, uint32_t off)
+{
+    fake_flash_t *f = ctx;
+    memset(f->mem + off, 0xFF, RING_SECTOR);
+    f->erases[off / RING_SECTOR]++;
+    return true;
+}
+
+static void test_ring_rotates_and_wear_levels(void)
+{
+    static fake_flash_t flash;
+    memset(&flash, 0, sizeof(flash)); /* lixo: nenhum save válido */
+    flash_ops_t ops = {&flash, flash_read, flash_write, flash_erase_sector};
+    ring_t ring;
+    guara_t g, bytes_read;
+    guara_birth(&g, "Anel", &rng, 1);
+
+    ring_init(&ring, &ops);
+    TEST_ASSERT_FALSE(ring_load(&ring, &bytes_read));
+    for (int i = 0; i < 40; i++) {
+        g.xp = (uint32_t)i;
+        TEST_ASSERT_TRUE(ring_save(&ring, &g));
+    }
+    /* 40 gravações: 5 voltas por setor */
+    TEST_ASSERT_EQUAL_INT(3, flash.erases[0]);
+    TEST_ASSERT_EQUAL_INT(2, flash.erases[1]);
+
+    ring_t other;
+    ring_init(&other, &ops);
+    TEST_ASSERT_TRUE(ring_load(&other, &bytes_read));
+    TEST_ASSERT_EQUAL_UINT32(39, bytes_read.xp);
+    TEST_ASSERT_EQUAL_UINT32(40, other.counter);
+}
+
+/* ---------------- Ciclo de vida ---------------- */
+
+static void test_birth(void)
+{
+    guara_t g;
+    guara_birth(&g, "NomeMuitoComprido", &rng, 1);
+    TEST_ASSERT_EQUAL_STRING("NomeMuitoC", g.name);
+    TEST_ASSERT_EQUAL_INT(1, g.level);
+    TEST_ASSERT_TRUE(g.nature <= NAT_AIR);
+    TEST_ASSERT_TRUE(g.head >= 1 && g.head <= 9);
+    TEST_ASSERT_EQUAL_INT(g.hp_max, g.hp);
+}
+
+static void test_initial_skills(void)
+{
+    REQUIRE_STORAGE();
+    guara_t g;
+    guara_birth(&g, "Hab", &rng, 1);
+    TEST_ASSERT_TRUE(g.owned_skills & 1u); /* primeira compatível (neutra) */
+    TEST_ASSERT_EQUAL_INT(0, g.active_skills[0]);
+    TEST_ASSERT_EQUAL_INT(g.nature == NAT_FIRE, (int)((g.owned_skills >> 1) & 1u));
+    for (int i = 0; i < COUNT_ITEMS; i++) {
+        TEST_ASSERT_EQUAL_INT(0, g.inventory[i]); /* sem kit inicial definido */
+    }
+}
+
+static void test_hunger_and_faint(void)
+{
+    guara_t g;
+    guara_birth(&g, "Fome", &rng, 1);
+    clock_ctx_t clock_ctx = {-1, 20 * 60, 8 * 60};
+    g.satiety = CENTI(10);
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_HUNGRY));
+    TEST_ASSERT_TRUE(g.hp < g.hp_max);
+    for (int i = 0; i < 200 && !guara_has_state(&g, ST_FAINTED); i++) {
+        guara_tick_minute(&g, &clock_ctx, false);
+    }
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_FAINTED));
+    TEST_ASSERT_EQUAL_INT(0, g.hp);
+}
+
+static void test_recovery_has_locks(void)
+{
+    guara_t g;
+    guara_birth(&g, "Longe", &rng, 1000);
+    uint32_t yes = guara_catch_up_time(&g, 1000 + 3 * 24 * 3600, 12 * 60, 20 * 60, 8 * 60);
+    TEST_ASSERT_EQUAL_UINT32(3 * 24 * 60, yes);
+    TEST_ASSERT_FALSE(guara_has_state(&g, ST_FAINTED));
+    TEST_ASSERT_TRUE(g.hp >= g.hp_max * LOCK_HP_PCT / 100);
+    TEST_ASSERT_TRUE(g.satiety >= LOCK_VITAL);
+    TEST_ASSERT_EQUAL_UINT32(1000 + 3 * 24 * 3600, g.timestamp);
+}
+
+static void test_sleeps_at_bedtime_and_wakes(void)
+{
+    guara_t g;
+    guara_birth(&g, "Sono", &rng, 1);
+    g.satiety = VITAL_MAX;
+    clock_ctx_t clock_ctx = {20 * 60, 20 * 60, 8 * 60};
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_SLEEPING));
+    g.energy = CENTI(60);
+    clock_ctx.minute_of_day = 8 * 60;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_FALSE(guara_has_state(&g, ST_SLEEPING));
+}
+
+static void test_affinity_opposites_and_birth_nature(void)
+{
+    guara_t g;
+    guara_birth(&g, "Afin", &rng, 1);
+    g.nature = g.birth_nature = NAT_FIRE;
+    guara_add_affinity(&g, NAT_WATER, CENTI(30));
+    guara_add_affinity(&g, NAT_FIRE, CENTI(10)); /* vai para o neutro */
+    TEST_ASSERT_EQUAL_INT(CENTI(30), g.affinities[NAT_WATER]);
+    TEST_ASSERT_EQUAL_INT(0, g.affinities[NAT_FIRE]);
+    TEST_ASSERT_EQUAL_INT(CENTI(10), g.affinities[NAT_NEUTRAL]);
+    guara_add_affinity(&g, NAT_EARTH, CENTI(5));
+    guara_add_affinity(&g, NAT_AIR, CENTI(2));
+    TEST_ASSERT_EQUAL_INT(CENTI(3), g.affinities[NAT_EARTH]);
+}
+
+static void test_evolution_steam(void)
+{
+    guara_t g;
+    guara_birth(&g, "Evo", &rng, 1);
+    g.nature = g.birth_nature = NAT_FIRE;
+    guara_add_affinity(&g, NAT_WATER, CENTI(60));
+    uint32_t total = 0;
+    for (int n = 1; n < 15; n++) {
+        total += guara_xp_to_next_level((uint8_t)n);
+    }
+    g.age_minutes = 10 * 1440; /* sem bônus de idade */
+    guara_gain_xp(&g, total, &rng);
+    TEST_ASSERT_EQUAL_INT(15, g.level);
+    TEST_ASSERT_EQUAL_INT(STAGE_YOUNG_B, g.stage);
+    TEST_ASSERT_EQUAL_INT(NAT_STEAM, g.nature);
+    TEST_ASSERT_FALSE(guara_affinity_enabled(&g));
+}
+
+static void test_item_heal_and_blocks(void)
+{
+    REQUIRE_STORAGE();
+    guara_t g;
+    catalog_record_t potion, apple;
+    guara_birth(&g, "Item", &rng, 1);
+    catalog_read(CAT_ITEMS, catalog_find_slug(CAT_ITEMS, "test_potion"), &potion);
+    catalog_read(CAT_ITEMS, 0, &apple);
+    g.inventory[potion.id] = 1;
+    g.inventory[apple.id] = 1;
+    g.hp = 1;
+    TEST_ASSERT_EQUAL_INT(USE_OK, guara_use_item(&g, &potion, &rng));
+    TEST_ASSERT_EQUAL_INT(g.hp_max < 31 ? g.hp_max : 31, g.hp);
+    TEST_ASSERT_EQUAL_INT(USE_NO_STOCK, guara_use_item(&g, &potion, &rng));
+
+    guara_set_state(&g, ST_CURSED, true);
+    TEST_ASSERT_EQUAL_INT(USE_BLOCKED_CURSE, guara_can_use_item(&g, &apple));
+    guara_set_state(&g, ST_CURSED, false);
+    guara_set_state(&g, ST_FAINTED, true);
+    g.minutes_fainted = 5;
+    TEST_ASSERT_EQUAL_INT(USE_BLOCKED_FAINTED, guara_can_use_item(&g, &apple));
+}
+
+static void test_development_version_rule(void)
+{
+    REQUIRE_STORAGE();
+    TEST_ASSERT_TRUE(guara_is_development_version("0.1.0"));
+    TEST_ASSERT_TRUE(guara_is_development_version("0.12.3"));
+    TEST_ASSERT_FALSE(guara_is_development_version("1.0.0"));
+    TEST_ASSERT_FALSE(guara_is_development_version("10.0.0"));
+    guara_t g;
+    guara_birth(&g, "Dev", &rng, 1);
+    guara_unlock_catalog(&g);
+    TEST_ASSERT_EQUAL_INT(255, g.inventory[0]);
+    TEST_ASSERT_EQUAL_INT(255, g.inventory[1]);
+    TEST_ASSERT_EQUAL_INT(0, g.inventory[2]); /* fora do catálogo de teste */
+    TEST_ASSERT_EQUAL_HEX64(0x1ull, g.owned_equipment);
+    TEST_ASSERT_EQUAL_HEX64(0x3ull, g.owned_skills);
+}
+
+/* ---------------- Combate ---------------- */
+
+static void test_combat_formulas(void)
+{
+    TEST_ASSERT_EQUAL_INT(5750, combat_atb_time(5));
+    TEST_ASSERT_EQUAL_INT(1500, combat_atb_time(90));
+    TEST_ASSERT_EQUAL_INT(MULT_ADVANTAGE, combat_multiplier(NAT_WATER, NAT_FIRE));
+    TEST_ASSERT_EQUAL_INT(MULT_DISADVANTAGE, combat_multiplier(NAT_FIRE, NAT_WATER));
+    TEST_ASSERT_EQUAL_INT(MULT_ADVANTAGE, combat_multiplier(NAT_FIRE, NAT_AIR));
+    /* Vapor (Fogo + Água) não sofre a fraqueza do Fogo contra Água */
+    TEST_ASSERT_EQUAL_INT(100, combat_multiplier(NAT_WATER, NAT_STEAM));
+    TEST_ASSERT_EQUAL_INT(100, combat_multiplier(NAT_NEUTRAL, NAT_FIRE));
+    TEST_ASSERT_EQUAL_INT(MULT_ADVANTAGE, combat_multiplier(NAT_LIGHT, NAT_SHADOW));
+}
+
+static void test_combat_ends(void)
+{
+    guara_t g;
+    guara_birth(&g, "Luta", &rng, 1);
+    fighter_t me, op;
+    combat_fighter_from_guara(&g, &me);
+    combat_generate_opponent(&g, &rng, &op);
+    combat_t c;
+    combat_start(&c, &me, &op, &rng);
+    combat_result_t r;
+    for (int step = 0; step < 10000 && !c.finished; step++) {
+        unsigned ready_mask = combat_advance(&c, 100);
+        for (int side = 0; side < 2; side++) {
+            if (ready_mask & (1u << side)) {
+                combat_execute(&c, side, combat_ai(&c, side), NULL, &r);
+            }
+        }
+    }
+    TEST_ASSERT_TRUE(c.finished);
+    TEST_ASSERT_TRUE(c.winner == 0 || c.winner == 1);
+    TEST_ASSERT_EQUAL_INT(0, c.side[1 - c.winner].hp);
+}
+
+static void test_forfeit(void)
+{
+    guara_t g;
+    guara_birth(&g, "Fuga", &rng, 1);
+    fighter_t me, op;
+    combat_fighter_from_guara(&g, &me);
+    combat_generate_opponent(&g, &rng, &op);
+    combat_t c;
+    combat_result_t r;
+    combat_start(&c, &me, &op, &rng);
+    combat_execute(&c, 0, (combat_action_t){ACTION_FORFEIT, 0}, NULL, &r);
+    TEST_ASSERT_TRUE(c.finished);
+    TEST_ASSERT_EQUAL_INT(1, c.winner);
+}
+
+int main(void)
+{
+    UNITY_BEGIN();
+    RUN_TEST(test_storage_catalog_and_vrom);
+    RUN_TEST(test_save_round_trip);
+    RUN_TEST(test_ring_rotates_and_wear_levels);
+    RUN_TEST(test_birth);
+    RUN_TEST(test_initial_skills);
+    RUN_TEST(test_hunger_and_faint);
+    RUN_TEST(test_recovery_has_locks);
+    RUN_TEST(test_sleeps_at_bedtime_and_wakes);
+    RUN_TEST(test_affinity_opposites_and_birth_nature);
+    RUN_TEST(test_evolution_steam);
+    RUN_TEST(test_item_heal_and_blocks);
+    RUN_TEST(test_development_version_rule);
+    RUN_TEST(test_combat_formulas);
+    RUN_TEST(test_combat_ends);
+    RUN_TEST(test_forfeit);
+    return UNITY_END();
+}

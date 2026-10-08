@@ -1,44 +1,53 @@
+/*
+ * Biblioteca gráfica 1-bit: framebuffer no formato de páginas do SH1106,
+ * primitivas, bitmaps com modos de desenho e texto UTF-8.
+ */
 #include "gfx.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-void gfx_iniciar(gfx_t *g)
+/* Limpa o framebuffer e remove o recorte. */
+void gfx_init(gfx_t *g)
 {
-    gfx_limpar(g);
-    gfx_sem_recorte(g);
+    gfx_clear(g);
+    gfx_reset_clip(g);
 }
 
-void gfx_limpar(gfx_t *g)
+/* Apaga todos os pixels. */
+void gfx_clear(gfx_t *g)
 {
     memset(g->buf, 0, sizeof(g->buf));
 }
 
-void gfx_recortar(gfx_t *g, int x0, int y0, int x1, int y1)
+/* Define o retângulo de recorte (limitado à tela). */
+void gfx_clip(gfx_t *g, int x0, int y0, int x1, int y1)
 {
     g->clip_x0 = x0 < 0 ? 0 : x0;
     g->clip_y0 = y0 < 0 ? 0 : y0;
-    g->clip_x1 = x1 > GFX_LARGURA ? GFX_LARGURA : x1;
-    g->clip_y1 = y1 > GFX_ALTURA ? GFX_ALTURA : y1;
+    g->clip_x1 = x1 > GFX_WIDTH ? GFX_WIDTH : x1;
+    g->clip_y1 = y1 > GFX_HEIGHT ? GFX_HEIGHT : y1;
 }
 
-void gfx_sem_recorte(gfx_t *g)
+/* Volta o recorte para a tela inteira. */
+void gfx_reset_clip(gfx_t *g)
 {
-    gfx_recortar(g, 0, 0, GFX_LARGURA, GFX_ALTURA);
+    gfx_clip(g, 0, 0, GFX_WIDTH, GFX_HEIGHT);
 }
 
-void gfx_pixel(gfx_t *g, int x, int y, gfx_cor_t cor)
+/* Acende, apaga ou inverte um pixel (respeitando o recorte). */
+void gfx_pixel(gfx_t *g, int x, int y, gfx_color_t color)
 {
     if (x < g->clip_x0 || x >= g->clip_x1 || y < g->clip_y0 || y >= g->clip_y1) {
         return;
     }
     uint8_t *b = &g->buf[y >> 3][x];
     uint8_t m = (uint8_t)(1u << (y & 7));
-    switch (cor) {
-    case GFX_BRANCO:
+    switch (color) {
+    case GFX_WHITE:
         *b |= m;
         break;
-    case GFX_PRETO:
+    case GFX_BLACK:
         *b &= (uint8_t)~m;
         break;
     default:
@@ -47,254 +56,272 @@ void gfx_pixel(gfx_t *g, int x, int y, gfx_cor_t cor)
     }
 }
 
-bool gfx_ler_pixel(const gfx_t *g, int x, int y)
+/* Verdadeiro se o pixel está aceso. */
+bool gfx_read_pixel(const gfx_t *g, int x, int y)
 {
-    if (x < 0 || x >= GFX_LARGURA || y < 0 || y >= GFX_ALTURA) {
+    if (x < 0 || x >= GFX_WIDTH || y < 0 || y >= GFX_HEIGHT) {
         return false;
     }
     return (g->buf[y >> 3][x] >> (y & 7)) & 1;
 }
 
-void gfx_linha_h(gfx_t *g, int x, int y, int largura, gfx_cor_t cor)
+/* Linha horizontal a partir de (x, y). */
+void gfx_line_h(gfx_t *g, int x, int y, int width, gfx_color_t color)
 {
-    for (int i = 0; i < largura; i++) {
-        gfx_pixel(g, x + i, y, cor);
+    for (int i = 0; i < width; i++) {
+        gfx_pixel(g, x + i, y, color);
     }
 }
 
-void gfx_linha_v(gfx_t *g, int x, int y, int altura, gfx_cor_t cor)
+/* Linha vertical a partir de (x, y). */
+void gfx_line_v(gfx_t *g, int x, int y, int height, gfx_color_t color)
 {
-    for (int i = 0; i < altura; i++) {
-        gfx_pixel(g, x, y + i, cor);
+    for (int i = 0; i < height; i++) {
+        gfx_pixel(g, x, y + i, color);
     }
 }
 
-void gfx_linha(gfx_t *g, int x0, int y0, int x1, int y1, gfx_cor_t cor)
+/* Linha entre dois pontos (algoritmo de Bresenham). */
+void gfx_line(gfx_t *g, int x0, int y0, int x1, int y1, gfx_color_t color)
 {
     int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-    int erro = dx + dy;
+    int error = dx + dy;
     for (;;) {
-        gfx_pixel(g, x0, y0, cor);
+        gfx_pixel(g, x0, y0, color);
         if (x0 == x1 && y0 == y1) {
             break;
         }
-        int e2 = 2 * erro;
+        int e2 = 2 * error;
         if (e2 >= dy) {
-            erro += dy;
+            error += dy;
             x0 += sx;
         }
         if (e2 <= dx) {
-            erro += dx;
+            error += dx;
             y0 += sy;
         }
     }
 }
 
-void gfx_retangulo(gfx_t *g, int x, int y, int l, int a, gfx_cor_t cor)
+/* Contorno de retângulo. */
+void gfx_rect(gfx_t *g, int x, int y, int l, int a, gfx_color_t color)
 {
     if (l <= 0 || a <= 0) {
         return;
     }
-    gfx_linha_h(g, x, y, l, cor);
+    gfx_line_h(g, x, y, l, color);
     if (a > 1) {
-        gfx_linha_h(g, x, y + a - 1, l, cor);
+        gfx_line_h(g, x, y + a - 1, l, color);
     }
     if (a > 2) {
-        gfx_linha_v(g, x, y + 1, a - 2, cor);
+        gfx_line_v(g, x, y + 1, a - 2, color);
         if (l > 1) {
-            gfx_linha_v(g, x + l - 1, y + 1, a - 2, cor);
+            gfx_line_v(g, x + l - 1, y + 1, a - 2, color);
         }
     }
 }
 
-void gfx_retangulo_cheio(gfx_t *g, int x, int y, int l, int a, gfx_cor_t cor)
+/* Retângulo preenchido. */
+void gfx_rect_filled(gfx_t *g, int x, int y, int l, int a, gfx_color_t color)
 {
     for (int j = 0; j < a; j++) {
-        gfx_linha_h(g, x, y + j, l, cor);
+        gfx_line_h(g, x, y + j, l, color);
     }
 }
 
 /* Recuo horizontal da linha j (0 = borda) num canto chanfrado de raio r. */
-static int recuo_canto(int j, int raio)
+static int inset_corner(int j, int radius)
 {
-    return j < raio ? raio - j : 0;
+    return j < radius ? radius - j : 0;
 }
 
-void gfx_retangulo_arred(gfx_t *g, int x, int y, int l, int a, int raio, gfx_cor_t cor)
+/* Contorno de retângulo com cantos arredondados (chanfrados). */
+void gfx_rect_rounded(gfx_t *g, int x, int y, int l, int a, int radius, gfx_color_t color)
 {
-    if (raio <= 0) {
-        gfx_retangulo(g, x, y, l, a, cor);
+    if (radius <= 0) {
+        gfx_rect(g, x, y, l, a, color);
         return;
     }
-    gfx_linha_h(g, x + raio, y, l - 2 * raio, cor);
-    gfx_linha_h(g, x + raio, y + a - 1, l - 2 * raio, cor);
-    gfx_linha_v(g, x, y + raio, a - 2 * raio, cor);
-    gfx_linha_v(g, x + l - 1, y + raio, a - 2 * raio, cor);
-    for (int j = 1; j < raio; j++) {
-        int r = recuo_canto(j, raio);
-        gfx_pixel(g, x + r, y + j, cor);
-        gfx_pixel(g, x + l - 1 - r, y + j, cor);
-        gfx_pixel(g, x + r, y + a - 1 - j, cor);
-        gfx_pixel(g, x + l - 1 - r, y + a - 1 - j, cor);
+    gfx_line_h(g, x + radius, y, l - 2 * radius, color);
+    gfx_line_h(g, x + radius, y + a - 1, l - 2 * radius, color);
+    gfx_line_v(g, x, y + radius, a - 2 * radius, color);
+    gfx_line_v(g, x + l - 1, y + radius, a - 2 * radius, color);
+    for (int j = 1; j < radius; j++) {
+        int r = inset_corner(j, radius);
+        gfx_pixel(g, x + r, y + j, color);
+        gfx_pixel(g, x + l - 1 - r, y + j, color);
+        gfx_pixel(g, x + r, y + a - 1 - j, color);
+        gfx_pixel(g, x + l - 1 - r, y + a - 1 - j, color);
     }
 }
 
-void gfx_retangulo_arred_cheio(gfx_t *g, int x, int y, int l, int a, int raio, gfx_cor_t cor)
+/* Retângulo preenchido com cantos arredondados. */
+void gfx_rect_rounded_filled(gfx_t *g, int x, int y, int l, int a, int radius, gfx_color_t color)
 {
     for (int j = 0; j < a; j++) {
         int r = 0;
-        if (j < raio) {
-            r = recuo_canto(j, raio);
-        } else if (j >= a - raio) {
-            r = recuo_canto(a - 1 - j, raio);
+        if (j < radius) {
+            r = inset_corner(j, radius);
+        } else if (j >= a - radius) {
+            r = inset_corner(a - 1 - j, radius);
         }
-        gfx_linha_h(g, x + r, y + j, l - 2 * r, cor);
+        gfx_line_h(g, x + r, y + j, l - 2 * r, color);
     }
 }
 
-void gfx_aba(gfx_t *g, int x, int y, int l, int a, int raio, bool cheia, gfx_cor_t cor)
+/* Aba: cantos de cima arredondados e sem a linha de baixo. */
+void gfx_tab(gfx_t *g, int x, int y, int l, int a, int radius, bool filled, gfx_color_t color)
 {
     for (int j = 0; j < a; j++) {
-        int r = recuo_canto(j, raio);
-        if (cheia || j == 0) {
-            gfx_linha_h(g, x + r, y + j, l - 2 * r, cor);
+        int r = inset_corner(j, radius);
+        if (filled || j == 0) {
+            gfx_line_h(g, x + r, y + j, l - 2 * r, color);
         } else {
-            gfx_pixel(g, x + r, y + j, cor);
-            gfx_pixel(g, x + l - 1 - r, y + j, cor);
+            gfx_pixel(g, x + r, y + j, color);
+            gfx_pixel(g, x + l - 1 - r, y + j, color);
         }
     }
 }
 
-void gfx_circulo(gfx_t *g, int cx, int cy, int r, gfx_cor_t cor)
+/* Contorno de círculo (algoritmo do ponto médio). */
+void gfx_circle(gfx_t *g, int cx, int cy, int r, gfx_color_t color)
 {
-    int x = r, y = 0, erro = 1 - r;
+    int x = r, y = 0, error = 1 - r;
     while (x >= y) {
-        gfx_pixel(g, cx + x, cy + y, cor);
-        gfx_pixel(g, cx + y, cy + x, cor);
-        gfx_pixel(g, cx - y, cy + x, cor);
-        gfx_pixel(g, cx - x, cy + y, cor);
-        gfx_pixel(g, cx - x, cy - y, cor);
-        gfx_pixel(g, cx - y, cy - x, cor);
-        gfx_pixel(g, cx + y, cy - x, cor);
-        gfx_pixel(g, cx + x, cy - y, cor);
+        gfx_pixel(g, cx + x, cy + y, color);
+        gfx_pixel(g, cx + y, cy + x, color);
+        gfx_pixel(g, cx - y, cy + x, color);
+        gfx_pixel(g, cx - x, cy + y, color);
+        gfx_pixel(g, cx - x, cy - y, color);
+        gfx_pixel(g, cx - y, cy - x, color);
+        gfx_pixel(g, cx + y, cy - x, color);
+        gfx_pixel(g, cx + x, cy - y, color);
         y++;
-        if (erro < 0) {
-            erro += 2 * y + 1;
+        if (error < 0) {
+            error += 2 * y + 1;
         } else {
             x--;
-            erro += 2 * (y - x) + 1;
+            error += 2 * (y - x) + 1;
         }
     }
 }
 
-void gfx_circulo_cheio(gfx_t *g, int cx, int cy, int r, gfx_cor_t cor)
+/* Círculo preenchido. */
+void gfx_circle_filled(gfx_t *g, int cx, int cy, int r, gfx_color_t color)
 {
     for (int dy = -r; dy <= r; dy++) {
         for (int dx = -r; dx <= r; dx++) {
             if (dx * dx + dy * dy <= r * r + r) {
-                gfx_pixel(g, cx + dx, cy + dy, cor);
+                gfx_pixel(g, cx + dx, cy + dy, color);
             }
         }
     }
 }
 
-void gfx_seta(gfx_t *g, int x, int y, int altura, int direcao, gfx_cor_t cor)
+/* Triângulo cheio apontando para a esquerda (-1) ou para a direita (+1) da tela. */
+void gfx_arrow(gfx_t *g, int x, int y, int height, int direction, gfx_color_t color)
 {
-    int meio = altura / 2;
-    for (int j = 0; j < altura; j++) {
-        int l = meio - abs(j - meio) + 1;
-        if (direcao > 0) {
-            gfx_linha_h(g, x, y + j, l, cor);
+    int mid = height / 2;
+    for (int j = 0; j < height; j++) {
+        int l = mid - abs(j - mid) + 1;
+        if (direction > 0) {
+            gfx_line_h(g, x, y + j, l, color);
         } else {
-            gfx_linha_h(g, x + meio + 1 - l, y + j, l, cor);
+            gfx_line_h(g, x + mid + 1 - l, y + j, l, color);
         }
     }
 }
 
+/* Lê o pixel (x, y) de um bitmap row-major. */
 static inline bool bit_bitmap(const gfx_bitmap_t *bmp, int x, int y)
 {
-    int passo = (bmp->largura + 7) / 8;
-    return (bmp->dados[y * passo + (x >> 3)] >> (7 - (x & 7))) & 1;
+    int step = (bmp->width + 7) / 8;
+    return (bmp->data[y * step + (x >> 3)] >> (7 - (x & 7))) & 1;
 }
 
-void gfx_bitmap(gfx_t *g, const gfx_bitmap_t *bmp, int x, int y, gfx_modo_t modo, unsigned flags)
+/* Desenha um bitmap com o modo e as opções (espelhar, ampliar 2x) pedidos. */
+void gfx_bitmap(gfx_t *g, const gfx_bitmap_t *bmp, int x, int y, gfx_mode_t mode, unsigned flags)
 {
-    if (bmp == NULL || bmp->dados == NULL) {
+    if (bmp == NULL || bmp->data == NULL) {
         return;
     }
-    int escala = (flags & GFX_ESCALA2) ? 2 : 1;
-    for (int by = 0; by < bmp->altura; by++) {
-        for (int bx = 0; bx < bmp->largura; bx++) {
-            int sx = (flags & GFX_ESPELHAR) ? bmp->largura - 1 - bx : bx;
-            bool aceso = bit_bitmap(bmp, sx, by);
-            int cor = -1;
-            switch (modo) {
-            case GFX_COPIA:
-                cor = aceso ? GFX_BRANCO : GFX_PRETO;
+    int scale = (flags & GFX_SCALE2X) ? 2 : 1;
+    for (int by = 0; by < bmp->height; by++) {
+        for (int bx = 0; bx < bmp->width; bx++) {
+            int sx = (flags & GFX_MIRROR) ? bmp->width - 1 - bx : bx;
+            bool lit = bit_bitmap(bmp, sx, by);
+            int color = -1;
+            switch (mode) {
+            case GFX_COPY:
+                color = lit ? GFX_WHITE : GFX_BLACK;
                 break;
-            case GFX_OU:
-                cor = aceso ? GFX_BRANCO : -1;
+            case GFX_OR:
+                color = lit ? GFX_WHITE : -1;
                 break;
             case GFX_E:
-                cor = aceso ? -1 : GFX_PRETO;
+                color = lit ? -1 : GFX_BLACK;
                 break;
             case GFX_XOR:
-                cor = aceso ? GFX_INVERTER : -1;
+                color = lit ? GFX_INVERT : -1;
                 break;
-            case GFX_INVERSO:
-                cor = aceso ? GFX_PRETO : GFX_BRANCO;
+            case GFX_INVERSE:
+                color = lit ? GFX_BLACK : GFX_WHITE;
                 break;
             }
-            if (cor < 0) {
+            if (color < 0) {
                 continue;
             }
-            for (int ey = 0; ey < escala; ey++) {
-                for (int ex = 0; ex < escala; ex++) {
-                    gfx_pixel(g, x + bx * escala + ex, y + by * escala + ey, (gfx_cor_t)cor);
+            for (int ey = 0; ey < scale; ey++) {
+                for (int ex = 0; ex < scale; ex++) {
+                    gfx_pixel(g, x + bx * scale + ex, y + by * scale + ey, (gfx_color_t)color);
                 }
             }
         }
     }
 }
 
-int gfx_texto_escala(gfx_t *g, int x, int y, const char *texto, gfx_cor_t cor, int escala)
+/* Desenha texto UTF-8 ampliado; só os pixels acesos do glyph são desenhados. */
+int gfx_text_scaled(gfx_t *g, int x, int y, const char *text, gfx_color_t color, int scale)
 {
-    const fonte_t *f = &FONTE_5X8;
+    const font_t *f = &FONT_5X8;
     int x0 = x;
     uint32_t c;
-    while ((c = utf8_proximo(&texto)) != 0) {
-        const uint8_t *col = fonte_glyph(f, c);
-        if (x + f->largura * escala > g->clip_x0 && x < g->clip_x1) {
-            for (int cx = 0; cx < f->largura; cx++) {
-                for (int cy = 0; cy < f->altura; cy++) {
+    while ((c = utf8_next(&text)) != 0) {
+        const uint8_t *col = font_glyph(f, c);
+        if (x + f->width * scale > g->clip_x0 && x < g->clip_x1) {
+            for (int cx = 0; cx < f->width; cx++) {
+                for (int cy = 0; cy < f->height; cy++) {
                     if ((col[cx] >> cy) & 1) {
-                        for (int ey = 0; ey < escala; ey++) {
-                            for (int ex = 0; ex < escala; ex++) {
-                                gfx_pixel(g, x + cx * escala + ex, y + cy * escala + ey, cor);
+                        for (int ey = 0; ey < scale; ey++) {
+                            for (int ex = 0; ex < scale; ex++) {
+                                gfx_pixel(g, x + cx * scale + ex, y + cy * scale + ey, color);
                             }
                         }
                     }
                 }
             }
         }
-        x += f->avanco * escala;
+        x += f->advance * scale;
     }
-    return x == x0 ? 0 : x - x0 - escala;
+    return x == x0 ? 0 : x - x0 - scale;
 }
 
-int gfx_texto(gfx_t *g, int x, int y, const char *texto, gfx_cor_t cor)
+/* Desenha texto UTF-8 em tamanho normal. Retorna a largura em pixels. */
+int gfx_text(gfx_t *g, int x, int y, const char *text, gfx_color_t color)
 {
-    return gfx_texto_escala(g, x, y, texto, cor, 1);
+    return gfx_text_scaled(g, x, y, text, color, 1);
 }
 
-int gfx_largura_texto(const char *texto)
+/* Largura do texto em pixels (6 px por caractere, sem o espaço final). */
+int gfx_text_width(const char *text)
 {
-    int n = utf8_tamanho(texto);
-    return n ? n * FONTE_5X8.avanco - 1 : 0;
+    int n = utf8_size(text);
+    return n ? n * FONT_5X8.advance - 1 : 0;
 }
 
-void gfx_texto_centro(gfx_t *g, int x, int largura, int y, const char *texto, gfx_cor_t cor)
+/* Desenha o texto centralizado em [x, x + width). */
+void gfx_text_center(gfx_t *g, int x, int width, int y, const char *text, gfx_color_t color)
 {
-    gfx_texto(g, x + (largura - gfx_largura_texto(texto)) / 2, y, texto, cor);
+    gfx_text(g, x + (width - gfx_text_width(text)) / 2, y, text, color);
 }

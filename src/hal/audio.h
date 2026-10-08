@@ -9,39 +9,39 @@
 typedef struct {
     uint16_t freq; /* Hz; 0 = pausa */
     uint16_t ms;
-} nota_t;
+} note_t;
 
 /* Fonte de música em segundo plano (ex.: leitor de MIDI). Chamada pela task de áudio. */
 typedef struct {
-    bool (*proxima)(void *ctx, nota_t *nota); /* false = fim */
-    void (*fechar)(void *ctx);
+    bool (*next_note)(void *ctx, note_t *note); /* false = fim */
+    void (*on_close)(void *ctx);
     void *ctx;
-} fonte_musica_t;
+} music_source_t;
 
-void audio_iniciar(void);
-void audio_mudo(bool mudo);
-bool audio_esta_mudo(void);
-void audio_volume(int nivel); /* 1..3 */
-int audio_nivel_volume(void);
+void audio_init(void);
+void audio_mute(bool mute);
+bool audio_is_mute(void);
+void audio_volume(int level); /* 1..3 */
+int audio_volume_level(void);
 
 /* Efeitos sonoros: interrompem a música enquanto tocam. `forcar` toca mesmo no mudo (alarmes). */
-void audio_efeito(const nota_t *notas, int quantidade, bool forcar);
-void audio_tom(uint16_t freq, uint16_t ms);
-void audio_parar_efeitos(void);
+void audio_effect(const note_t *notes, int count, bool force);
+void audio_tone(uint16_t freq, uint16_t ms);
+void audio_stop_effects(void);
 
-void audio_tocar_musica(const fonte_musica_t *fonte);
-void audio_parar_musica(void);
-void audio_pausar_musica(bool pausar);
-bool audio_musica_ativa(void);
-bool audio_musica_pausada(void);
+void audio_play_music(const music_source_t *source);
+void audio_stop_music(void);
+void audio_pause_music(bool pause);
+bool audio_music_active(void);
+bool audio_music_paused(void);
 
 /* Efeitos prontos */
-void audio_bip(void);
-void audio_erro(void);
-void audio_mordida(void);
-void audio_vitoria(void);
-void audio_derrota(void);
-void audio_alarme(void);
+void audio_beep(void);
+void audio_error(void);
+void audio_bite(void);
+void audio_victory(void);
+void audio_defeat(void);
+void audio_alarm(void);
 void audio_level_up(void);
 
 #endif

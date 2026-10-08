@@ -12,7 +12,7 @@
  * bytes; chame primeiro com destino NULL para obter as dimensões.
  * Retorna 0 em caso de sucesso ou um código de erro negativo.
  */
-int gfx_bmp_info(const uint8_t *arquivo, size_t tamanho, int *largura, int *altura);
-int gfx_bmp_decodificar(const uint8_t *arquivo, size_t tamanho, uint8_t *destino, size_t tam_destino);
+int gfx_bmp_info(const uint8_t *file, size_t size, int *width, int *height);
+int gfx_bmp_decode(const uint8_t *file, size_t size, uint8_t *destination, size_t target_size);
 
 #endif

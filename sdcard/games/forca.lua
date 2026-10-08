@@ -87,10 +87,10 @@ end
 function update()
     if game_over ~= 0 then
         if btn.pressed("a") then new_game()
-        elseif btn.pressed("b") then audio.beep(400, 80); sair() end
+        elseif btn.pressed("b") then audio.beep(400, 80); exit() end
         return
     end
-    if btn.pressed("b") then audio.beep(400, 80); sair(); return end
+    if btn.pressed("b") then audio.beep(400, 80); exit(); return end
     if btn.pressed("left")  and let_idx > 1  then let_idx = let_idx - 1; audio.beep(350, 20) end
     if btn.pressed("right") and let_idx < 26 then let_idx = let_idx + 1; audio.beep(350, 20) end
     if btn.pressed("up")    and let_idx > 7  then let_idx = let_idx - 7; audio.beep(350, 20) end

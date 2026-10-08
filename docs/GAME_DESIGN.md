@@ -1,6 +1,6 @@
 # Game Design — valores e decisões provisórias
 
-O README define as regras do Guará, mas deixa vários números e comportamentos em aberto. Este arquivo registra o que o firmware implementa nesses pontos, para revisão. Os valores numéricos estão em `lib/nucleo/src/regras.h`. Quando algo for decidido de outro jeito, atualize os dois lugares e marque o item no backlog de `docs/PLANO.md`.
+O README define as regras do Guará, mas deixa vários números e comportamentos em aberto. Este arquivo registra o que o firmware implementa nesses pontos, para revisão. Os valores numéricos estão em `lib/core/src/rules.h`. Quando algo for decidido de outro jeito, atualize os dois lugares e marque o item no backlog de `docs/PLAN.md`.
 
 Legenda: **PROVISÓRIO** = valor escolhido na implementação, não vem do README.
 
@@ -8,7 +8,7 @@ Legenda: **PROVISÓRIO** = valor escolhido na implementação, não vem do READM
 
 - Energia, Humor, Alimentação e Saúde são guardados em centésimos de ponto percentual (`10000` = 100%) para permitir desgaste lento.
 - HP e MP são pontos absolutos.
-- O ciclo de vida avança **um passo por minuto real** (`guara_minuto`).
+- O ciclo de vida avança **um passo por minuto real** (`guara_tick_minute`).
 
 ## Desgaste por minuto (PROVISÓRIO)
 
@@ -112,7 +112,7 @@ Ocorre ao entrar nos estágios jovem B, jovem C e adulto.
   - INT ≥ 1,5 × o maior outro atributo → **Psíquica**;
   - nenhum dos casos acima, já no estágio adulto → **Neutra**.
 
-O módulo Lua `guara.add_affinity("mente", n)` soma pontos em INT, porque os "pontos mentais" não existem em outro lugar (**I16**).
+O módulo Lua `guara.add_affinity("mind", n)` soma pontos em INT, porque os "pontos mentais" não existem em outro lugar (**I16**).
 
 ## Combate
 
@@ -120,7 +120,7 @@ As fórmulas de ATB, dano físico, crítico, esquiva e multiplicador elemental s
 
 - **Ordem de aplicação:** esquiva → dano base → elemento (só habilidades) → crítico (×1,5).
 - **Dano de habilidade:** `max(1, poder + INT×0,8 + ATK×0,4 − DEF×0,5)`.
-- **Custo de MP:** `max(1, custo − INT/20)`. O custo está no catálogo (coluna `custo_mp`).
+- **Custo de MP:** `max(1, custo − INT/20)`. O custo está no catálogo (coluna `mp_cost`).
 - **Cura:** `poder + INT/2`.
 - **Zangado:** ATK ×1,5 e DEF ×0,5 (README).
 - **Cansado:** −30% em todos os atributos (README), fora e dentro do combate.
@@ -144,7 +144,7 @@ As fórmulas de ATB, dano físico, crítico, esquiva e multiplicador elemental s
 
 ## Itens
 
-- **Sobre efeito:** −100 cura o estado; valor negativo é a chance de curar; valor positivo é a chance de causar. `TODOS-100` cura todos os estados físicos, exceto dormir e desmaio.
+- **Sobre efeito:** −100 cura o estado; valor negativo é a chance de curar; valor positivo é a chance de causar. `ALL-100` cura todos os estados físicos, exceto dormir e desmaio.
 - **Kit inicial:** a definir junto com o catálogo. Hoje o Guará nasce sem itens nem equipamentos; ganha só a primeira habilidade compatível do catálogo e o primeiro ataque da sua natureza, se existirem.
 - **Catálogo:** o conteúdo (itens, equipamentos, habilidades) é definido pelo autor em `CATALOG.md`. Os arquivos `catalog/*.csv`, lidos pelo storage-packer, estão vazios até lá. Os testes usam um catálogo próprio em `test/fixtures/catalog/`.
 
@@ -157,6 +157,6 @@ As fórmulas de ATB, dano físico, crítico, esquiva e multiplicador elemental s
 | Cartão SD | **A** abre a pasta ou os comandos do arquivo; **←/→** abre os comandos também para pastas; **B** sobe um nível |
 | Copiar/Mover (Cartão SD) | aparece "Colar aqui" no topo da lista de destino |
 | Músicas (tocador) | **↑/↓** troca de faixa, **←/→** ajusta o volume (3 níveis) |
-| Jogos | segure **B** por 2 s (ou chame `sair()` no Lua) para sair |
+| Jogos | segure **B** por 2 s (ou chame `exit()` no Lua) para sair |
 | Visualizador de imagens | direcional rola imagens maiores que a tela |
 | Teste de controle | segure **B** por 1 s para sair |

@@ -1,3 +1,7 @@
+/*
+ * Buzzer piezoelétrico: uma task toca efeitos sonoros (fila) e, nos intervalos,
+ * a música em segundo plano fornecida por uma fonte (ex.: leitor de MIDI).
+ */
 #include "audio.h"
 
 #include "driver/ledc.h"
@@ -5,84 +9,88 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
-#include "pinos.h"
+#include "pins.h"
 
 typedef struct {
-    nota_t nota;
-    bool forcar;
-} efeito_t;
+    note_t note;
+    bool force;
+} sound_effect_t;
 
-static QueueHandle_t fila;
-static SemaphoreHandle_t trava;
-static fonte_musica_t musica;
-static volatile bool musica_ativa, musica_pausada, mudo;
+static QueueHandle_t queue;
+static SemaphoreHandle_t lock;
+static music_source_t music;
+static volatile bool music_active, music_paused, mute;
 static volatile int volume = 3;
 
 static const uint32_t DUTY_VOLUME[] = {0, 24, 96, 512}; /* de 1024 (10 bits) */
 
-static void som(uint16_t freq, bool forcar)
+/* Liga o PWM na frequência pedida (ou silencia). `force` ignora o mudo (alarmes). */
+static void sound(uint16_t freq, bool force)
 {
-    if (freq == 0 || (mudo && !forcar)) {
+    if (freq == 0 || (mute && !force)) {
         ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
     } else {
         ledc_set_freq(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0, freq);
-        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, forcar ? 512 : DUTY_VOLUME[volume]);
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, force ? 512 : DUTY_VOLUME[volume]);
     }
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 }
 
-static void fechar_musica(void)
+/* Descarta a música atual; o callback de fechamento libera a memória da fonte. */
+static void close_music_source(void)
 {
-    fonte_musica_t antiga = musica;
-    musica_ativa = false;
-    musica_pausada = false;
-    musica = (fonte_musica_t){0};
-    if (antiga.fechar) {
-        antiga.fechar(antiga.ctx);
+    music_source_t old_source = music;
+    music_active = false;
+    music_paused = false;
+    music = (music_source_t){0};
+    if (old_source.on_close) {
+        old_source.on_close(old_source.ctx);
     }
 }
 
-static void tarefa_audio(void *arg)
+/* Task de áudio: efeitos têm prioridade e interrompem a música, que toca em fatias de 20 ms. */
+static void job_audio(void *arg)
 {
     (void)arg;
-    efeito_t ef;
+    sound_effect_t fx;
     for (;;) {
-        if (xQueueReceive(fila, &ef, 0) == pdTRUE) {
-            som(ef.nota.freq, ef.forcar);
-            vTaskDelay(pdMS_TO_TICKS(ef.nota.ms ? ef.nota.ms : 1));
-            if (uxQueueMessagesWaiting(fila) == 0) {
-                som(0, false);
+        if (xQueueReceive(queue, &fx, 0) == pdTRUE) {
+            sound(fx.note.freq, fx.force);
+            vTaskDelay(pdMS_TO_TICKS(fx.note.ms ? fx.note.ms : 1));
+            if (uxQueueMessagesWaiting(queue) == 0) {
+                sound(0, false);
             }
             continue;
         }
-        xSemaphoreTake(trava, portMAX_DELAY);
-        bool tocar = musica_ativa && !musica_pausada;
-        nota_t n = {0, 0};
-        if (tocar && !musica.proxima(musica.ctx, &n)) {
-            fechar_musica();
-            tocar = false;
+        xSemaphoreTake(lock, portMAX_DELAY);
+        bool play = music_active && !music_paused;
+        note_t n = {0, 0};
+        if (play && !music.next_note(music.ctx, &n)) {
+            close_music_source();
+            play = false;
         }
-        xSemaphoreGive(trava);
-        if (tocar) {
-            som(n.freq, false);
+        xSemaphoreGive(lock);
+        if (play) {
+            sound(n.freq, false);
             /* Toca a nota em fatias para atender efeitos rapidamente */
-            uint32_t restante = n.ms;
-            while (restante > 0 && uxQueueMessagesWaiting(fila) == 0) {
-                uint32_t fatia = restante > 20 ? 20 : restante;
-                vTaskDelay(pdMS_TO_TICKS(fatia));
-                restante -= fatia;
+            uint32_t remaining = n.ms;
+            while (remaining > 0 && uxQueueMessagesWaiting(queue) == 0) {
+                uint32_t slice = remaining > 20 ? 20 : remaining;
+                vTaskDelay(pdMS_TO_TICKS(slice));
+                remaining -= slice;
             }
-            som(0, false);
+            sound(0, false);
         } else {
-            som(0, false);
-            if (xQueuePeek(fila, &ef, pdMS_TO_TICKS(50)) != pdTRUE) {
+            sound(0, false);
+            if (xQueuePeek(queue, &fx, pdMS_TO_TICKS(50)) != pdTRUE) {
                 continue;
             }
         }
     }
 }
 
-void audio_iniciar(void)
+/* Configura o LEDC (timer 0, canal 0, 10 bits) e cria a task de áudio. */
+void audio_init(void)
 {
     ledc_timer_config_t timer = {
         .speed_mode = LEDC_LOW_SPEED_MODE,
@@ -92,111 +100,124 @@ void audio_iniciar(void)
         .clk_cfg = LEDC_AUTO_CLK,
     };
     ledc_timer_config(&timer);
-    ledc_channel_config_t canal = {
-        .gpio_num = PINO_BUZZER,
+    ledc_channel_config_t channel = {
+        .gpio_num = PIN_BUZZER,
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .channel = LEDC_CHANNEL_0,
         .timer_sel = LEDC_TIMER_0,
         .duty = 0,
         .hpoint = 0,
     };
-    ledc_channel_config(&canal);
-    fila = xQueueCreate(64, sizeof(efeito_t));
-    trava = xSemaphoreCreateMutex();
-    xTaskCreatePinnedToCore(tarefa_audio, "audio", 4096, NULL, 7, NULL, 0);
+    ledc_channel_config(&channel);
+    queue = xQueueCreate(64, sizeof(sound_effect_t));
+    lock = xSemaphoreCreateMutex();
+    xTaskCreatePinnedToCore(job_audio, "audio", 4096, NULL, 7, NULL, 0);
 }
 
-void audio_mudo(bool m) { mudo = m; }
-bool audio_esta_mudo(void) { return mudo; }
+void audio_mute(bool m) { mute = m; }
+bool audio_is_mute(void) { return mute; }
 
-void audio_volume(int nivel)
+/* Ajusta o volume (1..3), que muda o duty cycle do PWM. */
+void audio_volume(int level)
 {
-    volume = nivel < 1 ? 1 : (nivel > 3 ? 3 : nivel);
+    volume = level < 1 ? 1 : (level > 3 ? 3 : level);
 }
 
-int audio_nivel_volume(void) { return volume; }
+int audio_volume_level(void) { return volume; }
 
-void audio_efeito(const nota_t *notas, int quantidade, bool forcar)
+/* Enfileira as notas de um efeito sonoro. */
+void audio_effect(const note_t *notes, int count, bool force)
 {
-    if (!fila || (mudo && !forcar)) {
+    if (!queue || (mute && !force)) {
         return;
     }
-    for (int i = 0; i < quantidade; i++) {
-        efeito_t ef = {notas[i], forcar};
-        xQueueSend(fila, &ef, 0);
+    for (int i = 0; i < count; i++) {
+        sound_effect_t fx = {notes[i], force};
+        xQueueSend(queue, &fx, 0);
     }
 }
 
-void audio_tom(uint16_t freq, uint16_t ms)
+/* Enfileira um único tom. */
+void audio_tone(uint16_t freq, uint16_t ms)
 {
-    nota_t n = {freq, ms};
-    audio_efeito(&n, 1, false);
+    note_t n = {freq, ms};
+    audio_effect(&n, 1, false);
 }
 
-void audio_parar_efeitos(void)
+/* Descarta os efeitos ainda não tocados. */
+void audio_stop_effects(void)
 {
-    if (fila) {
-        xQueueReset(fila);
+    if (queue) {
+        xQueueReset(queue);
     }
 }
 
-void audio_tocar_musica(const fonte_musica_t *fonte)
+/* Troca a música de fundo pela nova fonte. */
+void audio_play_music(const music_source_t *source)
 {
-    xSemaphoreTake(trava, portMAX_DELAY);
-    fechar_musica();
-    musica = *fonte;
-    musica_ativa = true;
-    xSemaphoreGive(trava);
+    xSemaphoreTake(lock, portMAX_DELAY);
+    close_music_source();
+    music = *source;
+    music_active = true;
+    xSemaphoreGive(lock);
 }
 
-void audio_parar_musica(void)
+/* Para e descarta a música de fundo. */
+void audio_stop_music(void)
 {
-    xSemaphoreTake(trava, portMAX_DELAY);
-    fechar_musica();
-    xSemaphoreGive(trava);
+    xSemaphoreTake(lock, portMAX_DELAY);
+    close_music_source();
+    xSemaphoreGive(lock);
 }
 
-void audio_pausar_musica(bool pausar) { musica_pausada = pausar; }
-bool audio_musica_ativa(void) { return musica_ativa; }
-bool audio_musica_pausada(void) { return musica_pausada; }
+void audio_pause_music(bool pause) { music_paused = pause; }
+bool audio_music_active(void) { return music_active; }
+bool audio_music_paused(void) { return music_paused; }
 
-void audio_bip(void)
+/* Bip curto de confirmação. */
+void audio_beep(void)
 {
-    audio_tom(2000, 30);
+    audio_tone(2000, 30);
 }
 
-void audio_erro(void)
+/* Som de erro. */
+void audio_error(void)
 {
-    static const nota_t n[] = {{300, 80}, {0, 30}, {250, 120}};
-    audio_efeito(n, 3, false);
+    static const note_t n[] = {{300, 80}, {0, 30}, {250, 120}};
+    audio_effect(n, 3, false);
 }
 
-void audio_mordida(void)
+/* Som de mordida (animação de comer). */
+void audio_bite(void)
 {
-    static const nota_t n[] = {{180, 25}, {0, 15}, {120, 35}};
-    audio_efeito(n, 3, false);
+    static const note_t n[] = {{180, 25}, {0, 15}, {120, 35}};
+    audio_effect(n, 3, false);
 }
 
-void audio_vitoria(void)
+/* Melodia de vitória. */
+void audio_victory(void)
 {
-    static const nota_t n[] = {{523, 120}, {659, 120}, {784, 120}, {1047, 300}, {0, 60}, {784, 120}, {1047, 400}};
-    audio_efeito(n, 7, false);
+    static const note_t n[] = {{523, 120}, {659, 120}, {784, 120}, {1047, 300}, {0, 60}, {784, 120}, {1047, 400}};
+    audio_effect(n, 7, false);
 }
 
-void audio_derrota(void)
+/* Melodia de derrota. */
+void audio_defeat(void)
 {
-    static const nota_t n[] = {{392, 200}, {349, 200}, {330, 200}, {262, 500}};
-    audio_efeito(n, 4, false);
+    static const note_t n[] = {{392, 200}, {349, 200}, {330, 200}, {262, 500}};
+    audio_effect(n, 4, false);
 }
 
-void audio_alarme(void)
+/* Bipes do despertador (tocam mesmo no mudo). */
+void audio_alarm(void)
 {
-    static const nota_t n[] = {{2093, 120}, {0, 80}, {2093, 120}, {0, 80}, {2093, 120}, {0, 500}};
-    audio_efeito(n, 6, true);
+    static const note_t n[] = {{2093, 120}, {0, 80}, {2093, 120}, {0, 80}, {2093, 120}, {0, 500}};
+    audio_effect(n, 6, true);
 }
 
+/* Arpejo de subida de nível. */
 void audio_level_up(void)
 {
-    static const nota_t n[] = {{659, 90}, {784, 90}, {988, 90}, {1319, 250}};
-    audio_efeito(n, 4, false);
+    static const note_t n[] = {{659, 90}, {784, 90}, {988, 90}, {1319, 250}};
+    audio_effect(n, 4, false);
 }

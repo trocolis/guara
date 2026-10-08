@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 /* Leitor mínimo de INI (game.ini, book.ini): [SECAO] e chave=valor, ';' ou '#' comentam. */
-bool ini_texto(const char *conteudo, const char *secao, const char *chave, char *saida, int tamanho);
-int ini_inteiro(const char *conteudo, const char *secao, const char *chave, int padrao);
+bool ini_text(const char *content, const char *section, const char *key, char *output, int size);
+int ini_integer(const char *content, const char *section, const char *key, int fallback);
 
 #endif

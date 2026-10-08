@@ -336,7 +336,7 @@ function update()
             elseif menu_cursor == 4 then
                 current_state = STATE_RANKING; audio.beep(523, 20)
             elseif menu_cursor == 5 then
-                audio.beep(330, 40); sair()
+                audio.beep(330, 40); exit()
             end
         end
 

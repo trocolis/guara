@@ -1,3 +1,0 @@
-id,slug,nome,tipo,icone,afinidade,efeitos,sobre_efeitos,descricao
-0,teste_comida,Comida de teste,COMIDA,apple,AR,ALIMENTACAO+15;HP+5;ENERGIA+10,,Item usado só nos testes.
-1,teste_pocao,Poção de teste,POCAO,pocao_vida,NEUTRA,HP+30,,Item usado só nos testes.

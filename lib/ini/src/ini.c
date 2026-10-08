@@ -1,26 +1,32 @@
+/*
+ * Leitor mínimo de arquivos INI (game.ini, book.ini).
+ */
 #include "ini.h"
 
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
-static const char *pular_espacos(const char *p, const char *fim)
+/* Pula espaços e tabulações. */
+static const char *skip_spaces(const char *p, const char *end)
 {
-    while (p < fim && (*p == ' ' || *p == '\t')) {
+    while (p < end && (*p == ' ' || *p == '\t')) {
         p++;
     }
     return p;
 }
 
-static const char *aparar_fim(const char *ini, const char *fim)
+/* Recua `end` até o último caractere que não é espaço. */
+static const char *trim_end(const char *ini, const char *end)
 {
-    while (fim > ini && isspace((unsigned char)fim[-1])) {
-        fim--;
+    while (end > ini && isspace((unsigned char)end[-1])) {
+        end--;
     }
-    return fim;
+    return end;
 }
 
-static bool igual_ci(const char *a, int n, const char *b)
+/* Compara `n` caracteres de `a` com `b`, sem diferenciar maiúsculas. */
+static bool equal_ci(const char *a, int n, const char *b)
 {
     if ((int)strlen(b) != n) {
         return false;
@@ -33,43 +39,45 @@ static bool igual_ci(const char *a, int n, const char *b)
     return true;
 }
 
-bool ini_texto(const char *conteudo, const char *secao, const char *chave, char *saida, int tamanho)
+/* Procura `key` na seção `section` e copia o valor para `output`. */
+bool ini_text(const char *content, const char *section, const char *key, char *output, int size)
 {
-    bool na_secao = secao == NULL || *secao == '\0';
-    const char *p = conteudo;
+    bool in_section = section == NULL || *section == '\0';
+    const char *p = content;
     while (p && *p) {
-        const char *fim_linha = strchr(p, '\n');
-        const char *fim = fim_linha ? fim_linha : p + strlen(p);
-        const char *l = pular_espacos(p, fim);
-        const char *e = aparar_fim(l, fim);
+        const char *line_end = strchr(p, '\n');
+        const char *end = line_end ? line_end : p + strlen(p);
+        const char *l = skip_spaces(p, end);
+        const char *e = trim_end(l, end);
         if (l < e && *l == '[') {
             const char *f = memchr(l, ']', (size_t)(e - l));
             if (f) {
-                na_secao = secao && igual_ci(l + 1, (int)(f - l - 1), secao);
+                in_section = section && equal_ci(l + 1, (int)(f - l - 1), section);
             }
-        } else if (na_secao && l < e && *l != ';' && *l != '#') {
-            const char *igual = memchr(l, '=', (size_t)(e - l));
-            if (igual) {
-                const char *fim_chave = aparar_fim(l, igual);
-                if (igual_ci(l, (int)(fim_chave - l), chave)) {
-                    const char *v = pular_espacos(igual + 1, e);
+        } else if (in_section && l < e && *l != ';' && *l != '#') {
+            const char *equal = memchr(l, '=', (size_t)(e - l));
+            if (equal) {
+                const char *key_end = trim_end(l, equal);
+                if (equal_ci(l, (int)(key_end - l), key)) {
+                    const char *v = skip_spaces(equal + 1, e);
                     int n = (int)(e - v);
-                    if (n >= tamanho) {
-                        n = tamanho - 1;
+                    if (n >= size) {
+                        n = size - 1;
                     }
-                    memcpy(saida, v, (size_t)n);
-                    saida[n] = '\0';
+                    memcpy(output, v, (size_t)n);
+                    output[n] = '\0';
                     return true;
                 }
             }
         }
-        p = fim_linha ? fim_linha + 1 : NULL;
+        p = line_end ? line_end + 1 : NULL;
     }
     return false;
 }
 
-int ini_inteiro(const char *conteudo, const char *secao, const char *chave, int padrao)
+/* Lê um valor inteiro, ou devolve `fallback` se a chave não existir. */
+int ini_integer(const char *content, const char *section, const char *key, int fallback)
 {
     char buf[24];
-    return ini_texto(conteudo, secao, chave, buf, sizeof(buf)) ? atoi(buf) : padrao;
+    return ini_text(content, section, key, buf, sizeof(buf)) ? atoi(buf) : fallback;
 }

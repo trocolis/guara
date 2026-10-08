@@ -1,7 +1,8 @@
 """
 Alvo extra do PlatformIO: gera o storage.bin e grava só a partição 'storage'.
 
-    pio run -e esp32 -t upload_storage
+    pio run -e esp32 -t build_storage     # só gera .pio/storage.bin
+    pio run -e esp32 -t upload_storage    # gera e grava
 
 Não toca no firmware nem nas partições 'save' e 'nvs' (o Guará é preservado).
 """
@@ -12,44 +13,46 @@ import subprocess
 import sys
 from pathlib import Path
 
-RAIZ = Path(env.subst("$PROJECT_DIR"))  # noqa: F821
-IMAGEM = RAIZ / ".pio" / "storage.bin"
-OFFSET_STORAGE = "0x2F0000"
+PROJECT_ROOT = Path(env.subst("$PROJECT_DIR"))  # noqa: F821
+IMAGE_PATH = PROJECT_ROOT / ".pio" / "storage.bin"
+# Offset da partição 'storage' em partitions.csv
+STORAGE_OFFSET = "0x2F0000"
 
 
-def empacotar(*args, **kwargs):
-    resultado = subprocess.run([sys.executable, str(RAIZ / "tools" / "storage-packer" / "pack_storage.py"),
-                                "-o", str(IMAGEM)])
-    return resultado.returncode
+def build_storage(*args, **kwargs):
+    """Executa o storage-packer; retorna o código de saída (0 = sucesso)."""
+    packer = PROJECT_ROOT / "tools" / "storage-packer" / "pack_storage.py"
+    return subprocess.run([sys.executable, str(packer), "-o", str(IMAGE_PATH)]).returncode
 
 
-def gravar(*args, **kwargs):
-    if empacotar():
+def upload_storage(*args, **kwargs):
+    """Gera a imagem e grava no offset da partição com o esptool do PlatformIO."""
+    if build_storage():
         return 1
     env.AutodetectUploadPort()  # noqa: F821
-    comando = [
+    command = [
         env.subst("$PYTHONEXE"),  # noqa: F821
         env.subst("$UPLOADER"),  # noqa: F821
         "--chip", "esp32",
         "--port", env.subst("$UPLOAD_PORT"),  # noqa: F821
         "--baud", env.subst("$UPLOAD_SPEED"),  # noqa: F821
-        "write_flash", OFFSET_STORAGE, str(IMAGEM),
+        "write_flash", STORAGE_OFFSET, str(IMAGE_PATH),
     ]
-    print(" ".join(comando))
-    return subprocess.run(comando).returncode
+    print(" ".join(command))
+    return subprocess.run(command).returncode
 
 
 env.AddCustomTarget(  # noqa: F821
     name="build_storage",
     dependencies=None,
-    actions=[empacotar],
+    actions=[build_storage],
     title="Gerar storage.bin",
     description="Empacota VROM e catálogo em .pio/storage.bin",
 )
 env.AddCustomTarget(  # noqa: F821
     name="upload_storage",
     dependencies=None,
-    actions=[gravar],
+    actions=[upload_storage],
     title="Gravar storage",
     description="Grava .pio/storage.bin no offset da partição storage",
 )

@@ -72,7 +72,7 @@ O sistema possui um subsistema dedicado de gerenciamento de energia para maximiz
 	1. **Modo Ativo (Normal):** Consumo entre 80 mA e 120 mA, tela OLED ativa a 20 FPS (30 FPS em jogos).
 	2. **Light Sleep:** Modulação de clock e suspensão de periféricos para momentos de breve espera.
 	3. **Deep Sleep (Hibernação Total):** Desligamento da CPU principal e dos rádios, preservando unicamente o coprocessador RTC e a memória RTC Fast RAM (8 KB) com o estado completo do Guará e da mochila, com o display e o cartão SD em modo de espera.
-	   > ⏳ Pendente (decisão D7 em `docs/PLANO.md`): o consumo real em Deep Sleep ainda precisa ser medido. Com a montagem atual (divisor de bateria ligado direto, conversor USB-serial do NodeMCU, OLED e SD sem corte de energia) ele fica bem acima dos ~10 µA do ESP32 isolado.
+	   > ⏳ Pendente (decisão D7 em `docs/PLAN.md`): o consumo real em Deep Sleep ainda precisa ser medido. Com a montagem atual (divisor de bateria ligado direto, conversor USB-serial do NodeMCU, OLED e SD sem corte de energia) ele fica bem acima dos ~10 µA do ESP32 isolado.
 	4. **Despertar (*Wake-up*):** O sistema acorda automaticamente por interrupção externa nos pinos de hardware RTC (Botão Cima GPIO 32 e Botão Baixo GPIO 33) ou por alarme temporizado configurado no RTC (`esp_sleep_enable_timer_wakeup`) para acionamento de despertadores e temporizadores.
 - **Proteção Crítica contra Queda de Energia (*Emergency Flush*):** Quando a tensão da bateria atinge o limite crítico (< 10% / 3.45V), o sistema dispara um salvamento de emergência forçado para os setores rotativos da Flash (*Pilar 3*) e entra em suspensão profunda indefinida com display e periféricos desenergizados, prevenindo corrupção de dados.
 - **Recuperação Temporal Pós-Sono / Reinício (Cálculo de Desgaste Acumulado):** Ao inicializar ou acordar de um longo período de repouso, o sistema recupera o último Save State válido (da RTC Fast RAM ou do setor rotativo da Flash) e calcula o $\Delta t$ (tempo decorrido em minutos entre o timestamp atual do DS3231 e o timestamp do último save). O motor do ciclo de vida projeta o desgaste acumulado de Necessidades (Alimentação, Energia, Humor e Saúde) de forma gradual e segura, aplicando travas de proteção que evitam que o Guará desmaie imediatamente sem chance de reação do jogador.
@@ -152,7 +152,7 @@ O sistema é estritamente dividido em três camadas desacopladas. Firmware e sto
 
 #### Domínios do Save State (512 Bytes)
 
-O Save State é um bloco fixo de 512 bytes (little-endian) com domínios em offsets fixos, serializado por `lib/nucleo/src/save.c`. São 190 bytes úteis; o restante fica reservado para expansão:
+O Save State é um bloco fixo de 512 bytes (little-endian) com domínios em offsets fixos, serializado por `lib/core/src/save.c`. São 190 bytes úteis; o restante fica reservado para expansão:
 
 | Offset | Domínio | Tamanho | Descrição dos Dados |
 |---|---|---|---|
@@ -199,11 +199,11 @@ pio run -e esp32 -t upload                # grava bootloader, tabela de partiç�
 pio run -e esp32 -t upload_storage        # gera e grava só a partição storage (VROM + catálogo)
 pio run -e esp32 -t monitor               # monitor serial (115200)
 pio test -e native                        # testes unitários no computador
-python3 tools/console.py roteiro "espera 4" "teclas jj" "tela tela.png"   # console de depuração
+python3 tools/console.py script "wait 4" "keys jj" "screen tela.png"   # console de depuração
 ```
 
-- **Catálogo:** itens, equipamentos e habilidades ficam em `catalog/*.csv` e entram no `storage.bin` pelo `tools/storage-packer`.
-- **Fonte:** a fonte 5x8 (com acentos) é desenhada em `tools/font-builder/fonte_5x8.txt` e gerada com `build_font.py`.
+- **Catálogo:** itens, equipamentos e habilidades ficam em `catalog/items.csv`, `catalog/equipment.csv` e `catalog/skills.csv` (colunas e valores em inglês, como `FOOD`, `FIRE`, `SATIETY+15`) e entram no `storage.bin` pelo `tools/storage-packer`.
+- **Fonte:** a fonte 5x8 (com acentos) é desenhada em `tools/font-builder/font_5x8.txt` e gerada com `build_font.py`.
 - **Console de depuração:** pela serial aceita teclas (`w` `s` `a` `d` = direcional, `j` = A, `k` = B), `P` para capturar a tela e `S` para o estado do Guará.
 
 ### Versionamento e Política de Releases
@@ -217,14 +217,14 @@ O projeto adota o padrão de Versionamento Semântico (**`MAJOR.MINOR.PATCH`** /
 
 ### Conectividade: Wi-Fi sob Demanda
 
-Implementação: `src/sistema/rede.c`.
+Implementação: `src/system/network.c`.
 
 O rádio Wi-Fi só é ligado quando alguma tarefa precisa de rede. Para o usuário, o Wi-Fi continua simplesmente "ligado".
 
 - **Significado de `ON` e `OFF` (Ajustes > Wi-Fi):**
   - `ON` quer dizer **rede permitida**, não "rádio ligado". Fora das tarefas de rede, o rádio fica desligado e o driver descarregado, o que economiza bateria e libera cerca de 60 KB de RAM.
   - `OFF` proíbe qualquer uso de rede.
-- **Serviço de rede com contador de uso:** quem precisa de rede pede acesso (`rede_usar()`) e devolve ao terminar (`rede_liberar()`).
+- **Serviço de rede com contador de uso:** quem precisa de rede pede acesso (`network_use()`) e devolve ao terminar (`network_release()`).
   - No primeiro pedido, o serviço liga o rádio e conecta à última rede salva que estiver disponível.
   - Quando o contador volta a zero, o rádio desliga após **30 segundos** ociosos. Assim, tarefas próximas aproveitam a mesma conexão.
   - Uso contínuo, como um combate online, mantém o pedido aberto durante todo o uso.
@@ -434,7 +434,7 @@ gain_humor_per_min=4
 gain_exp_per_min=5
 gain_stat_focus=AGI
 gain_stat_pts_per_min=1
-affinity_elem=FOGO
+affinity_elem=FIRE
 affinity_pts_per_min=1
 drop_item_id=14
 drop_item_interval_min=2
@@ -451,11 +451,11 @@ A máquina virtual Lua roda a 30 FPS gerenciada pelo FreeRTOS e expõe as seguin
 - **Módulo `btn`:** Verificação de botões pressionados (`btn.up()`, `btn.down()`, `btn.left()`, `btn.right()`, `btn.a()`, `btn.b()`).
 - **Módulo `audio`:** Funções para bips sonoros (`audio.beep(freq, ms)`), notas musicais e reprodução de arquivos MIDI (`audio.play_midi(path)`).
 - **Módulo `guara` (ou `pet`):** Comunicação bidirecional com o Guará ativo:
-	- `guara.get_status()`: Retorna tabela com os dados vitais, atributos e nível.
+	- `guara.get_status()`: Retorna tabela com os dados vitais, atributos e nível (campos `name`, `nature`, `level`, `xp`, `hp`, `hp_max`, `mp`, `mp_max`, `energy`, `mood`, `satiety`, `health`, `atk`, `def`, `str`, `agi`, `int`, `luk`).
 	- `guara.give_item(id, quantidade)`: Adiciona ao inventário (mochila) unidades de um item do catálogo, pelo ID numérico ou pelo identificador textual (ex.: `"maca"`).
-	- `guara.add_stat(atributo, valor)`: Modifica status vitais ou atributos de combate.
+	- `guara.add_stat(nome, valor)`: Modifica status vitais ou atributos de combate (`hp`, `mp`, `energy`, `mood`, `satiety`, `health`, `atk`, `def`, `str`, `agi`, `int`, `luk`).
 	- `guara.add_exp(pontos)`: Concede experiência ao Guará com cálculo de *Level Up*.
-	- `guara.add_affinity(elemento, pontos)`: Incrementa a afinidade com uma natureza elemental, seguindo as regras de *Afinidades* (`luz`/`sombra` movem o medidor Dia × Noite; `mente`, os pontos mentais).
+	- `guara.add_affinity(elemento, pontos)`: Incrementa a afinidade com uma natureza elemental (`fire`, `earth`, `water`, `air`, `neutral`), seguindo as regras de *Afinidades*; `light`/`shadow` movem o medidor Dia × Noite e `mind` soma pontos de INT.
 	- `guara.report_result(vitoria)`: Registra o resultado de um minijogo ou batalha (`true` = vitória) no medidor Vitórias × Derrotas.
 - **Módulo `storage`:** Funções de gravação e leitura de arquivos de save isolados dentro da pasta do jogo (`GAME_DIR`), impedindo que jogos sobrescrevam dados uns dos outros: `storage.save(chave, texto)` e `storage.load(chave)` (chave com letras, números e `_`).
 
@@ -468,9 +468,9 @@ Referência completa da API implementada (cores: `1` = branco, `0` = preto, `2` 
 | `audio` | `beep(freq,ms)`, `note(nota_midi,ms)`, `play_midi(arquivo)`, `stop()` |
 | `guara` / `pet` | `get_status()`, `give_item(id\|slug,qtd)`, `add_stat(nome,valor)`, `add_exp(pontos)`, `add_affinity(elemento,pontos)`, `report_result(vitoria)` |
 | `storage` | `save(chave,texto)`, `load(chave)` |
-| globais | `sair()`, `millis()`, `WIDTH`, `HEIGHT` |
+| globais | `exit()`, `millis()`, `WIDTH`, `HEIGHT` |
 
-O jogo termina ao chamar `sair()` ou segurando **B** por 2 segundos. Há um exemplo completo em `exemplos/sdcard/games/pega_maca/` (copie a pasta para `/games` no cartão).
+O jogo termina ao chamar `exit()` ou segurando **B** por 2 segundos. Há um exemplo completo em `examples/sdcard/games/apple_catch/` (copie a pasta para `/games` no cartão).
 
 
 ##### Músicas ![Musicas](./bitmaps/icons/music.bmp)

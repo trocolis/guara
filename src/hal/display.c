@@ -1,3 +1,7 @@
+/*
+ * Driver do OLED SH1106 128x64 por I2C. Uma task envia só as páginas que
+ * mudaram desde o último quadro, sem travar a interface.
+ */
 #include "display.h"
 
 #include <string.h>
@@ -7,26 +11,27 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "i2c.h"
-#include "pinos.h"
+#include "pins.h"
 
 static const char *TAG = "display";
 
 /* Defina como 1 se a imagem aparecer de cabeça para baixo. */
-#ifndef DISPLAY_GIRAR_180
-#define DISPLAY_GIRAR_180 0
+#ifndef DISPLAY_ROTATE_180
+#define DISPLAY_ROTATE_180 0
 #endif
 
 /* O SH1106 tem RAM de 132 colunas; a área visível começa na coluna 2. */
-#define DESLOCAMENTO_COLUNA 2
+#define OFFSET_COLUMN 2
 
 static i2c_master_dev_handle_t dev;
-static SemaphoreHandle_t trava;
-static TaskHandle_t tarefa;
-static uint8_t pendente[GFX_ALTURA / 8][GFX_LARGURA];
-static uint8_t enviado[GFX_ALTURA / 8][GFX_LARGURA];
-static bool forcar = true;
+static SemaphoreHandle_t lock;
+static TaskHandle_t job;
+static uint8_t pending[GFX_HEIGHT / 8][GFX_WIDTH];
+static uint8_t sent[GFX_HEIGHT / 8][GFX_WIDTH];
+static bool force = true;
 
-static esp_err_t comandos(const uint8_t *cmds, size_t n)
+/* Envia uma sequência de comandos (byte de controle 0x00). */
+static esp_err_t commands(const uint8_t *cmds, size_t n)
 {
     uint8_t buf[16];
     buf[0] = 0x00; /* Co=0, D/C=0: sequência de comandos */
@@ -34,55 +39,58 @@ static esp_err_t comandos(const uint8_t *cmds, size_t n)
     return i2c_master_transmit(dev, buf, n + 1, 100);
 }
 
-static esp_err_t enviar_pagina(int pagina, const uint8_t *dados)
+/* Envia uma página (8 linhas) do framebuffer. */
+static esp_err_t send_page(int page, const uint8_t *data)
 {
-    const uint8_t endereco[] = {
-        (uint8_t)(0xB0 | pagina),
-        (uint8_t)(0x00 | (DESLOCAMENTO_COLUNA & 0x0F)),
-        (uint8_t)(0x10 | (DESLOCAMENTO_COLUNA >> 4)),
+    const uint8_t address[] = {
+        (uint8_t)(0xB0 | page),
+        (uint8_t)(0x00 | (OFFSET_COLUMN & 0x0F)),
+        (uint8_t)(0x10 | (OFFSET_COLUMN >> 4)),
     };
-    esp_err_t err = comandos(endereco, sizeof(endereco));
+    esp_err_t err = commands(address, sizeof(address));
     if (err != ESP_OK) {
         return err;
     }
-    uint8_t buf[GFX_LARGURA + 1];
+    uint8_t buf[GFX_WIDTH + 1];
     buf[0] = 0x40; /* dados */
-    memcpy(buf + 1, dados, GFX_LARGURA);
+    memcpy(buf + 1, data, GFX_WIDTH);
     return i2c_master_transmit(dev, buf, sizeof(buf), 100);
 }
 
-static void tarefa_display(void *arg)
+/* Task de envio: copia o quadro pendente e transmite as páginas alteradas. */
+static void job_display(void *arg)
 {
     (void)arg;
-    uint8_t local[GFX_ALTURA / 8][GFX_LARGURA];
+    uint8_t local[GFX_HEIGHT / 8][GFX_WIDTH];
     for (;;) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        xSemaphoreTake(trava, portMAX_DELAY);
-        memcpy(local, pendente, sizeof(local));
-        bool tudo = forcar;
-        forcar = false;
-        xSemaphoreGive(trava);
-        for (int p = 0; p < GFX_ALTURA / 8; p++) {
-            if (tudo || memcmp(local[p], enviado[p], GFX_LARGURA) != 0) {
-                if (enviar_pagina(p, local[p]) == ESP_OK) {
-                    memcpy(enviado[p], local[p], GFX_LARGURA);
+        xSemaphoreTake(lock, portMAX_DELAY);
+        memcpy(local, pending, sizeof(local));
+        bool all = force;
+        force = false;
+        xSemaphoreGive(lock);
+        for (int p = 0; p < GFX_HEIGHT / 8; p++) {
+            if (all || memcmp(local[p], sent[p], GFX_WIDTH) != 0) {
+                if (send_page(p, local[p]) == ESP_OK) {
+                    memcpy(sent[p], local[p], GFX_WIDTH);
                 } else {
-                    forcar = true;
+                    force = true;
                 }
             }
         }
     }
 }
 
-bool display_iniciar(void)
+/* Detecta o display, envia a sequência de inicialização e cria a task. */
+bool display_init(void)
 {
-    if (!i2c_presente(ENDERECO_SH1106)) {
-        ESP_LOGE(TAG, "SH1106 não respondeu em 0x%02X", ENDERECO_SH1106);
+    if (!i2c_is_present(ADDRESS_SH1106)) {
+        ESP_LOGE(TAG, "SH1106 não respondeu em 0x%02X", ADDRESS_SH1106);
         return false;
     }
     if (dev == NULL) {
-        dev = i2c_dispositivo(ENDERECO_SH1106);
-        trava = xSemaphoreCreateMutex();
+        dev = i2c_add_device(ADDRESS_SH1106);
+        lock = xSemaphoreCreateMutex();
     }
     static const uint8_t init[] = {
         0xAE,       /* display desligado */
@@ -91,11 +99,11 @@ bool display_iniciar(void)
         0xD3, 0x00, /* deslocamento vertical */
         0x40,       /* linha inicial 0 */
         0xAD, 0x8B, /* conversor DC-DC ligado */
-#if DISPLAY_GIRAR_180
+#if DISPLAY_ROTATE_180
         0xA0, 0xC0, /* orientação girada */
 #else
-        0xA1,       /* segmentos invertidos (coluna 127 -> SEG0) */
-        0xC8,       /* varredura COM de baixo para cima */
+        0xA1, /* segmentos invertidos (coluna 127 -> SEG0) */
+        0xC8, /* varredura COM de baixo para cima */
 #endif
         0xDA, 0x12, /* configuração dos pinos COM */
         0x81, 0xCF, /* contraste */
@@ -106,53 +114,57 @@ bool display_iniciar(void)
     };
     for (size_t i = 0; i < sizeof(init); i += 8) {
         size_t n = sizeof(init) - i < 8 ? sizeof(init) - i : 8;
-        if (comandos(init + i, n) != ESP_OK) {
+        if (commands(init + i, n) != ESP_OK) {
             ESP_LOGE(TAG, "Falha na inicialização");
             return false;
         }
     }
-    memset(pendente, 0, sizeof(pendente));
-    forcar = true;
-    if (tarefa == NULL) {
-        xTaskCreatePinnedToCore(tarefa_display, "display", 3072, NULL, 5, &tarefa, 1);
+    memset(pending, 0, sizeof(pending));
+    force = true;
+    if (job == NULL) {
+        xTaskCreatePinnedToCore(job_display, "display", 3072, NULL, 5, &job, 1);
     }
-    xTaskNotifyGive(tarefa);
-    display_ligar(true);
+    xTaskNotifyGive(job);
+    display_set_power(true);
     return true;
 }
 
-void display_enviar(const gfx_t *g)
+/* Copia o framebuffer para envio e acorda a task. */
+void display_send(const gfx_t *g)
 {
-    if (tarefa == NULL) {
+    if (job == NULL) {
         return;
     }
-    xSemaphoreTake(trava, portMAX_DELAY);
-    memcpy(pendente, g->buf, sizeof(pendente));
-    xSemaphoreGive(trava);
-    xTaskNotifyGive(tarefa);
+    xSemaphoreTake(lock, portMAX_DELAY);
+    memcpy(pending, g->buf, sizeof(pending));
+    xSemaphoreGive(lock);
+    xTaskNotifyGive(job);
 }
 
-void display_ligar(bool ligado)
+/* Liga ou desliga o painel (o conteúdo da RAM é mantido). */
+void display_set_power(bool enabled)
 {
     if (dev) {
-        const uint8_t c = ligado ? 0xAF : 0xAE;
-        comandos(&c, 1);
+        const uint8_t c = enabled ? 0xAF : 0xAE;
+        commands(&c, 1);
     }
 }
 
-void display_contraste(uint8_t valor)
+/* Ajusta o contraste (0..255). */
+void display_contrast(uint8_t value)
 {
     if (dev) {
-        const uint8_t c[] = {0x81, valor};
-        comandos(c, sizeof(c));
+        const uint8_t c[] = {0x81, value};
+        commands(c, sizeof(c));
     }
 }
 
-void display_copiar(uint8_t destino[GFX_ALTURA / 8][GFX_LARGURA])
+/* Copia o último quadro enviado (usado pela captura de tela). */
+void display_copy(uint8_t destination[GFX_HEIGHT / 8][GFX_WIDTH])
 {
-    if (trava) {
-        xSemaphoreTake(trava, portMAX_DELAY);
-        memcpy(destino, pendente, sizeof(pendente));
-        xSemaphoreGive(trava);
+    if (lock) {
+        xSemaphoreTake(lock, portMAX_DELAY);
+        memcpy(destination, pending, sizeof(pending));
+        xSemaphoreGive(lock);
     }
 }

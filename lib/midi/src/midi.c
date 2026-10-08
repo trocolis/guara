@@ -1,3 +1,7 @@
+/*
+ * Leitor de Standard MIDI File que reduz a música a uma voz (a nota ativa mais
+ * aguda), para tocar no buzzer piezoelétrico.
+ */
 #include "midi.h"
 
 #include <string.h>
@@ -6,17 +10,18 @@ static uint32_t be32(const uint8_t *p) { return ((uint32_t)p[0] << 24) | (p[1] <
 static uint16_t be16(const uint8_t *p) { return (uint16_t)((p[0] << 8) | p[1]); }
 
 /* Frequências (mHz) da oitava 5 do MIDI (notas 60..71: C4..B4 em Hz x1000). */
-static const uint32_t OITAVA[12] = {261626, 277183, 293665, 311127, 329628, 349228,
+static const uint32_t OCTAVE[12] = {261626, 277183, 293665, 311127, 329628, 349228,
                                     369994, 391995, 415305, 440000, 466164, 493883};
 
-uint16_t midi_frequencia(int nota)
+/* Frequência (Hz) de uma nota MIDI, limitada à faixa útil do piezo. */
+uint16_t midi_frequency(int note)
 {
-    if (nota < 0 || nota > 127) {
+    if (note < 0 || note > 127) {
         return 0;
     }
-    int oitava = nota / 12 - 5;
-    uint32_t f = OITAVA[nota % 12];
-    f = oitava >= 0 ? f << oitava : f >> -oitava;
+    int octave = note / 12 - 5;
+    uint32_t f = OCTAVE[note % 12];
+    f = octave >= 0 ? f << octave : f >> -octave;
     f /= 1000;
     if (f < 100) {
         f = 100; /* abaixo disso o piezo quase não soa */
@@ -27,11 +32,12 @@ uint16_t midi_frequencia(int nota)
     return (uint16_t)f;
 }
 
-static bool ler_vlq(midi_trilha_t *t, uint32_t *v)
+/* Lê uma quantidade de tamanho variável (VLQ) da trilha. */
+static bool read_vlq(midi_track_t *t, uint32_t *v)
 {
     *v = 0;
     for (int i = 0; i < 4; i++) {
-        if (t->pos >= t->fim) {
+        if (t->pos >= t->end) {
             return false;
         }
         uint8_t b = *t->pos++;
@@ -43,84 +49,88 @@ static bool ler_vlq(midi_trilha_t *t, uint32_t *v)
     return false;
 }
 
-static void ler_delta(midi_trilha_t *t)
+/* Lê o delta-time do próximo evento e atualiza o tick da trilha. */
+static void read_delta(midi_track_t *t)
 {
     uint32_t delta;
-    if (t->acabou || !ler_vlq(t, &delta)) {
-        t->acabou = true;
+    if (t->done || !read_vlq(t, &delta)) {
+        t->done = true;
         return;
     }
-    t->proximo_tick += delta;
+    t->next_tick += delta;
 }
 
-bool midi_abrir(midi_t *m, const uint8_t *dados, size_t tamanho)
+/* Valida o cabeçalho e localiza as trilhas (até 16). */
+bool midi_open(midi_t *m, const uint8_t *data, size_t size)
 {
     memset(m, 0, sizeof(*m));
-    if (tamanho < 14 || memcmp(dados, "MThd", 4) != 0 || be32(dados + 4) < 6) {
+    if (size < 14 || memcmp(data, "MThd", 4) != 0 || be32(data + 4) < 6) {
         return false;
     }
-    uint16_t formato = be16(dados + 8);
-    uint16_t n = be16(dados + 10);
-    uint16_t divisao = be16(dados + 12);
-    if (formato > 1 || n == 0) {
+    uint16_t format = be16(data + 8);
+    uint16_t n = be16(data + 10);
+    uint16_t division = be16(data + 12);
+    if (format > 1 || n == 0) {
         return false;
     }
-    if (divisao & 0x8000) {
+    if (division & 0x8000) {
         /* SMPTE: aproximação para ticks por segundo como "semínima de 1 s" */
-        int fps = -(int8_t)(divisao >> 8);
-        divisao = (uint16_t)(fps * (divisao & 0xFF));
-        m->tempo_us = 1000000;
+        int fps = -(int8_t)(division >> 8);
+        division = (uint16_t)(fps * (division & 0xFF));
+        m->time_us = 1000000;
     } else {
-        m->tempo_us = 500000; /* 120 BPM */
+        m->time_us = 500000; /* 120 BPM */
     }
-    if (divisao == 0) {
+    if (division == 0) {
         return false;
     }
-    m->dados = dados;
-    m->tamanho = tamanho;
-    m->divisao = divisao;
-    const uint8_t *p = dados + 8 + be32(dados + 4);
-    const uint8_t *fim = dados + tamanho;
-    while (p + 8 <= fim && m->n_trilhas < MIDI_MAX_TRILHAS) {
-        uint32_t tam = be32(p + 4);
+    m->data = data;
+    m->size = size;
+    m->division = division;
+    const uint8_t *p = data + 8 + be32(data + 4);
+    const uint8_t *end = data + size;
+    while (p + 8 <= end && m->n_tracks < MIDI_MAX_TRACKS) {
+        uint32_t length = be32(p + 4);
         if (memcmp(p, "MTrk", 4) == 0) {
-            midi_trilha_t *t = &m->trilhas[m->n_trilhas++];
+            midi_track_t *t = &m->tracks[m->n_tracks++];
             t->ini = t->pos = p + 8;
-            t->fim = (p + 8 + tam <= fim) ? p + 8 + tam : fim;
+            t->end = (p + 8 + length <= end) ? p + 8 + length : end;
         }
-        p += 8 + tam;
+        p += 8 + length;
     }
-    if (m->n_trilhas == 0) {
+    if (m->n_tracks == 0) {
         return false;
     }
-    midi_reiniciar(m);
+    midi_restart(m);
     return true;
 }
 
-void midi_reiniciar(midi_t *m)
+/* Volta todas as trilhas para o início. */
+void midi_restart(midi_t *m)
 {
-    for (int i = 0; i < m->n_trilhas; i++) {
-        midi_trilha_t *t = &m->trilhas[i];
+    for (int i = 0; i < m->n_tracks; i++) {
+        midi_track_t *t = &m->tracks[i];
         t->pos = t->ini;
-        t->proximo_tick = 0;
+        t->next_tick = 0;
         t->status = 0;
-        t->acabou = false;
-        ler_delta(t);
+        t->done = false;
+        read_delta(t);
     }
-    memset(m->ativas, 0, sizeof(m->ativas));
-    m->tick_atual = 0;
-    m->resto_us = 0;
-    m->nota_atual = -1;
-    m->terminou = false;
-    if (m->tempo_us != 1000000) {
-        m->tempo_us = 500000;
+    memset(m->active_skills, 0, sizeof(m->active_skills));
+    m->current_tick = 0;
+    m->remainder_us = 0;
+    m->current_note = -1;
+    m->ended = false;
+    if (m->time_us != 1000000) {
+        m->time_us = 500000;
     }
 }
 
-static int nota_mais_aguda(const midi_t *m)
+/* Nota ativa mais aguda (a melodia costuma estar no topo), ou -1. */
+static int highest_active_note(const midi_t *m)
 {
     for (int n = 127; n >= 0; n--) {
-        if (m->ativas[n]) {
+        if (m->active_skills[n]) {
             return n;
         }
     }
@@ -128,10 +138,10 @@ static int nota_mais_aguda(const midi_t *m)
 }
 
 /* Processa o próximo evento da trilha (já no tick dela). */
-static void processar_evento(midi_t *m, midi_trilha_t *t)
+static void process_event(midi_t *m, midi_track_t *t)
 {
-    if (t->pos >= t->fim) {
-        t->acabou = true;
+    if (t->pos >= t->end) {
+        t->done = true;
         return;
     }
     uint8_t b = *t->pos;
@@ -144,114 +154,117 @@ static void processar_evento(midi_t *m, midi_trilha_t *t)
         b = t->status; /* running status */
     }
     if (b == 0xFF) {
-        uint8_t tipo = t->pos < t->fim ? *t->pos++ : 0;
-        uint32_t tam;
-        if (!ler_vlq(t, &tam) || t->pos + tam > t->fim) {
-            t->acabou = true;
+        uint8_t type = t->pos < t->end ? *t->pos++ : 0;
+        uint32_t length;
+        if (!read_vlq(t, &length) || t->pos + length > t->end) {
+            t->done = true;
             return;
         }
-        if (tipo == 0x51 && tam == 3) {
-            m->tempo_us = ((uint32_t)t->pos[0] << 16) | (t->pos[1] << 8) | t->pos[2];
-        } else if (tipo == 0x2F) {
-            t->acabou = true;
+        if (type == 0x51 && length == 3) {
+            m->time_us = ((uint32_t)t->pos[0] << 16) | (t->pos[1] << 8) | t->pos[2];
+        } else if (type == 0x2F) {
+            t->done = true;
         }
-        t->pos += tam;
+        t->pos += length;
     } else if (b == 0xF0 || b == 0xF7) {
-        uint32_t tam;
-        if (!ler_vlq(t, &tam) || t->pos + tam > t->fim) {
-            t->acabou = true;
+        uint32_t length;
+        if (!read_vlq(t, &length) || t->pos + length > t->end) {
+            t->done = true;
             return;
         }
-        t->pos += tam;
+        t->pos += length;
     } else {
-        uint8_t tipo = b & 0xF0, canal = b & 0x0F;
-        int n_dados = (tipo == 0xC0 || tipo == 0xD0) ? 1 : 2;
-        if (t->pos + n_dados > t->fim) {
-            t->acabou = true;
+        uint8_t type = b & 0xF0, channel = b & 0x0F;
+        int n_data = (type == 0xC0 || type == 0xD0) ? 1 : 2;
+        if (t->pos + n_data > t->end) {
+            t->done = true;
             return;
         }
-        uint8_t d1 = t->pos[0], d2 = n_dados > 1 ? t->pos[1] : 0;
-        t->pos += n_dados;
-        if (canal != 9 && d1 < 128) {
-            if (tipo == 0x90 && d2 > 0) {
-                if (m->ativas[d1] < 255) {
-                    m->ativas[d1]++;
+        uint8_t d1 = t->pos[0], d2 = n_data > 1 ? t->pos[1] : 0;
+        t->pos += n_data;
+        if (channel != 9 && d1 < 128) {
+            if (type == 0x90 && d2 > 0) {
+                if (m->active_skills[d1] < 255) {
+                    m->active_skills[d1]++;
                 }
-            } else if (tipo == 0x80 || (tipo == 0x90 && d2 == 0)) {
-                if (m->ativas[d1]) {
-                    m->ativas[d1]--;
+            } else if (type == 0x80 || (type == 0x90 && d2 == 0)) {
+                if (m->active_skills[d1]) {
+                    m->active_skills[d1]--;
                 }
             }
         }
     }
-    ler_delta(t);
+    read_delta(t);
 }
 
-static midi_trilha_t *proxima_trilha(midi_t *m)
+/* Trilha com o próximo evento mais cedo. */
+static midi_track_t *next_track(midi_t *m)
 {
-    midi_trilha_t *melhor = NULL;
-    for (int i = 0; i < m->n_trilhas; i++) {
-        midi_trilha_t *t = &m->trilhas[i];
-        if (!t->acabou && (!melhor || t->proximo_tick < melhor->proximo_tick)) {
-            melhor = t;
+    midi_track_t *best = NULL;
+    for (int i = 0; i < m->n_tracks; i++) {
+        midi_track_t *t = &m->tracks[i];
+        if (!t->done && (!best || t->next_tick < best->next_tick)) {
+            best = t;
         }
     }
-    return melhor;
+    return best;
 }
 
-bool midi_proxima(midi_t *m, midi_nota_t *saida)
+/* Avança até a nota de saída mudar e devolve o trecho anterior (nota + duração). */
+bool midi_next(midi_t *m, midi_note_t *output)
 {
-    if (m->terminou) {
+    if (m->ended) {
         return false;
     }
     for (;;) {
-        midi_trilha_t *t = proxima_trilha(m);
+        midi_track_t *t = next_track(m);
         if (!t) {
-            m->terminou = true;
-            if (m->resto_us) {
-                uint32_t ms = (uint32_t)(m->resto_us / 1000);
-                m->resto_us = 0;
+            m->ended = true;
+            if (m->remainder_us) {
+                uint32_t ms = (uint32_t)(m->remainder_us / 1000);
+                m->remainder_us = 0;
                 if (ms) {
-                    saida->freq = midi_frequencia(m->nota_atual);
-                    saida->ms = (uint16_t)(ms > 65535 ? 65535 : ms);
+                    output->freq = midi_frequency(m->current_note);
+                    output->ms = (uint16_t)(ms > 65535 ? 65535 : ms);
                     return true;
                 }
             }
             return false;
         }
-        if (t->proximo_tick > m->tick_atual) {
-            uint32_t ticks = t->proximo_tick - m->tick_atual;
-            m->resto_us += (uint64_t)ticks * m->tempo_us / m->divisao;
-            m->tick_atual = t->proximo_tick;
+        if (t->next_tick > m->current_tick) {
+            uint32_t ticks = t->next_tick - m->current_tick;
+            m->remainder_us += (uint64_t)ticks * m->time_us / m->division;
+            m->current_tick = t->next_tick;
         }
         /* Processa todos os eventos deste tick antes de decidir a nota */
-        while ((t = proxima_trilha(m)) && t->proximo_tick == m->tick_atual) {
-            processar_evento(m, t);
+        while ((t = next_track(m)) && t->next_tick == m->current_tick) {
+            process_event(m, t);
         }
-        int nova = nota_mais_aguda(m);
-        if (nova != m->nota_atual) {
-            uint32_t ms = (uint32_t)(m->resto_us / 1000);
-            int anterior = m->nota_atual;
-            m->nota_atual = nova;
-            m->resto_us -= (uint64_t)ms * 1000;
+        int new = highest_active_note(m);
+        if (new != m->current_note) {
+            uint32_t ms = (uint32_t)(m->remainder_us / 1000);
+            int previous = m->current_note;
+            m->current_note = new;
+            m->remainder_us -= (uint64_t)ms * 1000;
             if (ms > 0) {
-                saida->freq = midi_frequencia(anterior);
-                saida->ms = (uint16_t)(ms > 65535 ? 65535 : ms);
+                output->freq = midi_frequency(previous);
+                output->ms = (uint16_t)(ms > 65535 ? 65535 : ms);
                 return true;
             }
         }
     }
 }
 
-uint32_t midi_duracao_ms(const uint8_t *dados, size_t tamanho)
+/* Duração total percorrendo uma cópia do estado. */
+uint32_t midi_duration_ms(const uint8_t *data, size_t size)
 {
     static midi_t m; /* grande demais para a pilha das tasks */
-    if (!midi_abrir(&m, dados, tamanho)) {
+    if (!midi_open(&m, data, size)) {
         return 0;
     }
     uint32_t total = 0;
-    midi_nota_t n;
-    while (midi_proxima(&m, &n)) {
+    midi_note_t n;
+    while (midi_next(&m, &n)) {
         total += n.ms;
     }
     return total;

@@ -1,0 +1,2 @@
+id,slug,name,type,icon,affinity,effects,status_effects,description
+0,test_weapon,Arma de teste,HAND_ATK,slot_mao_ataque_16,NEUTRAL,ATK+3,,Equipamento usado só nos testes.

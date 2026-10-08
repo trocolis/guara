@@ -6,12 +6,12 @@
 #include "gfx.h"
 
 /* Driver do OLED SH1106 128x64 (I2C). O envio roda numa task própria. */
-bool display_iniciar(void);
+bool display_init(void);
 /* Copia o framebuffer e agenda o envio das páginas alteradas. */
-void display_enviar(const gfx_t *g);
-void display_ligar(bool ligado);
-void display_contraste(uint8_t valor);
+void display_send(const gfx_t *g);
+void display_set_power(bool enabled);
+void display_contrast(uint8_t value);
 /* Cópia do último quadro enviado (1024 bytes, formato de páginas). */
-void display_copiar(uint8_t destino[GFX_ALTURA / 8][GFX_LARGURA]);
+void display_copy(uint8_t destination[GFX_HEIGHT / 8][GFX_WIDTH]);
 
 #endif

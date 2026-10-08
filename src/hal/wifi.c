@@ -1,3 +1,7 @@
+/*
+ * Driver Wi-Fi em modo estação. As telas não usam este módulo direto: o acesso
+ * passa pelo serviço de rede (system/network.c), que liga o rádio sob demanda.
+ */
 #include "wifi.h"
 
 #include <stdio.h>
@@ -13,38 +17,40 @@
 
 static const char *TAG = "wifi";
 
-#define BIT_CONECTADO BIT0
-#define BIT_FALHOU BIT1
+#define BIT_CONNECTED BIT0
+#define BIT_FAILED BIT1
 
-static EventGroupHandle_t eventos;
+static EventGroupHandle_t events;
 static esp_netif_t *netif;
-static bool ligado, base_iniciada;
-static char ssid_atual[33];
+static bool enabled, network_stack_started;
+static char current_ssid[33];
 
-static void ao_evento(void *arg, esp_event_base_t base, int32_t id, void *dados)
+/* Eventos do Wi-Fi: marca conexão obtida ou perdida. */
+static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     (void)arg;
-    (void)dados;
+    (void)data;
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
-        xEventGroupClearBits(eventos, BIT_CONECTADO);
-        xEventGroupSetBits(eventos, BIT_FALHOU);
+        xEventGroupClearBits(events, BIT_CONNECTED);
+        xEventGroupSetBits(events, BIT_FAILED);
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
-        xEventGroupSetBits(eventos, BIT_CONECTADO);
+        xEventGroupSetBits(events, BIT_CONNECTED);
     }
 }
 
-bool wifi_ligar(void)
+/* Inicializa a pilha de rede (uma vez) e liga o rádio em modo estação. */
+bool wifi_turn_on(void)
 {
-    if (ligado) {
+    if (enabled) {
         return true;
     }
-    if (!base_iniciada) {
+    if (!network_stack_started) {
         esp_netif_init();
         esp_event_loop_create_default();
-        eventos = xEventGroupCreate();
-        esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, ao_evento, NULL);
-        esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, ao_evento, NULL);
-        base_iniciada = true;
+        events = xEventGroupCreate();
+        esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_event, NULL);
+        esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL);
+        network_stack_started = true;
     }
     if (!netif) {
         netif = esp_netif_create_default_wifi_sta();
@@ -60,13 +66,14 @@ bool wifi_ligar(void)
         esp_wifi_deinit();
         return false;
     }
-    ligado = true;
+    enabled = true;
     return true;
 }
 
-void wifi_desligar(void)
+/* Desconecta, desliga o rádio e libera a memória do driver. */
+void wifi_turn_off(void)
 {
-    if (!ligado) {
+    if (!enabled) {
         return;
     }
     esp_wifi_disconnect();
@@ -75,69 +82,73 @@ void wifi_desligar(void)
     /* a interface padrão é recriada na próxima religação */
     esp_netif_destroy_default_wifi(netif);
     netif = NULL;
-    xEventGroupClearBits(eventos, BIT_CONECTADO | BIT_FALHOU);
-    ssid_atual[0] = '\0';
-    ligado = false;
+    xEventGroupClearBits(events, BIT_CONNECTED | BIT_FAILED);
+    current_ssid[0] = '\0';
+    enabled = false;
 }
 
-bool wifi_ligado(void)
+/* Verdadeiro se o rádio está ligado. */
+bool wifi_on(void)
 {
-    return ligado;
+    return enabled;
 }
 
-static int por_rssi(const void *a, const void *b)
+/* Ordena redes do sinal mais forte para o mais fraco. */
+static int by_rssi(const void *a, const void *b)
 {
-    return ((const rede_wifi_t *)b)->rssi - ((const rede_wifi_t *)a)->rssi;
+    return ((const wifi_network_t *)b)->rssi - ((const wifi_network_t *)a)->rssi;
 }
 
-int wifi_buscar(rede_wifi_t *redes, int max)
+/* Busca redes próximas (bloqueante). */
+int wifi_scan(wifi_network_t *networks, int max)
 {
-    if (!wifi_ligar()) {
+    if (!wifi_turn_on()) {
         return 0;
     }
     if (esp_wifi_scan_start(NULL, true) != ESP_OK) {
         return 0;
     }
-    uint16_t n = WIFI_MAX_REDES;
-    wifi_ap_record_t registros[WIFI_MAX_REDES];
-    esp_wifi_scan_get_ap_records(&n, registros);
-    int saida = 0;
-    for (int i = 0; i < n && saida < max; i++) {
-        if (registros[i].ssid[0] == '\0') {
+    uint16_t n = WIFI_MAX_NETWORKS;
+    wifi_ap_record_t records[WIFI_MAX_NETWORKS];
+    esp_wifi_scan_get_ap_records(&n, records);
+    int output = 0;
+    for (int i = 0; i < n && output < max; i++) {
+        if (records[i].ssid[0] == '\0') {
             continue;
         }
-        snprintf(redes[saida].ssid, sizeof(redes[saida].ssid), "%s", (const char *)registros[i].ssid);
-        redes[saida].rssi = registros[i].rssi;
-        redes[saida].aberta = registros[i].authmode == WIFI_AUTH_OPEN;
-        saida++;
+        snprintf(networks[output].ssid, sizeof(networks[output].ssid), "%s", (const char *)records[i].ssid);
+        networks[output].rssi = records[i].rssi;
+        networks[output].is_open = records[i].authmode == WIFI_AUTH_OPEN;
+        output++;
     }
-    qsort(redes, (size_t)saida, sizeof(rede_wifi_t), por_rssi);
-    return saida;
+    qsort(networks, (size_t)output, sizeof(wifi_network_t), by_rssi);
+    return output;
 }
 
-bool wifi_conectar(const char *ssid, const char *senha, uint32_t espera_ms, const uint8_t *bssid, uint8_t canal)
+/* Conecta; com BSSID e canal conhecidos, pula a busca (reconexão rápida). */
+bool wifi_connect(const char *ssid, const char *password, uint32_t timeout_ms, const uint8_t *bssid, uint8_t channel)
 {
-    if (!wifi_ligar()) {
+    if (!wifi_turn_on()) {
         return false;
     }
     wifi_config_t cfg = {0};
     snprintf((char *)cfg.sta.ssid, sizeof(cfg.sta.ssid), "%s", ssid);
-    snprintf((char *)cfg.sta.password, sizeof(cfg.sta.password), "%s", senha ? senha : "");
-    cfg.sta.threshold.authmode = (senha && *senha) ? WIFI_AUTH_WPA_PSK : WIFI_AUTH_OPEN;
-    if (bssid && canal) {
+    snprintf((char *)cfg.sta.password, sizeof(cfg.sta.password), "%s", password ? password : "");
+    cfg.sta.threshold.authmode = (password && *password) ? WIFI_AUTH_WPA_PSK : WIFI_AUTH_OPEN;
+    if (bssid && channel) {
         memcpy(cfg.sta.bssid, bssid, 6);
         cfg.sta.bssid_set = true;
-        cfg.sta.channel = canal;
+        cfg.sta.channel = channel;
     }
     esp_wifi_disconnect();
-    xEventGroupClearBits(eventos, BIT_CONECTADO | BIT_FALHOU);
+    xEventGroupClearBits(events, BIT_CONNECTED | BIT_FAILED);
     esp_wifi_set_config(WIFI_IF_STA, &cfg);
     if (esp_wifi_connect() != ESP_OK) {
         return false;
     }
-    EventBits_t bits = xEventGroupWaitBits(eventos, BIT_CONECTADO | BIT_FALHOU, pdFALSE, pdFALSE, pdMS_TO_TICKS(espera_ms));
-    if (bits & BIT_CONECTADO) {
-        snprintf(ssid_atual, sizeof(ssid_atual), "%s", ssid);
+    EventBits_t bits = xEventGroupWaitBits(events, BIT_CONNECTED | BIT_FAILED, pdFALSE, pdFALSE, pdMS_TO_TICKS(timeout_ms));
+    if (bits & BIT_CONNECTED) {
+        snprintf(current_ssid, sizeof(current_ssid), "%s", ssid);
         ESP_LOGI(TAG, "Conectado a %s", ssid);
         return true;
     }
@@ -145,51 +156,57 @@ bool wifi_conectar(const char *ssid, const char *senha, uint32_t espera_ms, cons
     return false;
 }
 
-bool wifi_conectado(void)
+/* Verdadeiro se há IP atribuído. */
+bool wifi_connected(void)
 {
-    return ligado && (xEventGroupGetBits(eventos) & BIT_CONECTADO);
+    return enabled && (xEventGroupGetBits(events) & BIT_CONNECTED);
 }
 
+/* Intensidade do sinal (dBm) da rede atual. */
 int wifi_rssi(void)
 {
     int rssi = -127;
-    if (wifi_conectado()) {
+    if (wifi_connected()) {
         esp_wifi_sta_get_rssi(&rssi);
     }
     return rssi;
 }
 
-int wifi_barras(void)
+/* Barras de sinal (0..3) para o ícone da barra superior. */
+int wifi_bars(void)
 {
-    if (!wifi_conectado()) {
+    if (!wifi_connected()) {
         return 0;
     }
     int r = wifi_rssi();
     return r > -60 ? 3 : (r > -72 ? 2 : 1);
 }
 
-const char *wifi_ssid_atual(void)
+/* Nome da rede conectada. */
+const char *wifi_current_ssid(void)
 {
-    return ssid_atual;
+    return current_ssid;
 }
 
-void wifi_ip(char *buf, int tam)
+/* Endereço IP atual como texto. */
+void wifi_ip(char *buf, int length)
 {
     esp_netif_ip_info_t ip;
-    if (wifi_conectado() && esp_netif_get_ip_info(netif, &ip) == ESP_OK) {
-        snprintf(buf, (size_t)tam, IPSTR, IP2STR(&ip.ip));
+    if (wifi_connected() && esp_netif_get_ip_info(netif, &ip) == ESP_OK) {
+        snprintf(buf, (size_t)length, IPSTR, IP2STR(&ip.ip));
     } else {
-        snprintf(buf, (size_t)tam, "-");
+        snprintf(buf, (size_t)length, "-");
     }
 }
 
-bool wifi_ap_atual(uint8_t bssid[6], uint8_t *canal)
+/* BSSID e canal do roteador atual (para a próxima reconexão rápida). */
+bool wifi_current_ap(uint8_t bssid[6], uint8_t *channel)
 {
     wifi_ap_record_t ap;
-    if (!wifi_conectado() || esp_wifi_sta_get_ap_info(&ap) != ESP_OK) {
+    if (!wifi_connected() || esp_wifi_sta_get_ap_info(&ap) != ESP_OK) {
         return false;
     }
     memcpy(bssid, ap.bssid, 6);
-    *canal = ap.primary;
+    *channel = ap.primary;
     return true;
 }

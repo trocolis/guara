@@ -1,274 +1,289 @@
+/*
+ * Modais padrão (alerta, confirmação, escolha, quantidade, detalhes). Cada camada
+ * da pilha tem seu próprio estado, então modais podem abrir outros modais.
+ */
 #include "modal.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #include "audio.h"
-#include "componentes.h"
+#include "widgets.h"
 #include "ui.h"
 
 #define MX 8
 #define MY 8
 #define MW 112
 #define MH 48
-#define LINHA_RODAPE 43
-#define MAX_OPCOES 8
+#define LINE_FOOTER 43
+#define MAX_OPTIONS 8
 
-typedef enum { M_ALERTA, M_CONFIRMAR, M_ESCOLHA, M_QUANTIDADE, M_DETALHES } tipo_modal_t;
+typedef enum { M_ALERT, M_CONFIRM, M_CHOICE, M_COUNT, M_DETAILS } modal_type_t;
 
 typedef struct {
-    tipo_modal_t tipo;
-    char titulo[40];
-    char icone[32];
-    char texto[256];
-    char texto_a[16];
-    char texto_b[16];
-    const char *opcoes[MAX_OPCOES];
-    char opcoes_buf[MAX_OPCOES][24];
-    int n_opcoes;
-    ui_lista_t lista;
-    int minimo, maximo, valor;
-    int rolagem, linhas_texto;
-    ui_resposta_fn fn;
+    modal_type_t type;
+    char title[40];
+    char icon[32];
+    char text[256];
+    char text_a[16];
+    char text_b[16];
+    const char *options[MAX_OPTIONS];
+    char options_buf[MAX_OPTIONS][24];
+    int n_options;
+    ui_list_t list;
+    int minimum, maximum, value;
+    int scrollbar, text_line_count;
+    ui_result_fn fn;
     void *ctx;
 } modal_t;
 
-static modal_t modais[16];
-static modal_t novo;
+static modal_t modals[16];
+static modal_t incoming;
 
-static modal_t *atual(void)
+/* Estado do modal da camada atual. */
+static modal_t *current(void)
 {
-    return &modais[ui_camada_atual() & 15];
+    return &modals[ui_current_layer() & 15];
 }
 
-static void abrir(void *param)
+/* Instala o modal preparado na camada que acabou de abrir. */
+static void on_open(void *param)
 {
     (void)param;
-    *atual() = novo;
+    *current() = incoming;
 }
 
-static void responder(int resposta)
+/* Fecha o modal e entrega a resposta ao callback (que pode abrir outra tela). */
+static void respond(int answer)
 {
-    modal_t m = *atual();
-    ui_voltar();
+    modal_t m = *current();
+    ui_back();
     if (m.fn) {
-        m.fn(resposta, m.ctx);
+        m.fn(answer, m.ctx);
     }
 }
 
-static void tecla(const evento_tecla_t *ev)
+/* Teclas do modal conforme o tipo (B sempre cancela). */
+static void on_key(const key_event_t *ev)
 {
-    modal_t *m = atual();
-    if (ev->tipo == TECLA_SOLTOU) {
+    modal_t *m = current();
+    if (ev->type == KEY_RELEASED) {
         return;
     }
-    if (ev->tipo == TECLA_PRESSIONOU && ev->tecla == TECLA_B) {
-        responder(-1);
+    if (ev->type == KEY_PRESSED && ev->on_key == KEY_B) {
+        respond(-1);
         return;
     }
-    switch (m->tipo) {
-    case M_ALERTA:
-    case M_CONFIRMAR:
-        if (ev->tecla == TECLA_A && ev->tipo == TECLA_PRESSIONOU) {
-            responder(1);
+    switch (m->type) {
+    case M_ALERT:
+    case M_CONFIRM:
+        if (ev->on_key == KEY_A && ev->type == KEY_PRESSED) {
+            respond(1);
         }
         break;
-    case M_ESCOLHA:
-        if (ui_lista_tecla(&m->lista, ev, 3)) {
+    case M_CHOICE:
+        if (ui_list_key(&m->list, ev, 3)) {
             break;
         }
-        if (ev->tecla == TECLA_A && ev->tipo == TECLA_PRESSIONOU) {
-            responder(m->lista.sel);
+        if (ev->on_key == KEY_A && ev->type == KEY_PRESSED) {
+            respond(m->list.sel);
         }
         break;
-    case M_QUANTIDADE: {
-        int passo = ev->tipo == TECLA_REPETIU ? 5 : 1;
-        if (ev->tecla == TECLA_CIMA || ev->tecla == TECLA_DIR) {
-            m->valor = m->valor + passo > m->maximo ? (ev->tipo == TECLA_REPETIU ? m->maximo : m->minimo) : m->valor + passo;
-        } else if (ev->tecla == TECLA_BAIXO || ev->tecla == TECLA_ESQ) {
-            m->valor = m->valor - passo < m->minimo ? (ev->tipo == TECLA_REPETIU ? m->minimo : m->maximo) : m->valor - passo;
-        } else if (ev->tecla == TECLA_A && ev->tipo == TECLA_PRESSIONOU) {
-            responder(m->valor);
+    case M_COUNT: {
+        int step = ev->type == KEY_REPEATED ? 5 : 1;
+        if (ev->on_key == KEY_UP || ev->on_key == KEY_RIGHT) {
+            m->value = m->value + step > m->maximum ? (ev->type == KEY_REPEATED ? m->maximum : m->minimum) : m->value + step;
+        } else if (ev->on_key == KEY_DOWN || ev->on_key == KEY_LEFT) {
+            m->value = m->value - step < m->minimum ? (ev->type == KEY_REPEATED ? m->minimum : m->maximum) : m->value - step;
+        } else if (ev->on_key == KEY_A && ev->type == KEY_PRESSED) {
+            respond(m->value);
         }
         break;
     }
-    case M_DETALHES:
-        if (ev->tecla == TECLA_CIMA && m->rolagem > 0) {
-            m->rolagem--;
-        } else if (ev->tecla == TECLA_BAIXO && m->rolagem + 3 < m->linhas_texto) {
-            m->rolagem++;
-        } else if (ev->tecla == TECLA_A && ev->tipo == TECLA_PRESSIONOU) {
-            responder(1);
+    case M_DETAILS:
+        if (ev->on_key == KEY_UP && m->scrollbar > 0) {
+            m->scrollbar--;
+        } else if (ev->on_key == KEY_DOWN && m->scrollbar + 3 < m->text_line_count) {
+            m->scrollbar++;
+        } else if (ev->on_key == KEY_A && ev->type == KEY_PRESSED) {
+            respond(1);
         }
         break;
     }
 }
 
-static void moldura(gfx_t *g, const char *titulo, uint32_t agora)
+/* Moldura 112x48 com sombra de 2 px e barra de título preta. */
+static void draw_frame(gfx_t *g, const char *title, uint32_t now)
 {
-    static marquee_t mq;
-    gfx_retangulo_cheio(g, MX - 2, MY - 2, MW + 4, MH + 4, GFX_PRETO);
-    gfx_retangulo(g, MX, MY, MW, MH, GFX_BRANCO);
-    int w = gfx_largura_texto(titulo);
+    static marquee_t marquee;
+    gfx_rect_filled(g, MX - 2, MY - 2, MW + 4, MH + 4, GFX_BLACK);
+    gfx_rect(g, MX, MY, MW, MH, GFX_WHITE);
+    int w = gfx_text_width(title);
     if (w <= MW - 6) {
-        gfx_texto(g, MX + (MW - w) / 2, MY + 2, titulo, GFX_BRANCO);
+        gfx_text(g, MX + (MW - w) / 2, MY + 2, title, GFX_WHITE);
     } else {
-        ui_texto_rolante(g, MX + 3, MY + 2, MW - 6, titulo, GFX_BRANCO, true, &mq, agora);
+        ui_marquee_text(g, MX + 3, MY + 2, MW - 6, title, GFX_WHITE, true, &marquee, now);
     }
-    gfx_linha_h(g, MX, MY + 11, MW, GFX_BRANCO);
+    gfx_line_h(g, MX, MY + 11, MW, GFX_WHITE);
 }
 
-static void item_opcao(int i, ui_item_t *it, void *ctx)
+/* Texto de uma opção do modal de escolha. */
+static void item_option(int i, ui_item_t *it, void *ctx)
 {
     modal_t *m = ctx;
-    snprintf(it->texto, sizeof(it->texto), "%s", m->opcoes[i]);
+    snprintf(it->text, sizeof(it->text), "%s", m->options[i]);
 }
 
 /* Contagem de linhas de um parágrafo, desenhando-o fora da tela. */
-static int contar_linhas(const char *texto, int largura)
+static int count_lines(const char *text, int width)
 {
-    static gfx_t rascunho;
-    gfx_iniciar(&rascunho);
-    gfx_recortar(&rascunho, 0, 0, 0, 0);
-    return ui_paragrafo(&rascunho, 0, 0, largura, 64, texto, false);
+    static gfx_t scratch;
+    gfx_init(&scratch);
+    gfx_clip(&scratch, 0, 0, 0, 0);
+    return ui_paragraph(&scratch, 0, 0, width, 64, text, false);
 }
 
-static void desenhar(gfx_t *g, uint32_t agora)
+/* Desenha o modal conforme o tipo. */
+static void on_draw(gfx_t *g, uint32_t now)
 {
-    modal_t *m = atual();
-    moldura(g, m->titulo, agora);
-    int corpo_y = MY + 13;
-    switch (m->tipo) {
-    case M_ALERTA:
-    case M_CONFIRMAR: {
-        int x = MX + 4, largura = MW - 8;
-        if (m->icone[0] && ui_icone(g, m->icone, MX + 4, corpo_y + 2)) {
+    modal_t *m = current();
+    draw_frame(g, m->title, now);
+    int body_y = MY + 13;
+    switch (m->type) {
+    case M_ALERT:
+    case M_CONFIRM: {
+        int x = MX + 4, width = MW - 8;
+        if (m->icon[0] && ui_icon(g, m->icon, MX + 4, body_y + 2)) {
             x = MX + 24;
-            largura = MW - 28;
+            width = MW - 28;
         }
-        int linhas = m->texto[0] ? (gfx_largura_texto(m->texto) > largura ? 2 : 1) : 0;
-        int y = corpo_y + (LINHA_RODAPE - corpo_y - linhas * 9) / 2;
-        ui_paragrafo(g, x, y, largura, 2, m->texto, true);
-        ui_rodape_modal(g, LINHA_RODAPE, m->texto_b[0] ? m->texto_b : NULL, m->texto_a, agora);
+        int lines = m->text[0] ? (gfx_text_width(m->text) > width ? 2 : 1) : 0;
+        int y = body_y + (LINE_FOOTER - body_y - lines * 9) / 2;
+        ui_paragraph(g, x, y, width, 2, m->text, true);
+        ui_footer_modal(g, LINE_FOOTER, m->text_b[0] ? m->text_b : NULL, m->text_a, now);
         break;
     }
-    case M_ESCOLHA: {
-        ui_lista_ajustar(&m->lista, 3);
-        for (int i = 0; i < 3 && m->lista.topo + i < m->n_opcoes; i++) {
-            int idx = m->lista.topo + i, y = corpo_y + i * 11;
+    case M_CHOICE: {
+        ui_list_adjust(&m->list, 3);
+        for (int i = 0; i < 3 && m->list.top + i < m->n_options; i++) {
+            int idx = m->list.top + i, y = body_y + i * 11;
             ui_item_t it = {0};
-            item_opcao(idx, &it, m);
-            bool sel = idx == m->lista.sel;
-            ui_texto_rolante(g, MX + 6, y + 2, MW - 16, it.texto, GFX_BRANCO, sel, &m->lista.mq, agora);
+            item_option(idx, &it, m);
+            bool sel = idx == m->list.sel;
+            ui_marquee_text(g, MX + 6, y + 2, MW - 16, it.text, GFX_WHITE, sel, &m->list.marquee, now);
             if (sel) {
-                gfx_retangulo_arred(g, MX + 2, y, MW - 7, 11, 2, GFX_BRANCO);
+                gfx_rect_rounded(g, MX + 2, y, MW - 7, 11, 2, GFX_WHITE);
             }
         }
-        if (m->n_opcoes > 3) {
-            int alt = 33, tam = alt * 3 / m->n_opcoes;
-            int y = corpo_y + (alt - tam) * m->lista.topo / (m->n_opcoes - 3);
-            gfx_linha_v(g, MX + MW - 3, y, tam, GFX_BRANCO);
+        if (m->n_options > 3) {
+            int bar_height = 33, length = bar_height * 3 / m->n_options;
+            int y = body_y + (bar_height - length) * m->list.top / (m->n_options - 3);
+            gfx_line_v(g, MX + MW - 3, y, length, GFX_WHITE);
         }
         break;
     }
-    case M_QUANTIDADE: {
+    case M_COUNT: {
         char buf[16];
-        snprintf(buf, sizeof(buf), "%d", m->valor);
-        int w = gfx_largura_texto(buf) * 2 + 1;
+        snprintf(buf, sizeof(buf), "%d", m->value);
+        int w = gfx_text_width(buf) * 2 + 1;
         int x = MX + (MW - w) / 2;
-        gfx_texto_escala(g, x, corpo_y + 6, buf, GFX_BRANCO, 2);
-        gfx_seta(g, x - 10, corpo_y + 9, 9, -1, GFX_BRANCO);
-        gfx_seta(g, x + w + 5, corpo_y + 9, 9, 1, GFX_BRANCO);
-        ui_rodape_modal(g, LINHA_RODAPE, m->texto_b, m->texto_a, agora);
+        gfx_text_scaled(g, x, body_y + 6, buf, GFX_WHITE, 2);
+        gfx_arrow(g, x - 10, body_y + 9, 9, -1, GFX_WHITE);
+        gfx_arrow(g, x + w + 5, body_y + 9, 9, 1, GFX_WHITE);
+        ui_footer_modal(g, LINE_FOOTER, m->text_b, m->text_a, now);
         break;
     }
-    case M_DETALHES: {
+    case M_DETAILS: {
         gfx_t *gg = g;
         int16_t cy0 = gg->clip_y0, cy1 = gg->clip_y1;
-        gfx_recortar(gg, MX + 1, corpo_y, MX + MW - 1, MY + MH - 1);
-        ui_paragrafo(gg, MX + 4, corpo_y + 1 - m->rolagem * 9, MW - 12, 64, m->texto, false);
+        gfx_clip(gg, MX + 1, body_y, MX + MW - 1, MY + MH - 1);
+        ui_paragraph(gg, MX + 4, body_y + 1 - m->scrollbar * 9, MW - 12, 64, m->text, false);
         gg->clip_y0 = cy0;
         gg->clip_y1 = cy1;
-        gfx_sem_recorte(gg);
-        if (m->linhas_texto > 3) {
-            int alt = 33, tam = alt * 3 / m->linhas_texto;
-            int y = corpo_y + (alt - tam) * m->rolagem / (m->linhas_texto - 3);
-            gfx_linha_v(g, MX + MW - 3, y, tam, GFX_BRANCO);
+        gfx_reset_clip(gg);
+        if (m->text_line_count > 3) {
+            int bar_height = 33, length = bar_height * 3 / m->text_line_count;
+            int y = body_y + (bar_height - length) * m->scrollbar / (m->text_line_count - 3);
+            gfx_line_v(g, MX + MW - 3, y, length, GFX_WHITE);
         }
         break;
     }
     }
 }
 
-static const tela_t TELA_MODAL = {
-    .nome = "modal",
+static const screen_t SCREEN_MODAL = {
+    .name = "modal",
     .modal = true,
-    .abrir = abrir,
-    .tecla = tecla,
-    .desenhar = desenhar,
+    .on_open = on_open,
+    .on_key = on_key,
+    .on_draw = on_draw,
 };
 
-static void preparar(tipo_modal_t tipo, const char *titulo, ui_resposta_fn fn, void *ctx)
+/* Zera o modal pendente e define título e callback. */
+static void prepare(modal_type_t type, const char *title, ui_result_fn fn, void *ctx)
 {
-    memset(&novo, 0, sizeof(novo));
-    novo.tipo = tipo;
-    snprintf(novo.titulo, sizeof(novo.titulo), "%s", titulo ? titulo : "");
-    novo.fn = fn;
-    novo.ctx = ctx;
+    memset(&incoming, 0, sizeof(incoming));
+    incoming.type = type;
+    snprintf(incoming.title, sizeof(incoming.title), "%s", title ? title : "");
+    incoming.fn = fn;
+    incoming.ctx = ctx;
 }
 
-void ui_alerta(const char *titulo, const char *icone, const char *mensagem, const char *texto_a, ui_resposta_fn fn,
+void ui_alert(const char *title, const char *icon, const char *message, const char *text_a, ui_result_fn fn,
                void *ctx)
 {
-    preparar(M_ALERTA, titulo, fn, ctx);
-    snprintf(novo.icone, sizeof(novo.icone), "%s", icone ? icone : "");
-    snprintf(novo.texto, sizeof(novo.texto), "%s", mensagem ? mensagem : "");
-    snprintf(novo.texto_a, sizeof(novo.texto_a), "%s", texto_a ? texto_a : "OK");
-    ui_abrir(&TELA_MODAL, NULL);
+    prepare(M_ALERT, title, fn, ctx);
+    snprintf(incoming.icon, sizeof(incoming.icon), "%s", icon ? icon : "");
+    snprintf(incoming.text, sizeof(incoming.text), "%s", message ? message : "");
+    snprintf(incoming.text_a, sizeof(incoming.text_a), "%s", text_a ? text_a : "OK");
+    ui_open(&SCREEN_MODAL, NULL);
 }
 
-void ui_confirmar(const char *titulo, const char *icone, const char *mensagem, const char *texto_nao,
-                  const char *texto_sim, ui_resposta_fn fn, void *ctx)
+void ui_confirm(const char *title, const char *icon, const char *message, const char *text_no,
+                  const char *text_yes, ui_result_fn fn, void *ctx)
 {
-    preparar(M_CONFIRMAR, titulo, fn, ctx);
-    snprintf(novo.icone, sizeof(novo.icone), "%s", icone ? icone : "");
-    snprintf(novo.texto, sizeof(novo.texto), "%s", mensagem ? mensagem : "");
-    snprintf(novo.texto_a, sizeof(novo.texto_a), "%s", texto_sim ? texto_sim : "SIM");
-    snprintf(novo.texto_b, sizeof(novo.texto_b), "%s", texto_nao ? texto_nao : "NAO");
-    ui_abrir(&TELA_MODAL, NULL);
+    prepare(M_CONFIRM, title, fn, ctx);
+    snprintf(incoming.icon, sizeof(incoming.icon), "%s", icon ? icon : "");
+    snprintf(incoming.text, sizeof(incoming.text), "%s", message ? message : "");
+    snprintf(incoming.text_a, sizeof(incoming.text_a), "%s", text_yes ? text_yes : "SIM");
+    snprintf(incoming.text_b, sizeof(incoming.text_b), "%s", text_no ? text_no : "NAO");
+    ui_open(&SCREEN_MODAL, NULL);
 }
 
-void ui_escolha(const char *titulo, const char *const *opcoes, int quantidade, ui_resposta_fn fn, void *ctx)
+/* Abre uma lista de opções compacta (sem rodapé). */
+void ui_choice(const char *title, const char *const *options, int count, ui_result_fn fn, void *ctx)
 {
-    preparar(M_ESCOLHA, titulo, fn, ctx);
-    novo.n_opcoes = quantidade > MAX_OPCOES ? MAX_OPCOES : quantidade;
-    for (int i = 0; i < novo.n_opcoes; i++) {
-        snprintf(novo.opcoes_buf[i], sizeof(novo.opcoes_buf[i]), "%s", opcoes[i]);
+    prepare(M_CHOICE, title, fn, ctx);
+    incoming.n_options = count > MAX_OPTIONS ? MAX_OPTIONS : count;
+    for (int i = 0; i < incoming.n_options; i++) {
+        snprintf(incoming.options_buf[i], sizeof(incoming.options_buf[i]), "%s", options[i]);
     }
-    novo.lista.total = novo.n_opcoes;
-    ui_abrir(&TELA_MODAL, NULL);
+    incoming.list.total = incoming.n_options;
+    ui_open(&SCREEN_MODAL, NULL);
     /* os ponteiros precisam apontar para a cópia já instalada na camada */
-    modal_t *m = &modais[ui_profundidade() - 1];
-    for (int i = 0; i < m->n_opcoes; i++) {
-        m->opcoes[i] = m->opcoes_buf[i];
+    modal_t *m = &modals[ui_depth() - 1];
+    for (int i = 0; i < m->n_options; i++) {
+        m->options[i] = m->options_buf[i];
     }
 }
 
-void ui_quantidade(const char *titulo, int minimo, int maximo, int inicial, ui_resposta_fn fn, void *ctx)
+/* Abre a escolha de quantidade entre `minimum` e `maximum`. */
+void ui_quantity_picker(const char *title, int minimum, int maximum, int initial, ui_result_fn fn, void *ctx)
 {
-    preparar(M_QUANTIDADE, titulo, fn, ctx);
-    novo.minimo = minimo;
-    novo.maximo = maximo;
-    novo.valor = inicial;
-    snprintf(novo.texto_a, sizeof(novo.texto_a), "OK");
-    snprintf(novo.texto_b, sizeof(novo.texto_b), "VOLTAR");
-    ui_abrir(&TELA_MODAL, NULL);
+    prepare(M_COUNT, title, fn, ctx);
+    incoming.minimum = minimum;
+    incoming.maximum = maximum;
+    incoming.value = initial;
+    snprintf(incoming.text_a, sizeof(incoming.text_a), "OK");
+    snprintf(incoming.text_b, sizeof(incoming.text_b), "VOLTAR");
+    ui_open(&SCREEN_MODAL, NULL);
 }
 
-void ui_detalhes(const char *titulo, const char *texto)
+/* Abre um texto rolável sem rodapé. */
+void ui_details(const char *title, const char *text)
 {
-    preparar(M_DETALHES, titulo, NULL, NULL);
-    snprintf(novo.texto, sizeof(novo.texto), "%s", texto);
-    novo.linhas_texto = contar_linhas(novo.texto, MW - 12);
-    ui_abrir(&TELA_MODAL, NULL);
+    prepare(M_DETAILS, title, NULL, NULL);
+    snprintf(incoming.text, sizeof(incoming.text), "%s", text);
+    incoming.text_line_count = count_lines(incoming.text, MW - 12);
+    ui_open(&SCREEN_MODAL, NULL);
 }

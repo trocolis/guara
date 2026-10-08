@@ -3,6 +3,17 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.2.1 — 2026-10-08
+
+### Refatoração (README > Implementação > Código)
+- Identificadores, funções, arquivos e pastas renomeados para o inglês: `src/system`, `src/screens`, `lib/core`, `examples/`, `docs/PLAN.md` e todos os módulos. Sem mudança de comportamento: os testes e o build com `-Wshadow` não acusam diferenças.
+- Comentários em português: cabeçalho em todos os arquivos e um comentário antes de cada função.
+- Ferramentas Python (`pack_storage.py`, `build_font.py`, `console.py`, pré-scripts do PlatformIO) reescritas com nomes em inglês.
+- API Lua: `sair()` virou `exit()`, e os campos de `guara.get_status()`, os nomes de `guara.add_stat()` e os elementos de `guara.add_affinity()` passaram para o inglês. Os jogos do cartão foram atualizados.
+- Catálogo: arquivos `items.csv`, `equipment.csv` e `skills.csv`, com colunas e valores em inglês (`FOOD`, `FIRE`, `SATIETY`…). O formato binário não mudou.
+- Despertadores gravados em `/sdcard/guara/alarms.txt`; o `alarmes.txt` antigo é migrado automaticamente.
+- `console.py`: o modo `roteiro` virou `script` (passos `wait`, `keys`, `screen`, `state`, `log`).
+
 ## v0.2.0 — 2026-10-08
 
 ### Wi-Fi sob demanda

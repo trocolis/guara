@@ -64,10 +64,10 @@ end
 function update()
     if winner ~= 0 then
         if btn.pressed("a") then reset_game(); audio.beep(600, 80)
-        elseif btn.pressed("b") then audio.beep(400, 80); sair() end
+        elseif btn.pressed("b") then audio.beep(400, 80); exit() end
         return
     end
-    if btn.pressed("b") then audio.beep(400, 80); sair(); return end
+    if btn.pressed("b") then audio.beep(400, 80); exit(); return end
     if btn.pressed("left")  and cx > 0 then cx = cx - 1; audio.beep(300, 30) end
     if btn.pressed("right") and cx < 2 then cx = cx + 1; audio.beep(300, 30) end
     if btn.pressed("up")    and cy > 0 then cy = cy - 1; audio.beep(300, 30) end

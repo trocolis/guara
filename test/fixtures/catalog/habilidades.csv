@@ -1,3 +1,0 @@
-id,slug,nome,tipo,icone,alvo,natureza,poder,custo_mp,sobre_efeitos,descricao
-0,teste_neutra,Ataque neutro,ATAQUE,attack,OPONENTE,NEUTRA,10,2,,Habilidade usada só nos testes.
-1,teste_fogo,Ataque de fogo,ATAQUE,fire,OPONENTE,FOGO,14,4,QUEIMADO+15,Habilidade usada só nos testes.

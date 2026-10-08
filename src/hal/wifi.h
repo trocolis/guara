@@ -1,32 +1,35 @@
+/*
+ * Driver Wi-Fi em modo estação. Use o serviço de rede (system/network.h) nas telas.
+ */
 #ifndef GUARA_WIFI_H
 #define GUARA_WIFI_H
 
 #include <stdbool.h>
 #include <stdint.h>
 
-#define WIFI_MAX_REDES 16
+#define WIFI_MAX_NETWORKS 16
 
 typedef struct {
     char ssid[33];
     int8_t rssi;
-    bool aberta;
-} rede_wifi_t;
+    bool is_open;
+} wifi_network_t;
 
 /* Liga o rádio em modo estação (aloca o driver). */
-bool wifi_ligar(void);
+bool wifi_turn_on(void);
 /* Desliga e libera a memória do driver (antes dos jogos Lua). */
-void wifi_desligar(void);
-bool wifi_ligado(void);
-int wifi_buscar(rede_wifi_t *redes, int max);
+void wifi_turn_off(void);
+bool wifi_on(void);
+int wifi_scan(wifi_network_t *networks, int max);
 /* Conecta. Com `bssid` (6 bytes) e `canal` conhecidos, pula a busca (reconexão rápida). */
-bool wifi_conectar(const char *ssid, const char *senha, uint32_t espera_ms, const uint8_t *bssid, uint8_t canal);
+bool wifi_connect(const char *ssid, const char *password, uint32_t timeout_ms, const uint8_t *bssid, uint8_t channel);
 /* BSSID e canal do roteador atual (para a próxima reconexão rápida). */
-bool wifi_ap_atual(uint8_t bssid[6], uint8_t *canal);
-bool wifi_conectado(void);
+bool wifi_current_ap(uint8_t bssid[6], uint8_t *channel);
+bool wifi_connected(void);
 int wifi_rssi(void);
 /* 0..3 barras para o indicador da barra superior. */
-int wifi_barras(void);
-const char *wifi_ssid_atual(void);
-void wifi_ip(char *buf, int tam);
+int wifi_bars(void);
+const char *wifi_current_ssid(void);
+void wifi_ip(char *buf, int length);
 
 #endif
