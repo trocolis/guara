@@ -136,3 +136,30 @@ void config_esquecer_rede(int indice)
     memset(&redes[CONFIG_MAX_REDES - 1], 0, sizeof(rede_salva_t));
     gravar_redes(redes);
 }
+
+bool config_rede_rapida(rede_rapida_t *r)
+{
+    nvs_handle_t h;
+    if (nvs_open(NAMESPACE, NVS_READONLY, &h) != ESP_OK) {
+        return false;
+    }
+    size_t tam = sizeof(*r);
+    bool ok = nvs_get_blob(h, "rapida", r, &tam) == ESP_OK && tam == sizeof(*r) && r->ssid[0];
+    nvs_close(h);
+    return ok;
+}
+
+void config_salvar_rede_rapida(const rede_rapida_t *r)
+{
+    rede_rapida_t atual;
+    if (config_rede_rapida(&atual) && memcmp(&atual, r, sizeof(atual)) == 0) {
+        return; /* evita gravar a NVS a cada reconexão */
+    }
+    nvs_handle_t h;
+    if (nvs_open(NAMESPACE, NVS_READWRITE, &h) != ESP_OK) {
+        return;
+    }
+    nvs_set_blob(h, "rapida", r, sizeof(*r));
+    nvs_commit(h);
+    nvs_close(h);
+}

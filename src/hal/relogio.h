@@ -23,5 +23,7 @@ void relogio_ajustar_epoch(uint32_t epoch);
 /* Sincroniza pelo NTP (exige Wi-Fi conectado). Bloqueia até `espera_ms`. */
 bool relogio_sincronizar_ntp(uint32_t espera_ms);
 void relogio_formatar_hhmm(char *buf, int tam);
+/* Epoch da última sincronização NTP bem-sucedida (0 = nenhuma desde o boot frio). */
+uint32_t relogio_ultimo_ntp(void);
 
 #endif

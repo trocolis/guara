@@ -21,5 +21,10 @@ Primeira versão funcional do firmware e do storage.
 ### Regra de desenvolvimento
 - Versões `0.x.x` liberam todo o catálogo no nascimento e a cada boot: todos os itens com 255 unidades e todos os equipamentos e habilidades.
 
+### Wi-Fi sob demanda
+- Com o Wi-Fi em ON, o rádio só liga durante tarefas de rede e desliga após 30 s ocioso. Há reconexão rápida pelo BSSID e canal salvos na NVS.
+- O NTP roda em segundo plano a cada 24 h ou quando a hora é inválida, e o boot não espera mais a rede.
+- O Wi-Fi passou a se comportar igual após acordar do deep sleep.
+
 ### Pendente
 - Bluetooth (trocas e combate entre Guarás), atualização pelo GitHub, decisões D7 e D10 de hardware.

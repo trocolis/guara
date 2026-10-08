@@ -16,6 +16,7 @@ static const char *TAG = "relogio";
 static i2c_master_dev_handle_t ds3231;
 /* Sobrevive ao deep sleep: o RTC interno continua contando. */
 static RTC_DATA_ATTR bool hora_valida;
+static RTC_DATA_ATTR uint32_t ultimo_ntp;
 
 static uint8_t bcd(uint8_t v) { return (uint8_t)(((v / 10) << 4) | (v % 10)); }
 static uint8_t de_bcd(uint8_t v) { return (uint8_t)((v >> 4) * 10 + (v & 0x0F)); }
@@ -170,6 +171,7 @@ bool relogio_sincronizar_ntp(uint32_t espera_ms)
         time_t t = time(NULL);
         gravar_ds3231(t);
         hora_valida = true;
+        ultimo_ntp = (uint32_t)t;
         ESP_LOGI(TAG, "Hora sincronizada pelo NTP");
     }
     return ok;
@@ -183,4 +185,9 @@ void relogio_formatar_hhmm(char *buf, int tam)
     } else {
         snprintf(buf, (size_t)tam, "--:--");
     }
+}
+
+uint32_t relogio_ultimo_ntp(void)
+{
+    return ultimo_ntp;
 }

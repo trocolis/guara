@@ -10,7 +10,7 @@
 #include "relogio.h"
 #include "submenu.h"
 #include "telas.h"
-#include "wifi.h"
+#include "rede.h"
 
 /* ========================================================================= */
 /* Editor de hora "--:--" (README > Relógio > Despertador)                   */
@@ -375,15 +375,14 @@ static void abrir_ajuste(void)
 
 static void sincronizar(void)
 {
-    bool ok = false;
-    if (wifi_conectado()) {
-        ok = relogio_sincronizar_ntp(6000);
-    } else {
-        ok = app_conectar_wifi_salvo(8000);
-        if (!g_cfg.wifi_ligado) {
-            wifi_desligar();
-        }
+    if (!rede_permitida()) {
+        audio_erro();
+        ui_alerta("NTP", "satellite", "Ligue o Wi-Fi em Ajustes.", "OK", NULL, NULL);
+        return;
     }
+    rede_usar();
+    bool ok = rede_aguardar(12000) && relogio_sincronizar_ntp(6000);
+    rede_liberar();
     char hora[8];
     relogio_formatar_hhmm(hora, sizeof(hora));
     char msg[48];

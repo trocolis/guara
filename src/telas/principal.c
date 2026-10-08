@@ -14,7 +14,7 @@
 #include "sprite.h"
 #include "storage.h"
 #include "telas.h"
-#include "wifi.h"
+#include "rede.h"
 
 /* Layout (mockup bitmaps/exemple/main_screen.bmp) */
 #define GUARA_X 64
@@ -121,9 +121,26 @@ static void barra_superior(gfx_t *g, uint32_t agora)
     }
     ui_icone(g, nome, x, 1);
     x -= 10;
-    if (wifi_conectado()) {
-        snprintf(nome, sizeof(nome), "wifi_%d", wifi_barras() ? wifi_barras() : 1);
+    estado_rede_t rede = rede_estado();
+    if (rede != REDE_DESATIVADA) {
+        if (rede == REDE_CONECTADA) {
+            snprintf(nome, sizeof(nome), "wifi_%d", rede_barras() ? rede_barras() : 1);
+        } else if (rede == REDE_CONECTANDO) {
+            snprintf(nome, sizeof(nome), "wifi_%d", (int)(agora / 300 % 3) + 1); /* barras subindo */
+        } else {
+            snprintf(nome, sizeof(nome), "wifi_3");
+        }
         ui_icone(g, nome, x, 1);
+        if (rede == REDE_OCIOSA) {
+            /* permitida e ociosa: ícone "apagado" (xadrez) */
+            for (int yy = 1; yy < 9; yy++) {
+                for (int xx = x; xx < x + 8; xx++) {
+                    if ((xx + yy) % 2) {
+                        gfx_pixel(g, xx, yy, GFX_PRETO);
+                    }
+                }
+            }
+        }
         x -= 10;
     }
     if (g_cfg.bt_ligado) {

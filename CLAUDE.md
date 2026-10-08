@@ -40,7 +40,7 @@ python3 tools/bmp-builder/bmp_builder.py in.png -o bitmaps/icons/x.bmp --preset 
 
 - `src/` — ESP-IDF main component (hardware/IDF code only). `CMakeLists.txt` lists the `REQUIRES`; add new IDF components there.
   - `hal/` drivers: `display` (SH1106, async task sending only changed pages), `botoes` (event queue), `audio` (LEDC task: effects + background music source), `bateria`, `sdcard`, `relogio` (DS3231/NTP/TZ), `energia` (deep sleep), `wifi`, `i2c`, `pinos.h`.
-  - `sistema/` services: `app` (boot, main loop, per-minute life cycle, inactivity sleep, battery emergency), `persist` (storage mmap, save ring, RTC-RAM mirror), `config` (NVS), `alarmes`, `ota`, `depuracao`.
+  - `sistema/` services: `app` (boot, main loop, per-minute life cycle, inactivity sleep, battery emergency), `persist` (storage mmap, save ring, RTC-RAM mirror), `config` (NVS), `rede` (Wi-Fi on demand: never call `wifi_*` directly from screens — use `rede_usar/rede_aguardar/rede_liberar`, `rede_executar` for background jobs, `rede_suspender` around memory-hungry tasks), `alarmes`, `ota`, `depuracao`.
   - `ui/` — screen stack (`ui.h`), standard components (`componentes.h`), modals + virtual keyboard (`modal.h`).
   - `telas/` — one file per menu; `telas.h` lists them. `submenu.h` builds static standard sub-menus; `sprite.h` composes head + body + eyes.
 - `lib/` — pure C11, **no IDF includes**, compiled for both `esp32` and `native`: `crc32`, `gfx` (page-format framebuffer, primitives, UTF-8 text, draw modes, BMP decoder), `nucleo` (types, storage/VROM/catalog reader, save format + ring, pet life cycle, combat), `midi` (SMF → monophonic), `ini`, `lua` (vendored 5.4.7, `LUA_32BITS`, no io/os/package/debug; excluded from `native`).

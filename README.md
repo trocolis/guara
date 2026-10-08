@@ -215,6 +215,39 @@ O projeto adota o padrão de Versionamento Semântico (**`MAJOR.MINOR.PATCH`** /
 - **Versões de desenvolvimento (`0.x.x`):** o Guará tem todo o catálogo liberado: todos os itens com 255 unidades no inventário e todos os equipamentos e habilidades possuídos. A liberação é feita no nascimento e a cada boot, para facilitar os testes. A regra deixa de valer a partir da `1.0.0`.
 - **Critério de Incremento de Versão:** A numeração de versão é atualizada **exclusivamente** mediante alterações funcionais no **Firmware** (código compilado C/C++) e/ou no **Storage** (VROM, catálogo binário, formato de save state). Alterações puramente conceituais ou em arquivos de documentação Markdown geram apenas commit de histórico sem incrementar a versão do sistema.
 
+### Conectividade: Wi-Fi sob Demanda
+
+Implementação: `src/sistema/rede.c`.
+
+O rádio Wi-Fi só é ligado quando alguma tarefa precisa de rede. Para o usuário, o Wi-Fi continua simplesmente "ligado".
+
+- **Significado de `ON` e `OFF` (Ajustes > Wi-Fi):**
+  - `ON` quer dizer **rede permitida**, não "rádio ligado". Fora das tarefas de rede, o rádio fica desligado e o driver descarregado, o que economiza bateria e libera cerca de 60 KB de RAM.
+  - `OFF` proíbe qualquer uso de rede.
+- **Serviço de rede com contador de uso:** quem precisa de rede pede acesso (`rede_usar()`) e devolve ao terminar (`rede_liberar()`).
+  - No primeiro pedido, o serviço liga o rádio e conecta à última rede salva que estiver disponível.
+  - Quando o contador volta a zero, o rádio desliga após **30 segundos** ociosos. Assim, tarefas próximas aproveitam a mesma conexão.
+  - Uso contínuo, como um combate online, mantém o pedido aberto durante todo o uso.
+- **Execução em segundo plano:** a conexão e as tarefas rodam numa task própria, sem travar a interface. Telas que dependem do resultado mostram "Conectando..." até a rede responder.
+- **Reconexão rápida:** o canal e o BSSID do último roteador ficam salvos na NVS. Com eles, a conexão leva cerca de 1 a 2 s, em vez de 3 a 5 s com busca completa.
+- **Sincronização do relógio (NTP):**
+  - No boot, em segundo plano e sem bloquear a tela de boot, só se a hora for inválida ou se a última sincronização tiver mais de **24 horas**.
+  - Depois, uma vez a cada 24 horas enquanto o aparelho estiver acordado.
+  - Com o DS3231 instalado, isso basta para manter a hora correta.
+- **Deep sleep:** o comportamento é o mesmo no boot frio e ao acordar do deep sleep. O rádio é sempre desligado antes de dormir.
+- **Jogos Lua:** como o rádio já fica desligado fora das tarefas de rede, a liberação de memória antes dos jogos passa a ser automática.
+- **Indicador na barra superior:**
+  - ícone de Wi-Fi sem barras quando a rede está permitida e ociosa;
+  - barras de sinal (`wifi_1` a `wifi_3`) só durante uma conexão ativa;
+  - nenhum ícone com o Wi-Fi em `OFF`.
+- **Tarefas que usam o serviço:**
+  - sincronização NTP (automática e em Relógio > Configurar);
+  - busca, conexão e status em Ajustes > Wi-Fi;
+  - atualização pelo GitHub;
+  - combate e trocas online, no futuro.
+- **Custo:** cada tarefa de rede leva de 1 a 5 segundos a mais para começar, por causa da conexão.
+- **Parâmetros:** o tempo ocioso (30 s) e o intervalo do NTP (24 h) são constantes do firmware.
+
 ### UI
 
 #### Padões do sistema:
@@ -234,7 +267,7 @@ O projeto adota o padrão de Versionamento Semântico (**`MAJOR.MINOR.PATCH`** /
 - **Comportamento Padrão** - Ao navegar pelo menu principal, sub-menus e telas de funcionalidade, ao terminar ou apertar B/Votar/Cancelar/Fechar, deve voltar para o menu anterior, fazendo o caminho inverso, exemplo: ao usar um item ou alimentar o guará é exibido a animação e depois retorna para o sub-menu de inventário, na mesma posição com o mesmo elemento selecionado. 
 #### Tela de boot
 
-Ao ligar é exibido a tela de boot, no cento dela é exibido o bitmap: ![bitart logo](./bitmaps/bitart/bitart_logo.bmp), e em baixo uma barra de progresso mostrando o carregamento do sistema, é verificaso se existe configuração de wifi , se sim a hora dev ser atualizada durante o boot, após concluido a tela de boot deve permanecer exibida por 1 segundo.
+Ao ligar é exibido a tela de boot, no cento dela é exibido o bitmap: ![bitart logo](./bitmaps/bitart/bitart_logo.bmp), e em baixo uma barra de progresso mostrando o carregamento do sistema, é verificaso se existe configuração de wifi , se sim a hora deve ser atualizada em segundo plano, sem prender a tela de boot (ver *Conectividade: Wi-Fi sob Demanda*), após concluido a tela de boot deve permanecer exibida por 1 segundo.
 
 #### Tela principal
 
@@ -499,7 +532,7 @@ O gerenciador de arquivos do Micro SD substitui o antigo menu Arquivos e adota e
 
 O menu de Ajustes centraliza a calibração de hardware, preferências do jogador, conectividade e manutenção do sistema. Adota o padrão de sub-menu de 3 linhas com ícone 16x16, letreiro em rotação (*marquee*) para títulos longos, valor de estado à direita e barra de rolagem de 1px:
 
-1. **WiFi** (![[wifi.bmp]]) (Status: `ON` / `OFF`) - Controle do rádio Wi-Fi 802.11 b/g/n, busca ativa de pontos de acesso (redes) com indicador de potência de sinal RSSI, conexão com senha através do teclado virtual e sincronização automática do relógio via Network Time Protocol (NTP) com compensação de fuso horário.
+1. **WiFi** (![[wifi.bmp]]) (Status: `ON` / `OFF`) - Controle do rádio Wi-Fi 802.11 b/g/n, busca ativa de pontos de acesso (redes) com indicador de potência de sinal RSSI, conexão com senha através do teclado virtual e sincronização automática do relógio via Network Time Protocol (NTP) com compensação de fuso horário. Com `ON`, o rádio só é ligado quando uma tarefa precisa de rede (ver *Conectividade: Wi-Fi sob Demanda*).
 	1. Liga/Desliga (![[on_off.bmp]]) (Status: `ON` / `OFF`).
 	2. Status (![[info.bmp]])
 	3. Buscar (![[search.bmp]]).
@@ -692,3 +725,14 @@ A ultima parte que compõe o sprite, são os olhos, eles se sobrepõe ao sprite 
 - Asustado: ![Preto](./bitmaps/sprites/sprite_eye_black_scared.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_scared.bmp)
 - Piscadela: ![Preto](./bitmaps/sprites/sprite_eye_black_wink.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_wink.bmp), essa piscadela o gurá depois de ser alimentado ou curado.
 
+## Implementação
+
+### Vercionameto
+
+O verciomento deve ser feito no formato v#.#.#, onde é release.feature.pach, a versão só deve ser alterada em uma mudança no firmware e/ou storage, em caso de documentação deve ser feito apenas o commite.
+
+A cada execução de um escopo deve ser feito um commite a adição no changelog.
+
+### Código
+
+Por se tratar de um projeto para fins de aprendizado e aperfeiçoamento, deve-se abusar de comentários descritivos em portugês, o padrão de nomenclatura de variaáveis, funções arquivos, de ser descritivo e em inglês. Sempre seguinda as boas práticas de arquitetuda e desenvolvimento do mercado. 

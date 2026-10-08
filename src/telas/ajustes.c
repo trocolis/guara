@@ -19,7 +19,7 @@
 #include "sdcard.h"
 #include "submenu.h"
 #include "telas.h"
-#include "wifi.h"
+#include "rede.h"
 
 /* ========================================================================= */
 /* Wi-Fi                                                                     */
@@ -42,12 +42,10 @@ static void tela_ocupado(const char *texto)
 static void conectar(const char *ssid, const char *senha)
 {
     tela_ocupado("Conectando...");
-    bool ok = wifi_conectar(ssid, senha, 10000);
+    bool ok = rede_conectar_nova(ssid, senha);
     if (ok) {
-        config_salvar_rede(ssid, senha);
         g_cfg.wifi_ligado = true;
         config_salvar();
-        relogio_sincronizar_ntp(5000);
         ui_alerta("WI-FI", "wifi", "Conectado!", "OK", NULL, NULL);
     } else {
         audio_erro();
@@ -108,7 +106,7 @@ static void buscar_wifi(void)
 {
     tela_ocupado("Buscando redes...");
     lista_redes = (ui_lista_t){0};
-    lista_redes.total = wifi_buscar(redes, WIFI_MAX_REDES);
+    lista_redes.total = rede_buscar(redes, WIFI_MAX_REDES);
     ui_abrir(&TELA_BUSCA_WIFI, NULL);
 }
 
@@ -175,22 +173,16 @@ static void alternar_wifi(void)
 {
     g_cfg.wifi_ligado = !g_cfg.wifi_ligado;
     config_salvar();
-    if (g_cfg.wifi_ligado) {
-        tela_ocupado("Conectando...");
-        if (!app_conectar_wifi_salvo(8000)) {
-            wifi_ligar();
-        }
-    } else {
-        wifi_desligar();
+    if (!g_cfg.wifi_ligado) {
+        rede_desligar();
     }
+    /* Com ON nada liga agora: o rádio só acorda quando alguma tarefa precisar de rede */
 }
 
 static void status_wifi(void)
 {
-    char ip[20], texto[160];
-    wifi_ip(ip, sizeof(ip));
-    snprintf(texto, sizeof(texto), "Rádio: %s\nRede: %s\nIP: %s\nSinal: %d dBm", wifi_ligado() ? "ligado" : "desligado",
-             wifi_conectado() ? wifi_ssid_atual() : "-", ip, wifi_conectado() ? wifi_rssi() : 0);
+    char texto[200];
+    rede_status(texto, sizeof(texto));
     ui_detalhes("WI-FI", texto);
 }
 

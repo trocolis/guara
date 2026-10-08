@@ -72,6 +72,9 @@ void wifi_desligar(void)
     esp_wifi_disconnect();
     esp_wifi_stop();
     esp_wifi_deinit();
+    /* a interface padrão é recriada na próxima religação */
+    esp_netif_destroy_default_wifi(netif);
+    netif = NULL;
     xEventGroupClearBits(eventos, BIT_CONECTADO | BIT_FALHOU);
     ssid_atual[0] = '\0';
     ligado = false;
@@ -112,7 +115,7 @@ int wifi_buscar(rede_wifi_t *redes, int max)
     return saida;
 }
 
-bool wifi_conectar(const char *ssid, const char *senha, uint32_t espera_ms)
+bool wifi_conectar(const char *ssid, const char *senha, uint32_t espera_ms, const uint8_t *bssid, uint8_t canal)
 {
     if (!wifi_ligar()) {
         return false;
@@ -121,6 +124,11 @@ bool wifi_conectar(const char *ssid, const char *senha, uint32_t espera_ms)
     snprintf((char *)cfg.sta.ssid, sizeof(cfg.sta.ssid), "%s", ssid);
     snprintf((char *)cfg.sta.password, sizeof(cfg.sta.password), "%s", senha ? senha : "");
     cfg.sta.threshold.authmode = (senha && *senha) ? WIFI_AUTH_WPA_PSK : WIFI_AUTH_OPEN;
+    if (bssid && canal) {
+        memcpy(cfg.sta.bssid, bssid, 6);
+        cfg.sta.bssid_set = true;
+        cfg.sta.channel = canal;
+    }
     esp_wifi_disconnect();
     xEventGroupClearBits(eventos, BIT_CONECTADO | BIT_FALHOU);
     esp_wifi_set_config(WIFI_IF_STA, &cfg);
@@ -173,4 +181,15 @@ void wifi_ip(char *buf, int tam)
     } else {
         snprintf(buf, (size_t)tam, "-");
     }
+}
+
+bool wifi_ap_atual(uint8_t bssid[6], uint8_t *canal)
+{
+    wifi_ap_record_t ap;
+    if (!wifi_conectado() || esp_wifi_sta_get_ap_info(&ap) != ESP_OK) {
+        return false;
+    }
+    memcpy(bssid, ap.bssid, 6);
+    *canal = ap.primary;
+    return true;
 }

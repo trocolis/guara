@@ -19,7 +19,7 @@
 #include "regras.h"
 #include "sdcard.h"
 #include "telas.h"
-#include "wifi.h"
+#include "rede.h"
 
 /*
  * Console virtual (README > Jogos): jogos em /sdcard/games/<slug>/ (game.ini +
@@ -734,9 +734,7 @@ static void fechar_vm(void)
     }
     arquivos_liberar_bmp(&vm.splash);
     app_bloquear_sono(false);
-    if (g_cfg.wifi_ligado) {
-        app_conectar_wifi_salvo(4000);
-    }
+    rede_suspender(false);
 }
 
 static void jogo_tecla(const evento_tecla_t *ev)
@@ -835,7 +833,7 @@ void telas_executar_jogo(const char *caminho)
     free(ini);
 
     /* README: o Wi-Fi é descarregado antes do jogo para liberar ~60 KB */
-    wifi_desligar();
+    rede_suspender(true);
 
     vm.L = lua_newstate(alocador, NULL);
     if (!vm.L) {

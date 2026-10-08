@@ -18,11 +18,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "persist.h"
+#include "rede.h"
 #include "relogio.h"
 #include "sdcard.h"
 #include "telas.h"
 #include "ui.h"
-#include "wifi.h"
 
 static const char *TAG = "app";
 
@@ -119,19 +119,6 @@ void app_renascer(void)
     ui_limpar_pilha(&TELA_NASCIMENTO, NULL);
 }
 
-bool app_conectar_wifi_salvo(uint32_t espera_ms)
-{
-    rede_salva_t redes[CONFIG_MAX_REDES];
-    int n = config_redes(redes);
-    for (int i = n - 1; i >= 0; i--) {
-        if (wifi_conectar(redes[i].ssid, redes[i].senha, espera_ms)) {
-            relogio_sincronizar_ntp(5000);
-            return true;
-        }
-    }
-    return false;
-}
-
 /* ------------------------------------------------------------------------- */
 /* Boot                                                                      */
 /* ------------------------------------------------------------------------- */
@@ -210,12 +197,8 @@ void app_iniciar(void)
         desenhar_boot(65);
     }
 
-    /* Wi-Fi configurado: atualiza a hora durante o boot (README > Tela de boot) */
-    if (frio && g_cfg.wifi_ligado) {
-        if (app_conectar_wifi_salvo(6000)) {
-            desenhar_boot(85);
-        }
-    }
+    /* Wi-Fi sob demanda: a hora é sincronizada em segundo plano, sem prender o boot */
+    rede_iniciar();
 
     if (g_tem_guara && relogio_valido()) {
         uint32_t min = guara_recuperar_tempo(&g_guara, relogio_agora(), relogio_minuto_do_dia(), g_cfg.dormir_min,
@@ -276,7 +259,7 @@ static void dormir_por_inatividade(void)
         acordar = t ? t : 1;
     }
     sd_desmontar();
-    wifi_desligar();
+    rede_desligar();
     energia_dormir(acordar);
 }
 
@@ -306,7 +289,7 @@ static void verificar_bateria(void)
         display_enviar(&tela);
         vTaskDelay(pdMS_TO_TICKS(3000));
         sd_desmontar();
-        wifi_desligar();
+        rede_desligar();
         energia_dormir(0);
     }
 }

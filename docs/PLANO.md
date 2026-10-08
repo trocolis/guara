@@ -20,7 +20,7 @@ Legenda: `[ ]` pendente · `[x]` feito · ✅ decidido/adotado · ⏳ pendente
 | 7 — Combate | ✅ treino; combate online pendente (Bluetooth) |
 | 8 — Mídia | ✅ músicas MIDI e biblioteca |
 | 9 — Lua | ✅ VM 5.4, APIs do README, exemplo em exemplos/sdcard |
-| 10 — Conectividade | ⏳ Wi-Fi, NTP e OTA pelo SD prontos; Bluetooth e GitHub pendentes |
+| 10 — Conectividade | ⏳ Wi-Fi sob demanda, NTP automático e OTA pelo SD prontos; Bluetooth e GitHub pendentes |
 
 Gravado e verificado no NodeMCU do protótipo: boot, storage, cartão SD (10 MHz), nascimento, tela principal, carrossel e lista de músicas. Sem o DS3231 ligado, a hora fica `--:--` até um ajuste manual ou NTP.
 
@@ -269,6 +269,9 @@ Ordem sugerida, das telas mais simples para as mais dependentes:
 - [x] **L-fonte** Fontes e suporte a acentos → fonte 5x8 com acentos em tools/font-builder
 - [ ] **L-sistema** ~~Botão que abre o menu principal~~ (A); configuração de fuso (fixo em UTC-3, falta menu); ~~sandbox Lua~~; `games.idx` (a lista é lida da pasta a cada abertura); ~~atualização do storage em campo~~ (SD)
 - [x] **L-midi** Redução de MIDI a uma voz; Cima/Baixo no player troca faixa ou volume? → nota mais aguda ativa; ↑/↓ troca de faixa e ←/→ ajusta o volume
+
+### Conectividade
+- [x] **C1** Wi-Fi sob demanda (README > Conectividade: Wi-Fi sob Demanda): rádio ligado só durante tarefas de rede, boot sem esperar a rede, NTP a cada 24 h, desligamento após 30 s ocioso. Corrige também o Wi-Fi não religar ao acordar do deep sleep.
 
 ### Assets
 - [x] **A1** Basenames duplicados entre `ui/` e `icons/`: alarm, bluetooth, mute, timer → renomeados para status_*

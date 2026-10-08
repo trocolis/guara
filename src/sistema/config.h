@@ -34,4 +34,14 @@ int config_redes(rede_salva_t *redes);
 void config_salvar_rede(const char *ssid, const char *senha);
 void config_esquecer_rede(int indice);
 
+/* Último roteador conectado: permite reconectar sem busca (~1-2 s). */
+typedef struct {
+    char ssid[33];
+    uint8_t bssid[6];
+    uint8_t canal;
+} rede_rapida_t;
+
+bool config_rede_rapida(rede_rapida_t *r);
+void config_salvar_rede_rapida(const rede_rapida_t *r);
+
 #endif

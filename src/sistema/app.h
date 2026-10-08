@@ -30,8 +30,6 @@ int app_ganhar_xp(uint32_t pontos);
 void app_nascer(const char *nome);
 /* Factory Rebirth: apaga o save e volta para o nascimento. */
 void app_renascer(void);
-/* Tenta reconectar ao Wi-Fi salvo e sincronizar a hora (bloqueante). */
-bool app_conectar_wifi_salvo(uint32_t espera_ms);
 const char *app_versao(void);
 
 #endif
