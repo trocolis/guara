@@ -156,9 +156,9 @@ static void list_on_key(const key_event_t *ev)
     if (ui_list_key(&list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && list.total) {
+    } else if (ev->key == KEY_A && list.total) {
         char c[160];
         snprintf(c, sizeof(c), "%s/%s", FOLDER_GAMES, games[list.sel].name);
         screens_run_game(c);
@@ -793,10 +793,10 @@ static void close_vm(void)
 /* Rastreia o B segurado (2 s saem) e fecha a tela de erro. */
 static void game_key(const key_event_t *ev)
 {
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         vm.b_pressed_at = ev->type == KEY_PRESSED ? app_ms() : (ev->type == KEY_RELEASED ? 0 : vm.b_pressed_at);
     }
-    if (vm.has_error && ev->type == KEY_PRESSED && (ev->on_key == KEY_A || ev->on_key == KEY_B)) {
+    if (vm.has_error && ev->type == KEY_PRESSED && (ev->key == KEY_A || ev->key == KEY_B)) {
         vm.exit_requested = true;
     }
 }

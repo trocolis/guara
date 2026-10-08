@@ -57,9 +57,9 @@ static void eq_key(const key_event_t *ev)
     if (ui_list_key(&equipment_list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && equipment_list.total) {
+    } else if (ev->key == KEY_A && equipment_list.total) {
         guara_equip(&g_guara, slot, options_ids[equipment_list.sel]);
         app_mark_changed();
         ui_back();
@@ -115,15 +115,15 @@ static void on_key(const key_event_t *ev)
     if (ev->type == KEY_RELEASED) {
         return;
     }
-    if (ev->on_key == KEY_UP) {
+    if (ev->key == KEY_UP) {
         slot = (slot + COUNT_SLOTS_EQUIP - 1) % COUNT_SLOTS_EQUIP;
-    } else if (ev->on_key == KEY_DOWN) {
+    } else if (ev->key == KEY_DOWN) {
         slot = (slot + 1) % COUNT_SLOTS_EQUIP;
     } else if (ev->type != KEY_PRESSED) {
         return;
-    } else if (ev->on_key == KEY_B) {
+    } else if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A) {
+    } else if (ev->key == KEY_A) {
         if (g_guara.equipped[slot] == SLOT_EMPTY) {
             open_list();
         } else {

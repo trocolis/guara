@@ -197,15 +197,16 @@ void ui_footer(gfx_t *g, const char *text_b, const char *text_a, uint32_t now)
 /* Rodapé de modal com os sprites B (X=11) e A (X=107). */
 void ui_footer_modal(gfx_t *g, int y_line, const char *text_b, const char *text_a, uint32_t now)
 {
-    gfx_rect_filled(g, 9, y_line + 1, 110, 55 - y_line - 1, GFX_BLACK);
+    /* faixa preta de 11 px abaixo da linha; os sprites ficam 2 px abaixo dela */
+    gfx_rect_filled(g, 9, y_line + 1, 110, 11, GFX_BLACK);
     gfx_line_h(g, 9, y_line, 110, GFX_WHITE);
     if (text_b) {
-        ui_icon_mode(g, "button_b", 11, 45, GFX_COPY, 0);
+        ui_icon_mode(g, "button_b", 11, y_line + 2, GFX_COPY, 0);
     }
     if (text_a) {
-        ui_icon_mode(g, "button_a", 107, 45, GFX_COPY, 0);
+        ui_icon_mode(g, "button_a", 107, y_line + 2, GFX_COPY, 0);
     }
-    captions(g, 24, 104, 46, 38, text_b, text_a, now);
+    captions(g, 24, 104, y_line + 3, 38, text_b, text_a, now);
 }
 
 /* Barra de progresso com contorno. */
@@ -350,9 +351,9 @@ bool ui_list_key(ui_list_t *l, const key_event_t *ev, int lines)
     if (ev->type == KEY_RELEASED || l->total <= 0) {
         return false;
     }
-    if (ev->on_key == KEY_UP) {
+    if (ev->key == KEY_UP) {
         l->sel = (l->sel - 1 + l->total) % l->total;
-    } else if (ev->on_key == KEY_DOWN) {
+    } else if (ev->key == KEY_DOWN) {
         l->sel = (l->sel + 1) % l->total;
     } else {
         return false;

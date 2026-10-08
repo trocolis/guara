@@ -148,15 +148,15 @@ static void on_key(const key_event_t *ev)
     if (ui_list_key(&list, ev, UI_LINES_VISIBLE) || ev->type == KEY_RELEASED) {
         return;
     }
-    if (ev->on_key == KEY_LEFT || ev->on_key == KEY_RIGHT) {
-        tab = (tab + (ev->on_key == KEY_RIGHT ? 1 : 3)) % 4;
+    if (ev->key == KEY_LEFT || ev->key == KEY_RIGHT) {
+        tab = (tab + (ev->key == KEY_RIGHT ? 1 : 3)) % 4;
         list.sel = list.top = 0;
         mount();
     } else if (ev->type != KEY_PRESSED) {
         return;
-    } else if (ev->on_key == KEY_B) {
+    } else if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && list.total) {
+    } else if (ev->key == KEY_A && list.total) {
         catalog_record_t r;
         catalog_read(CAT_ITEMS, item_sel(), &r);
         const char *use = r.type == ITEM_FOOD ? "Comer" : (r.type == ITEM_DRINK ? "Beber" : "Usar");

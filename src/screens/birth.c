@@ -41,7 +41,7 @@ static void named(const char *name, void *ctx)
 /* A abre o teclado para digitar o nome. */
 static void on_key(const key_event_t *ev)
 {
-    if (ev->type == KEY_PRESSED && ev->on_key == KEY_A) {
+    if (ev->type == KEY_PRESSED && ev->key == KEY_A) {
         ui_keyboard("Nome do Guará", "", 10, named, NULL);
     }
 }

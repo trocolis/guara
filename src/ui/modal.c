@@ -12,10 +12,12 @@
 #include "ui.h"
 
 #define MX 8
-#define MY 8
+#define MY 6   /* 112x52 centralizado: Y=6..57 (sombra até Y=59) */
 #define MW 112
-#define MH 48
-#define LINE_FOOTER 43
+#define MH 52
+#define LINE_FOOTER (MY + MH - 13) /* linha do rodapé (Y=45): sprites B/A de 10 px abaixo dela */
+#define TEXT_LINES 3               /* linhas de mensagem em alertas e confirmações */
+#define DETAIL_LINES 4             /* linhas visíveis no modal de detalhes (sem rodapé) */
 #define MAX_OPTIONS 8
 
 typedef enum { M_ALERT, M_CONFIRM, M_CHOICE, M_COUNT, M_DETAILS } modal_type_t;
@@ -70,14 +72,14 @@ static void on_key(const key_event_t *ev)
     if (ev->type == KEY_RELEASED) {
         return;
     }
-    if (ev->type == KEY_PRESSED && ev->on_key == KEY_B) {
+    if (ev->type == KEY_PRESSED && ev->key == KEY_B) {
         respond(-1);
         return;
     }
     switch (m->type) {
     case M_ALERT:
     case M_CONFIRM:
-        if (ev->on_key == KEY_A && ev->type == KEY_PRESSED) {
+        if (ev->key == KEY_A && ev->type == KEY_PRESSED) {
             respond(1);
         }
         break;
@@ -85,27 +87,27 @@ static void on_key(const key_event_t *ev)
         if (ui_list_key(&m->list, ev, 3)) {
             break;
         }
-        if (ev->on_key == KEY_A && ev->type == KEY_PRESSED) {
+        if (ev->key == KEY_A && ev->type == KEY_PRESSED) {
             respond(m->list.sel);
         }
         break;
     case M_COUNT: {
         int step = ev->type == KEY_REPEATED ? 5 : 1;
-        if (ev->on_key == KEY_UP || ev->on_key == KEY_RIGHT) {
+        if (ev->key == KEY_UP || ev->key == KEY_RIGHT) {
             m->value = m->value + step > m->maximum ? (ev->type == KEY_REPEATED ? m->maximum : m->minimum) : m->value + step;
-        } else if (ev->on_key == KEY_DOWN || ev->on_key == KEY_LEFT) {
+        } else if (ev->key == KEY_DOWN || ev->key == KEY_LEFT) {
             m->value = m->value - step < m->minimum ? (ev->type == KEY_REPEATED ? m->minimum : m->maximum) : m->value - step;
-        } else if (ev->on_key == KEY_A && ev->type == KEY_PRESSED) {
+        } else if (ev->key == KEY_A && ev->type == KEY_PRESSED) {
             respond(m->value);
         }
         break;
     }
     case M_DETAILS:
-        if (ev->on_key == KEY_UP && m->scrollbar > 0) {
+        if (ev->key == KEY_UP && m->scrollbar > 0) {
             m->scrollbar--;
-        } else if (ev->on_key == KEY_DOWN && m->scrollbar + 3 < m->text_line_count) {
+        } else if (ev->key == KEY_DOWN && m->scrollbar + DETAIL_LINES < m->text_line_count) {
             m->scrollbar++;
-        } else if (ev->on_key == KEY_A && ev->type == KEY_PRESSED) {
+        } else if (ev->key == KEY_A && ev->type == KEY_PRESSED) {
             respond(1);
         }
         break;
@@ -158,9 +160,13 @@ static void on_draw(gfx_t *g, uint32_t now)
             x = MX + 24;
             width = MW - 28;
         }
-        int lines = m->text[0] ? (gfx_text_width(m->text) > width ? 2 : 1) : 0;
-        int y = body_y + (LINE_FOOTER - body_y - lines * 9) / 2;
-        ui_paragraph(g, x, y, width, 2, m->text, true);
+        /* centraliza verticalmente entre a barra de título e o rodapé (até 3 linhas) */
+        int lines = m->text[0] ? count_lines(m->text, width) : 0;
+        if (lines > TEXT_LINES) {
+            lines = TEXT_LINES;
+        }
+        int y = body_y + (LINE_FOOTER - body_y - lines * FONT_5X8.line_height) / 2;
+        ui_paragraph(g, x, y, width, TEXT_LINES, m->text, true);
         ui_footer_modal(g, LINE_FOOTER, m->text_b[0] ? m->text_b : NULL, m->text_a, now);
         break;
     }
@@ -202,9 +208,9 @@ static void on_draw(gfx_t *g, uint32_t now)
         gg->clip_y0 = cy0;
         gg->clip_y1 = cy1;
         gfx_reset_clip(gg);
-        if (m->text_line_count > 3) {
-            int bar_height = 33, length = bar_height * 3 / m->text_line_count;
-            int y = body_y + (bar_height - length) * m->scrollbar / (m->text_line_count - 3);
+        if (m->text_line_count > DETAIL_LINES) {
+            int bar_height = DETAIL_LINES * FONT_5X8.line_height, length = bar_height * DETAIL_LINES / m->text_line_count;
+            int y = body_y + (bar_height - length) * m->scrollbar / (m->text_line_count - DETAIL_LINES);
             gfx_line_v(g, MX + MW - 3, y, length, GFX_WHITE);
         }
         break;

@@ -14,7 +14,7 @@ typedef struct {
     const char *name;
     const char *icon;
     const screen_t *screen; /* tela a abrir, ou */
-    void (*on_open)(void);  /* função que abre um sub-menu */
+    void (*open_menu)(void);  /* função que abre um sub-menu */
 } item_menu_t;
 
 static const item_menu_t ITEMS[] = {
@@ -49,7 +49,7 @@ static void on_key(const key_event_t *ev)
     if (ev->type == KEY_RELEASED) {
         return;
     }
-    switch (ev->on_key) {
+    switch (ev->key) {
     case KEY_LEFT: /* item da esquerda (anterior) vem para o centro */
         sel = (sel - 1 + COUNT) % COUNT;
         anim_dir = -1;
@@ -65,7 +65,7 @@ static void on_key(const key_event_t *ev)
             if (ITEMS[sel].screen) {
                 ui_open(ITEMS[sel].screen, NULL);
             } else {
-                ITEMS[sel].on_open();
+                ITEMS[sel].open_menu();
             }
         }
         break;

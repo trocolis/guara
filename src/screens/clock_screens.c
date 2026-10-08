@@ -58,7 +58,7 @@ static void ed_key(const key_event_t *ev)
     if (ev->type == KEY_RELEASED) {
         return;
     }
-    switch (ev->on_key) {
+    switch (ev->key) {
     case KEY_LEFT:
         ed.cursor = (ed.cursor + 3) % 4;
         break;
@@ -76,7 +76,7 @@ static void ed_key(const key_event_t *ev)
         if (ev->type == KEY_PRESSED) {
             time_edit_fn fn = ed.fn;
             int v = editor_value();
-            bool cancelled = ev->on_key == KEY_B;
+            bool cancelled = ev->key == KEY_B;
             ui_back();
             fn(v, cancelled);
         }
@@ -196,9 +196,9 @@ static void alarms_key(const key_event_t *ev)
     if (ui_list_key(&alarm_list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A) {
+    } else if (ev->key == KEY_A) {
         if (alarm_list.sel == 0) {
             if (alarms_count() >= ALARMS_MAX) {
                 ui_alert("DESPERTADOR", "alarm", "Limite de despertadores atingido.", "OK", NULL, NULL);
@@ -242,10 +242,10 @@ static void stopwatch_key(const key_event_t *ev)
     if (ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         app_block_sleep(false);
         ui_back();
-    } else if (ev->on_key == KEY_A) {
+    } else if (ev->key == KEY_A) {
         if (stopwatch.running) {
             stopwatch.elapsed = app_ms() - stopwatch.start;
             stopwatch.running = false;
@@ -300,7 +300,7 @@ static void timer_key(const key_event_t *ev)
     bool stopped = !timer_active();
     if (stopped) {
         static const int maximums[4] = {9, 9, 5, 9};
-        switch (ev->on_key) {
+        switch (ev->key) {
         case KEY_LEFT: timer_cursor = (timer_cursor + 3) % 4; return;
         case KEY_RIGHT: timer_cursor = (timer_cursor + 1) % 4; return;
         case KEY_UP:
@@ -315,9 +315,9 @@ static void timer_key(const key_event_t *ev)
     if (ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A) {
+    } else if (ev->key == KEY_A) {
         if (stopped) {
             uint32_t s = (uint32_t)((timer_digits[0] * 10 + timer_digits[1]) * 60 + timer_digits[2] * 10 + timer_digits[3]);
             if (s > 0) {

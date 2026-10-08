@@ -22,7 +22,7 @@ typedef enum {
 } key_event_type_t;
 
 typedef struct {
-    input_key_t on_key;
+    input_key_t key;
     key_event_type_t type;
 } key_event_t;
 

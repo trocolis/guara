@@ -3,6 +3,15 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.3.2 — 2026-10-08
+
+### Interface
+- Modal com 112 x 52 px (Y=6..57) para mostrar até 3 linhas de mensagem em alertas e confirmações; os detalhes mostram 4 linhas.
+- Rodapé do modal 2 px mais abaixo (sprites B e A em Y=47).
+
+### Código
+- Campo do evento de tecla renomeado de `on_key` para `key` e o do carrossel para `open_menu` (sobras da refatoração da v0.2.1).
+
 ## v0.3.1 — 2026-10-08
 
 ### Interface

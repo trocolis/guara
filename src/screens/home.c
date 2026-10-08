@@ -198,7 +198,7 @@ static void on_key(const key_event_t *ev)
     if (ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_A) {
+    if (ev->key == KEY_A) {
         app_interact();
         ui_open(&SCREEN_MENU, NULL);
     }

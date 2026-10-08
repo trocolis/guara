@@ -275,16 +275,16 @@ static void on_key(const key_event_t *ev)
         return;
     }
     if (!sd_mounted()) {
-        if (ev->on_key == KEY_A) {
+        if (ev->key == KEY_A) {
             sd_mount();
             reload();
-        } else if (ev->on_key == KEY_B) {
+        } else if (ev->key == KEY_B) {
             ui_back();
         }
         return;
     }
     const file_entry_t *e = selected_entry();
-    switch (ev->on_key) {
+    switch (ev->key) {
     case KEY_B:
         if (is_root()) {
             ui_back();

@@ -149,7 +149,7 @@ static void reader_key(const key_event_t *ev)
         return;
     }
     int before = reader.top;
-    switch (ev->on_key) {
+    switch (ev->key) {
     case KEY_UP: reader.top--; break;
     case KEY_DOWN: reader.top++; break;
     case KEY_LEFT: reader.top -= 6; break;
@@ -324,9 +324,9 @@ static void on_key(const key_event_t *ev)
     if (ui_list_key(&list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && list.total) {
+    } else if (ev->key == KEY_A && list.total) {
         library_entry_t *o = &works[list.sel];
         char file[200], folder[160];
         if (o->book) {

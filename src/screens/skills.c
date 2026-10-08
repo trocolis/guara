@@ -79,9 +79,9 @@ static void on_key(const key_event_t *ev)
     if (ui_list_key(&list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && list.total) {
+    } else if (ev->key == KEY_A && list.total) {
         static const char *const types[] = {"Ataque", "Cura", "Efeito"};
         static const char *const targets[] = {"Usuário", "Oponente"};
         catalog_record_t r;
@@ -95,7 +95,7 @@ static void on_key(const key_event_t *ev)
                           r.status[i].value);
         }
         ui_details(r.name, text);
-    } else if ((ev->on_key == KEY_LEFT || ev->on_key == KEY_RIGHT) && list.total) {
+    } else if ((ev->key == KEY_LEFT || ev->key == KEY_RIGHT) && list.total) {
         bool turning_on = !is_active(ids[list.sel]);
         int free_slots = 0;
         for (int i = 0; i < COUNT_SKILL_ACTIVE; i++) {

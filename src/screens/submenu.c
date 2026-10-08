@@ -49,9 +49,9 @@ static void on_key(const key_event_t *ev)
     if (ui_list_key(&e->list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && e->def->items[e->list.sel].action) {
+    } else if (ev->key == KEY_A && e->def->items[e->list.sel].action) {
         e->def->items[e->list.sel].action();
     }
 }

@@ -140,7 +140,7 @@ static void player_key(const key_event_t *ev)
     if (ev->type != KEY_PRESSED) {
         return;
     }
-    switch (ev->on_key) {
+    switch (ev->key) {
     case KEY_A:
         if (audio_music_active()) {
             audio_pause_music(!audio_music_paused());
@@ -230,9 +230,9 @@ static void on_key(const key_event_t *ev)
     if (ui_list_key(&list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && list.total) {
+    } else if (ev->key == KEY_A && list.total) {
         char c[160];
         path_for_index(list.sel, c, sizeof(c));
         if (track && audio_music_active() && strcmp(track->path, c) == 0) {

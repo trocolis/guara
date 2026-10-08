@@ -29,7 +29,7 @@ static void viewer_key(const key_event_t *ev)
         return;
     }
     int step = 8;
-    switch (ev->on_key) {
+    switch (ev->key) {
     case KEY_LEFT: vx -= step; break;
     case KEY_RIGHT: vx += step; break;
     case KEY_UP: vy -= step; break;
@@ -155,9 +155,9 @@ static void on_key(const key_event_t *ev)
     if (ui_list_key(&list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && list.total) {
+    } else if (ev->key == KEY_A && list.total) {
         static const char *const options[] = {"Abrir", "Detalhes", "Excluir"};
         ui_choice(items->items[list.sel].name, options, 3, option, NULL);
     }

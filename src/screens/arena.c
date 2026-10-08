@@ -163,17 +163,17 @@ static void on_key(const key_event_t *ev)
         return;
     }
     if (combat.finished) {
-        if (end_shown && (ev->on_key == KEY_A || ev->on_key == KEY_B)) {
+        if (end_shown && (ev->key == KEY_A || ev->key == KEY_B)) {
             finish();
         }
         return;
     }
-    if (ev->on_key == KEY_A && combat_ready(&combat, 0)) {
+    if (ev->key == KEY_A && combat_ready(&combat, 0)) {
         static const char *const options[] = {"Atacar", "Habilidade", "Itens", "Desistir"};
         at_modal = true;
         notice[0] = '\0';
         ui_choice("ACAO", options, 4, action_chosen, NULL);
-    } else if (ev->on_key == KEY_B) {
+    } else if (ev->key == KEY_B) {
         at_modal = true;
         ui_confirm("DESISTIR", "fight", "Desistir do combate?", "NAO", "SIM", forfeit_answer, NULL);
     }

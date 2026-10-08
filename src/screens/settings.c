@@ -83,9 +83,9 @@ static void scan_key(const key_event_t *ev)
     if (ui_list_key(&network_list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && network_list.total) {
+    } else if (ev->key == KEY_A && network_list.total) {
         snprintf(ssid_chosen, sizeof(ssid_chosen), "%s", networks[network_list.sel].ssid);
         if (networks[network_list.sel].is_open) {
             connect(ssid_chosen, "");
@@ -150,9 +150,9 @@ static void saved_key(const key_event_t *ev)
     if (ui_list_key(&saved_list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
         return;
     }
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         ui_back();
-    } else if (ev->on_key == KEY_A && saved_list.total) {
+    } else if (ev->key == KEY_A && saved_list.total) {
         static const char *const options[] = {"Conectar", "Esquecer"};
         ui_choice(saved_networks[saved_list.sel].ssid, options, 2, saved_option, NULL);
     }
@@ -333,7 +333,7 @@ static uint32_t b_pressed_at;
 /* Bipa a cada tecla; segurar B por 1 s sai. */
 static void controller_key(const key_event_t *ev)
 {
-    if (ev->on_key == KEY_B) {
+    if (ev->key == KEY_B) {
         b_pressed_at = ev->type == KEY_PRESSED ? app_ms() : 0;
     }
     if (ev->type == KEY_PRESSED) {

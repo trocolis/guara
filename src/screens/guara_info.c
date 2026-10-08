@@ -20,11 +20,11 @@ static void on_key(const key_event_t *ev)
     if (ev->type == KEY_RELEASED) {
         return;
     }
-    if (ev->on_key == KEY_LEFT) {
+    if (ev->key == KEY_LEFT) {
         tab = (tab + 3) % 4;
-    } else if (ev->on_key == KEY_RIGHT) {
+    } else if (ev->key == KEY_RIGHT) {
         tab = (tab + 1) % 4;
-    } else if (ev->on_key == KEY_B && ev->type == KEY_PRESSED) {
+    } else if (ev->key == KEY_B && ev->type == KEY_PRESSED) {
         ui_back();
     }
 }

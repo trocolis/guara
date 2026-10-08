@@ -79,7 +79,7 @@ static void on_key(const key_event_t *ev)
     if (ev->type == KEY_RELEASED) {
         return;
     }
-    switch (ev->on_key) {
+    switch (ev->key) {
     case KEY_B:
         if (ev->type == KEY_PRESSED) {
             respond(NULL);
