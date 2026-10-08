@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## Não publicado
+
+### Exemplos
+- Boitatá movido de `sdcard/games/` para `examples/sdcard/games/boitata/`: passa a ser o jogo de referência do projeto, evoluído junto com o console.
+
 ## v0.2.1 — 2026-10-08
 
 ### Refatoração (README > Implementação > Código)

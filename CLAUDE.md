@@ -10,7 +10,7 @@ Guará is a virtual-pet / RPG handheld built on an ESP32 (NodeMCU-32S) with a 12
 - `docs/GAME_DESIGN.md` — numbers and behaviours the README leaves open (decay rates, XP curve, stage levels, extra combat formulas, unspecified controls). Values live in `lib/core/src/rules.h`; keep both in sync.
 - `docs/PLAN.md` — phase plan, hardware decisions (D1–D10) and the README fix backlog (H/I/L/A/C items). Mark items there when you resolve them.
 - `catalog/items.csv`, `equipment.csv`, `skills.csv` — packer input. **Empty on purpose:** the author fills the content in `CATALOG.md`; never invent catalog entries. Tests use `test/fixtures/catalog/`.
-- `bitmaps/` — 1-bit VROM assets. `examples/sdcard/` — sample Lua game. `sdcard/` — the author's own SD card content (games, music, saves).
+- `bitmaps/` — 1-bit VROM assets. `examples/sdcard/games/` — sample Lua games: `apple_catch` (short API demo) and `boitata` (the reference game, evolved together with the author). `sdcard/` — the author's own SD card content (games, music, saves).
 
 ## Project rules (README > Implementação)
 

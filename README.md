@@ -470,7 +470,10 @@ Referência completa da API implementada (cores: `1` = branco, `0` = preto, `2` 
 | `storage` | `save(chave,texto)`, `load(chave)` |
 | globais | `exit()`, `millis()`, `WIDTH`, `HEIGHT` |
 
-O jogo termina ao chamar `exit()` ou segurando **B** por 2 segundos. Há um exemplo completo em `examples/sdcard/games/apple_catch/` (copie a pasta para `/games` no cartão).
+O jogo termina ao chamar `exit()` ou segurando **B** por 2 segundos. Há exemplos completos em `examples/sdcard/games/` (copie a pasta do jogo para `/games` no cartão):
+
+- `apple_catch/` — Pega-Maçã: exemplo curto e comentado da API.
+- `boitata/` — Boitatá: jogo da serpente de fogo, com menu, configurações, slots de save e ranking. É o jogo de referência do projeto e vai evoluir junto com o console.
 
 
 ##### Músicas ![Musicas](./bitmaps/icons/music.bmp)
