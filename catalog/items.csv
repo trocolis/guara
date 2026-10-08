@@ -1,1 +1,2 @@
 id,slug,name,type,icon,affinity,effects,status_effects,description
+0,apple,Maçã,FOOD,apple,NEUTRAL,SATIETY+15;HP+5;ENERGY+10,,"Maca fresca, crocante e rica em fibras."

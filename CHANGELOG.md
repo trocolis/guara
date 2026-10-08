@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.4.0 — 2026-10-08
+
+### Catálogo
+- Primeiro item do catálogo, convertido do `CATALOG.md`: Maçã (`apple`), comida com Alimentação +15, HP +5 e Energia +10. A afinidade, não definida no `CATALOG.md`, ficou como Neutra.
+
 ## v0.3.2 — 2026-10-08
 
 ### Interface
