@@ -259,7 +259,7 @@ void gfx_bitmap(gfx_t *g, const gfx_bitmap_t *bmp, int x, int y, gfx_mode_t mode
             case GFX_OR:
                 color = lit ? GFX_WHITE : -1;
                 break;
-            case GFX_E:
+            case GFX_MASK:
                 color = lit ? -1 : GFX_BLACK;
                 break;
             case GFX_XOR:

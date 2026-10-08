@@ -64,6 +64,7 @@ python3 tools/bmp-builder/bmp_builder.py in.png -o bitmaps/icons/x.bmp --preset 
     - `alarms`, `ota`, `debug_console`.
   - `ui/` — screen stack (`ui.h`), standard widgets (`widgets.h`), modals and virtual keyboard (`modal.h`).
   - `screens/` — one file per menu; `screens.h` lists them. `submenu.h` builds static standard sub-menus; `sprite.h` composes head + body + eyes.
+  - Lua API: `games.c` holds the VM runtime and the base modules (`oled`, `btn`, `audio`, `guara`, `storage`); `game_api.c` adds VROM drawing options, `guara.draw`, `catalog` and the `ui` widgets/modals. Keep the README API table in sync when changing either.
 - `lib/` — pure C11, **no IDF includes**, compiled for both `esp32` and `native`:
   - `crc32`;
   - `gfx`: page-format framebuffer, primitives, UTF-8 text, draw modes, BMP decoder;

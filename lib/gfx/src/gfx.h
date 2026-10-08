@@ -38,7 +38,7 @@ typedef struct {
 typedef enum {
     GFX_COPY,    /* desenha branco e preto (opaco) */
     GFX_OR,      /* só os pixels brancos acendem (fundo transparente) */
-    GFX_E,       /* pixels pretos apagam, brancos são transparentes (máscara) */
+    GFX_MASK,       /* pixels pretos apagam, brancos são transparentes (máscara) */
     GFX_XOR,     /* pixels brancos invertem o fundo */
     GFX_INVERSE, /* opaco com cores invertidas */
 } gfx_mode_t;

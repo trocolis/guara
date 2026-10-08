@@ -14,6 +14,7 @@
 #include "buttons.h"
 #include "widgets.h"
 #include "config.h"
+#include "game_api.h"
 #include "ini.h"
 #include "midi.h"
 #include "lauxlib.h"
@@ -210,6 +211,7 @@ static struct {
     bool has_error;
     gfx_t *g;
     bool holding[COUNT_KEYS], previous[COUNT_KEYS];
+    bool resync_keys; /* voltou de um modal: ignora bordas de tecla neste quadro */
     uint32_t b_pressed_at;
     uint32_t start, last_frame, last_minute;
     int minutes;
@@ -218,6 +220,9 @@ static struct {
     uint32_t splash_until;
     gfx_bitmap_t sheets[4];
 } vm;
+
+/* Declarada aqui porque game_draw precisa saber se o jogo está no topo da pilha */
+static const screen_t SCREEN_GAME;
 
 /* Alocador da VM Lua com limite de memória. */
 static void *allocator(void *ud, void *ptr, size_t old_size, size_t incoming)
@@ -316,16 +321,7 @@ static int l_textwidth(lua_State *L)
     lua_pushinteger(L, gfx_text_width(luaL_checkstring(L, 1)));
     return 1;
 }
-/* oled.icon(nome, x, y [, espelhar]) desenha um bitmap da VROM */
-static int l_icon(lua_State *L)
-{
-    const gfx_bitmap_t *b = vrom(luaL_checkstring(L, 1));
-    if (b) {
-        gfx_bitmap(vm.g, b, lua_int_arg(L, 2), lua_int_arg(L, 3), GFX_OR,
-                   lua_toboolean(L, 4) ? GFX_MIRROR : 0);
-    }
-    return 0;
-}
+
 /* oled.load("sprites.bmp") -> id ; oled.sprite(id, sx, sy, w, h, x, y [, espelhar]) */
 static int l_load(lua_State *L)
 {
@@ -440,6 +436,10 @@ static int l_get_status(lua_State *L)
     lua_setfield(L, -2, "name");
     lua_pushstring(L, nature_name(g->nature));
     lua_setfield(L, -2, "nature");
+    lua_pushstring(L, g->color == COLOR_WHITE ? "white" : "black");
+    lua_setfield(L, -2, "color");
+    field(L, "head", g->head);
+    field(L, "stage", g->stage);
     field(L, "level", g->level);
     field(L, "xp", g->xp);
     field(L, "hp", g->hp);
@@ -662,7 +662,7 @@ static void open_libraries(lua_State *L)
     static const luaL_Reg oled[] = {
         {"clear", l_clear}, {"pixel", l_pixel}, {"line", l_line}, {"rect", l_rect}, {"fill", l_fill},
         {"circle", l_circle}, {"fillcircle", l_fillcircle}, {"text", l_text}, {"textwidth", l_textwidth},
-        {"icon", l_icon}, {"load", l_load}, {"sprite", l_sprite}, {NULL, NULL},
+        {"load", l_load}, {"sprite", l_sprite}, {NULL, NULL},
     };
     static const luaL_Reg btn[] = {
         {"up", l_up}, {"down", l_down}, {"left", l_left}, {"right", l_right},
@@ -691,6 +691,8 @@ static void open_libraries(lua_State *L)
     lua_setglobal(L, "WIDTH");
     lua_pushinteger(L, GFX_HEIGHT);
     lua_setglobal(L, "HEIGHT");
+    /* Gráficos da VROM, o Guará, o catálogo e os componentes de interface (game_api.c) */
+    game_api_register(L);
 }
 
 /* Chama uma função global do jogo (se existir); erros param o jogo e são exibidos. */
@@ -823,10 +825,26 @@ static void game_draw(gfx_t *g, uint32_t now)
         ui_paragraph(g, 2, 14, 124, 5, vm.error, false);
         return;
     }
+    /*
+     * Com um modal ou o teclado do sistema por cima, o jogo fica em pausa: só
+     * redesenha o último estado (o modal é desenhado em seguida, por cima).
+     */
+    if (ui_top() != &SCREEN_GAME) {
+        vm.resync_keys = true;
+        gfx_clear(g);
+        call("draw", 0);
+        vm.last_frame = now;
+        return;
+    }
     for (int i = 0; i < COUNT_KEYS; i++) {
         vm.previous[i] = vm.holding[i];
         vm.holding[i] = buttons_is_held((input_key_t)i);
+        if (vm.resync_keys) {
+            /* a tecla que fechou o modal ainda pode estar apertada: não conta como nova */
+            vm.previous[i] = vm.holding[i];
+        }
     }
+    vm.resync_keys = false;
     float dt = (float)(now - vm.last_frame) / 1000.0f;
     vm.last_frame = now;
     lua_pushnumber(vm.L, (lua_Number)dt);
@@ -852,6 +870,7 @@ static const screen_t SCREEN_GAME = {
 void screens_run_game(const char *path)
 {
     memset(&vm, 0, sizeof(vm));
+    game_api_reset();
     struct stat st;
     char home[200];
     char *ini = NULL;
@@ -916,4 +935,23 @@ void screens_run_game(const char *path)
         return;
     }
     call("init", 0);
+}
+
+/* Framebuffer do quadro atual, onde as funções de desenho da API escrevem. */
+gfx_t *game_runtime_framebuffer(void)
+{
+    return vm.g;
+}
+
+/* VM do jogo aberto (NULL se nenhum), usada pelas funções de retorno dos modais. */
+lua_State *game_runtime_lua(void)
+{
+    return vm.L;
+}
+
+/* Para o jogo e mostra o erro (ex.: falha numa função de retorno de modal). */
+void game_runtime_fail(const char *message)
+{
+    snprintf(vm.error, sizeof(vm.error), "%s", message ? message : "erro desconhecido");
+    vm.has_error = true;
 }

@@ -55,7 +55,7 @@ static void test_bitmap_modes(void)
     gfx_bitmap(&g, &b, 0, 0, GFX_OR, 0);
     TEST_ASSERT_TRUE(gfx_read_pixel(&g, 0, 0));
     TEST_ASSERT_TRUE(gfx_read_pixel(&g, 1, 0)); /* OU preserva o fundo */
-    gfx_bitmap(&g, &b, 0, 0, GFX_E, 0);
+    gfx_bitmap(&g, &b, 0, 0, GFX_MASK, 0);
     TEST_ASSERT_TRUE(gfx_read_pixel(&g, 0, 0));
     TEST_ASSERT_FALSE(gfx_read_pixel(&g, 1, 0)); /* E apaga onde o bitmap é preto */
     gfx_clear(&g);

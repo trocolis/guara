@@ -3,6 +3,18 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.3.0 — 2026-10-08
+
+### API Lua: gráficos e componentes do sistema
+- `oled.icon` aceita opções `{mode, scale, mirror}` (modos `or`, `copy`, `mask`, `xor` e `invert`); novo `oled.icon_size`.
+- `guara.draw` desenha o Guará do jogador (olhos, escala 2x, espelho, quadro), e `guara.get_status` informa cor, cabeça e estágio.
+- Novo módulo `catalog`: `item`, `equipment`, `skill` (por id ou slug) e `count`.
+- Novo módulo `ui`:
+  - componentes de desenho: `title`, `tabs`, `list`, `footer`, `progress`, `scrollbar`, `marquee`, `paragraph`, `text_center`;
+  - componentes interativos: `alert`, `confirm`, `choice`, `quantity`, `details`, `keyboard`.
+- Com um modal ou o teclado aberto, o jogo fica em pausa e a tecla que fecha o modal não é repassada a ele.
+- O exemplo Pega-Maçã usa a pausa com `ui.choice` e a tela final com `guara.draw`.
+
 ## Não publicado
 
 ### Exemplos

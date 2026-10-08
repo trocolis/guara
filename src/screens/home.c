@@ -270,7 +270,7 @@ static void item_use_on_draw(gfx_t *g, uint32_t now)
         if (frame >= 1) {
             char name[12];
             snprintf(name, sizeof(name), "bite_%d", frame);
-            ui_icon_mode(g, name, ITEM_X, ITEM_Y, GFX_E, 0);
+            ui_icon_mode(g, name, ITEM_X, ITEM_Y, GFX_MASK, 0);
             if (frame != usage.last_frame) {
                 audio_bite();
             }

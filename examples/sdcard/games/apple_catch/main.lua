@@ -1,5 +1,6 @@
 -- Pega-Maçã: mova a cesta com esquerda/direita e pegue as maçãs.
--- A reinicia depois do fim de jogo; segure B por 2 s para sair.
+-- B abre a pausa (modal do sistema); A reinicia depois do fim de jogo.
+-- Demonstra a API: oled, btn, audio, storage, guara.draw e os componentes ui.
 
 local basket_x      -- posição horizontal da cesta (pode ser fracionária)
 local apples        -- maçãs caindo: {x, y, speed}
@@ -42,7 +43,20 @@ local function finish_game()
   audio.beep(200, 300)
 end
 
+-- Pausa com o modal de escolha do sistema: o jogo para enquanto ele está aberto
+local function open_pause_menu()
+  ui.choice("PAUSA", {"Continuar", "Sair"}, function(option)
+    if option == 2 then
+      exit()
+    end
+  end)
+end
+
 function update(dt)
+  if btn.pressed("b") then
+    open_pause_menu()
+    return
+  end
   if game_over then
     if btn.pressed("a") then init() end
     return
@@ -85,10 +99,9 @@ function update(dt)
 end
 
 function draw()
-  -- Placar no topo
+  -- Placar no topo: pontos à esquerda e as vidas numa barra de progresso
   oled.text(0, 0, "Pontos " .. score)
-  local lives_text = "Vidas " .. lives
-  oled.text(WIDTH - oled.textwidth(lives_text), 0, lives_text)
+  ui.progress(WIDTH - 30, 1, 30, 6, lives, 3)
   oled.line(0, 9, WIDTH - 1, 9)
 
   for _, apple in ipairs(apples) do
@@ -101,10 +114,12 @@ function draw()
   oled.line(x + 2, BASKET_Y + 2, x + BASKET_WIDTH - 3, BASKET_Y + 2)
 
   if game_over then
-    oled.fill(14, 20, 100, 28, 0)
-    oled.rect(14, 20, 100, 28)
-    local title, record = "FIM DE JOGO", "Recorde " .. best_score
-    oled.text(64 - oled.textwidth(title) // 2, 25, title)
-    oled.text(64 - oled.textwidth(record) // 2, 36, record)
+    -- Tela de fim: o Guará do jogador comemora (ou fica chateado) em 2x
+    oled.clear()
+    ui.title("FIM DE JOGO")
+    guara.draw(32, 60, {scale = 2, eye = score >= 10 and "happy" or "bored"})
+    ui.text_center(64, 64, 22, "Pontos " .. score)
+    ui.text_center(64, 64, 34, "Recorde " .. best_score)
+    ui.footer("PAUSA", "DE NOVO")
   end
 end
