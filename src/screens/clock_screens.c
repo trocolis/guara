@@ -218,7 +218,7 @@ static void alarms_draw(gfx_t *g, uint32_t now)
 {
     alarm_list.total = alarms_count() + 1;
     ui_title(g, "DESPERTADOR", now);
-    ui_list_draw(g, &alarm_list, UI_TITLE_HEIGHT, UI_LINES_VISIBLE, item_alarm, NULL, now);
+    ui_list_draw(g, &alarm_list, UI_LIST_Y, UI_LINES_VISIBLE, item_alarm, NULL, now);
 }
 
 static const screen_t SCREEN_ALARM_CLOCKS = {

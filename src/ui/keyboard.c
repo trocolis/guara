@@ -138,9 +138,9 @@ static void on_draw(gfx_t *g, uint32_t now)
     if (n > 19) {
         show = utf8_advance(show, n - 19);
     }
-    int w = gfx_text(g, 2, 2, show, GFX_BLACK);
+    int w = gfx_text(g, 2, UI_TITLE_TEXT_Y, show, GFX_BLACK);
     if (kb.text[0] && (now / 400) % 2) {
-        gfx_line_v(g, 2 + w + 1, 2, 8, GFX_BLACK);
+        gfx_line_v(g, 2 + w + 1, UI_TITLE_TEXT_Y, 8, GFX_BLACK);
     }
 
     for (int row = 0; row < LINES_CHARS; row++) {

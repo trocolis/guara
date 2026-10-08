@@ -9,9 +9,12 @@
 
 /* Componentes padrão da UI (README > UI > Padrões do system). */
 
-#define UI_TITLE_HEIGHT 12   /* Y=0..11 */
-#define UI_LINE_HEIGHT 16
-#define UI_LINES_VISIBLE 3  /* Y=12..59 */
+#define UI_TITLE_HEIGHT 11   /* barra de título e de abas: Y=0..10 */
+#define UI_LINE_HEIGHT 18   /* caixa de 16 px + 2 px de espaço entre os itens */
+#define UI_SELECTION_HEIGHT 16 /* caixa de seleção, da altura do ícone */
+#define UI_TITLE_TEXT_Y 2    /* linha do texto: 1 px de folga até o contorno e a linha de base das abas */
+#define UI_LIST_Y 12         /* primeira linha da lista: 1 px abaixo da barra */
+#define UI_LINES_VISIBLE 3   /* Y=12..63 */
 #define UI_FOOTER_Y 54
 
 /* Letreiro (marquee): rola o texto quando não cabe; reinicia quando a chave muda. */

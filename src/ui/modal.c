@@ -112,19 +112,20 @@ static void on_key(const key_event_t *ev)
     }
 }
 
-/* Moldura 112x48 com sombra de 2 px e barra de título preta. */
+/* Moldura 112x48 com sombra de 2 px e barra de título branca (como a das telas). */
 static void draw_frame(gfx_t *g, const char *title, uint32_t now)
 {
     static marquee_t marquee;
     gfx_rect_filled(g, MX - 2, MY - 2, MW + 4, MH + 4, GFX_BLACK);
     gfx_rect(g, MX, MY, MW, MH, GFX_WHITE);
+    /* barra de título branca com texto preto, da mesma altura da barra das telas */
+    gfx_rect_filled(g, MX, MY, MW, UI_TITLE_HEIGHT, GFX_WHITE);
     int w = gfx_text_width(title);
     if (w <= MW - 6) {
-        gfx_text(g, MX + (MW - w) / 2, MY + 2, title, GFX_WHITE);
+        gfx_text(g, MX + (MW - w) / 2, MY + UI_TITLE_TEXT_Y, title, GFX_BLACK);
     } else {
-        ui_marquee_text(g, MX + 3, MY + 2, MW - 6, title, GFX_WHITE, true, &marquee, now);
+        ui_marquee_text(g, MX + 3, MY + UI_TITLE_TEXT_Y, MW - 6, title, GFX_BLACK, true, &marquee, now);
     }
-    gfx_line_h(g, MX, MY + 11, MW, GFX_WHITE);
 }
 
 /* Texto de uma opção do modal de escolha. */
@@ -148,7 +149,7 @@ static void on_draw(gfx_t *g, uint32_t now)
 {
     modal_t *m = current();
     draw_frame(g, m->title, now);
-    int body_y = MY + 13;
+    int body_y = MY + UI_TITLE_HEIGHT + 1; /* 1 px abaixo da barra de título */
     switch (m->type) {
     case M_ALERT:
     case M_CONFIRM: {

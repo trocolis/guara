@@ -173,7 +173,7 @@ static void on_draw(gfx_t *g, uint32_t now)
         gfx_text_center(g, 0, GFX_WIDTH, 28, "Nenhuma imagem em", GFX_WHITE);
         gfx_text_center(g, 0, GFX_WIDTH, 38, "/image", GFX_WHITE);
     } else {
-        ui_list_draw(g, &list, UI_TITLE_HEIGHT, UI_LINES_VISIBLE, item, NULL, now);
+        ui_list_draw(g, &list, UI_LIST_Y, UI_LINES_VISIBLE, item, NULL, now);
     }
 }
 

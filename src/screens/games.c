@@ -127,7 +127,7 @@ static void draw_list(gfx_t *g, uint32_t now)
         gfx_text_center(g, 0, GFX_WIDTH, 38, "/games", GFX_WHITE);
         return;
     }
-    ui_list_draw(g, &list, UI_TITLE_HEIGHT, UI_LINES_VISIBLE, item, NULL, now);
+    ui_list_draw(g, &list, UI_LIST_Y, UI_LINES_VISIBLE, item, NULL, now);
     /* Ícones personalizados (icon.bmp 16x16) por cima do ícone padrão */
     for (int k = 0; k < 3 && list.top + k < list.total; k++) {
         int i = list.top + k;
@@ -142,7 +142,8 @@ static void draw_list(gfx_t *g, uint32_t now)
             }
         }
         if (icons[k].data) {
-            int y = UI_TITLE_HEIGHT + k * UI_LINE_HEIGHT;
+            int y = UI_LIST_Y + k * UI_LINE_HEIGHT;
+            /* apaga o ícone padrão e põe o do jogo no lugar */
             gfx_rect_filled(g, 4, y + 1, 16, 14, GFX_BLACK);
             gfx_bitmap(g, &icons[k], 4, y, GFX_OR, 0);
         }

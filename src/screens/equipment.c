@@ -74,7 +74,7 @@ static void eq_draw(gfx_t *g, uint32_t now)
         gfx_text_center(g, 0, GFX_WIDTH, 32, "Nada para equipar", GFX_WHITE);
         return;
     }
-    ui_list_draw(g, &equipment_list, UI_TITLE_HEIGHT, UI_LINES_VISIBLE, item_eq, NULL, now);
+    ui_list_draw(g, &equipment_list, UI_LIST_Y, UI_LINES_VISIBLE, item_eq, NULL, now);
 }
 
 static const screen_t SCREEN_LIST_EQUIP = {

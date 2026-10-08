@@ -103,7 +103,7 @@ static void scan_draw(gfx_t *g, uint32_t now)
         gfx_text_center(g, 0, GFX_WIDTH, 32, "Nenhuma rede", GFX_WHITE);
         return;
     }
-    ui_list_draw(g, &network_list, UI_TITLE_HEIGHT, UI_LINES_VISIBLE, item_network, NULL, now);
+    ui_list_draw(g, &network_list, UI_LIST_Y, UI_LINES_VISIBLE, item_network, NULL, now);
 }
 
 static const screen_t SCREEN_SCAN_WIFI = {
@@ -166,7 +166,7 @@ static void saved_draw(gfx_t *g, uint32_t now)
         gfx_text_center(g, 0, GFX_WIDTH, 32, "Nenhuma rede salva", GFX_WHITE);
         return;
     }
-    ui_list_draw(g, &saved_list, UI_TITLE_HEIGHT, UI_LINES_VISIBLE, item_saved, NULL, now);
+    ui_list_draw(g, &saved_list, UI_LIST_Y, UI_LINES_VISIBLE, item_saved, NULL, now);
 }
 
 static const screen_t SCREEN_NETWORKS_SAVED = {

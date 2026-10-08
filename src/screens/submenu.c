@@ -61,7 +61,7 @@ static void on_draw(gfx_t *g, uint32_t now)
 {
     state_t *e = current();
     ui_title(g, e->def->title, now);
-    ui_list_draw(g, &e->list, UI_TITLE_HEIGHT, UI_LINES_VISIBLE, item, (void *)e->def, now);
+    ui_list_draw(g, &e->list, UI_LIST_Y, UI_LINES_VISIBLE, item, (void *)e->def, now);
 }
 
 static const screen_t SCREEN_SUBMENU = {

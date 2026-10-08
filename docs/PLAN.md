@@ -250,7 +250,7 @@ Ordem sugerida, das telas mais simples para as mais dependentes:
 - [x] **I7** Queda de 2%/s nos estados físicos × desgaste gradual e travas → 2% por minuto
 - [x] **I8** Nomes de estados: Sono/Cansado, Chateado/Entediado, olhos Assustado/Atordoado sem estado → Sono = Cansado, Chateado = Entediado, olhos Assustado/Atordoado mapeados
 - [x] **I9** ~~Carrossel invertido~~: não é inconsistência. Os lados são do ponto de vista do aparelho (convenção registrada no README e conferida nos mockups).
-- [x] **I10** Linha de 16px com ícone de 16px: a seleção sobrepõe o ícone → retângulo em X=2..125 e ícone em X=4; a sobreposição de 1 px no topo e na base do ícone foi aceita
+- [x] **I10** Linha de 16px com ícone de 16px: a seleção sobrepõe o ícone → v0.3.1: barra de 11 px, lista a partir de Y=12 com caixas de 16 px e 2 px entre os itens; o contorno da seleção encosta no ícone em cima e embaixo (aceito)
 - [x] **I11** Três definições de exibição do "Feliz" → regra única em docs/GAME_DESIGN.md
 - [x] **I12** Sequência de frames "1, 2, 2" e margem dos olhos "frames 1 e 2 … frame 2" → sequência literal 1, 2, 2; olhos fixos pelo quadro 1
 - [x] **I13** `give_item("maca")` usa identificador textual inexistente no catálogo → coluna `slug` no catálogo

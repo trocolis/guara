@@ -3,6 +3,23 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.3.1 — 2026-10-08
+
+### Interface
+- Barra de título e de abas com 11 px (Y=0..10).
+- Lista dos sub-menus a partir de Y=12 (1 px livre abaixo da barra), com caixas de seleção de 16 px e 2 px de espaço entre os itens (Y=12..63).
+- Barra de título do modal branca com texto preto e 11 px, como a das telas; barra do teclado virtual também com 11 px.
+- Vale para todos os sub-menus, listas e para `ui.list`/`ui.tabs` dos jogos Lua.
+
+### Exemplos
+- Boitatá usa os componentes do sistema:
+  - menu, configurações e ranking com `ui.title` e `ui.list`;
+  - nome do jogador pelo `ui.keyboard`;
+  - slots, pausa e fim de jogo com `ui.choice` e `ui.alert`.
+  
+  Os saves continuam no mesmo formato. O código ganhou comentários em português.
+- Boitatá movido de `sdcard/games/` para `examples/sdcard/games/boitata/`: passa a ser o jogo de referência do projeto, evoluído junto com o console.
+
 ## v0.3.0 — 2026-10-08
 
 ### API Lua: gráficos e componentes do sistema
@@ -14,17 +31,6 @@ Cada escopo executado gera um commit e uma entrada aqui.
   - componentes interativos: `alert`, `confirm`, `choice`, `quantity`, `details`, `keyboard`.
 - Com um modal ou o teclado aberto, o jogo fica em pausa e a tecla que fecha o modal não é repassada a ele.
 - O exemplo Pega-Maçã usa a pausa com `ui.choice` e a tela final com `guara.draw`.
-
-## Não publicado
-
-### Exemplos
-- Boitatá usa os componentes do sistema:
-  - menu, configurações e ranking com `ui.title` e `ui.list`;
-  - nome do jogador pelo `ui.keyboard`;
-  - slots, pausa e fim de jogo com `ui.choice` e `ui.alert`.
-  
-  Os saves continuam no mesmo formato. O código ganhou comentários em português.
-- Boitatá movido de `sdcard/games/` para `examples/sdcard/games/boitata/`: passa a ser o jogo de referência do projeto, evoluído junto com o console.
 
 ## v0.2.1 — 2026-10-08
 

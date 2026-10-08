@@ -80,9 +80,9 @@ void ui_title(gfx_t *g, const char *text, uint32_t now)
     gfx_rect_filled(g, 0, 0, GFX_WIDTH, UI_TITLE_HEIGHT, GFX_WHITE);
     int w = gfx_text_width(text);
     if (w <= GFX_WIDTH - 4) {
-        gfx_text(g, (GFX_WIDTH - w) / 2, 2, text, GFX_BLACK);
+        gfx_text(g, (GFX_WIDTH - w) / 2, UI_TITLE_TEXT_Y, text, GFX_BLACK);
     } else {
-        ui_marquee_text(g, 2, 2, GFX_WIDTH - 4, text, GFX_BLACK, true, &marquee, now);
+        ui_marquee_text(g, 2, UI_TITLE_TEXT_Y, GFX_WIDTH - 4, text, GFX_BLACK, true, &marquee, now);
     }
 }
 
@@ -127,13 +127,14 @@ void ui_tabs(gfx_t *g, const char *const *names, int n, int sel, uint32_t now)
             continue;
         }
         bool is_active = i == sel;
+        /* contorno com cantos de cima arredondados; a aba ativa é preenchida */
         gfx_tab(g, x, 0, ws[i], UI_TITLE_HEIGHT - 1, 2, is_active, GFX_WHITE);
         if (is_active) {
-            ui_marquee_text(g, x + TAB_MARGIN, 2, ws[i] - TAB_MARGIN * 2, names[i], GFX_BLACK, true, &marquee, now);
+            ui_marquee_text(g, x + TAB_MARGIN, UI_TITLE_TEXT_Y, ws[i] - TAB_MARGIN * 2, names[i], GFX_BLACK, true, &marquee, now);
         } else {
             char buf[24];
             ui_truncate(buf, sizeof(buf), names[i], ws[i] - TAB_MARGIN * 2);
-            gfx_text(g, x + TAB_MARGIN, 2, buf, GFX_WHITE);
+            gfx_text(g, x + TAB_MARGIN, UI_TITLE_TEXT_Y, buf, GFX_WHITE);
         }
     }
     /* Setas cheias nas extremidades quando há abas fora da tela */
@@ -337,7 +338,7 @@ void ui_list_draw(gfx_t *g, ui_list_t *l, int y0, int lines, ui_item_fn item_fn,
         bool sel = position == l->sel;
         ui_marquee_text(g, x_text, y + 4, text_end - x_text, it.text, GFX_WHITE, sel, &l->marquee, now);
         if (sel) {
-            gfx_rect_rounded(g, 2, y, 124, UI_LINE_HEIGHT, 2, GFX_WHITE);
+            gfx_rect_rounded(g, 2, y, 124, UI_SELECTION_HEIGHT, 2, GFX_WHITE);
         }
     }
     ui_scrollbar(g, y0, lines * UI_LINE_HEIGHT, l->total, lines, l->top);

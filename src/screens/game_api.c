@@ -351,7 +351,7 @@ static int l_ui_list(lua_State *L)
         list->total = MAX_LIST_ITEMS;
     }
     list->sel = int_arg(L, 2) - 1;
-    int y = int_option(L, 3, "y", UI_TITLE_HEIGHT);
+    int y = int_option(L, 3, "y", UI_LIST_Y);
     int rows = int_option(L, 3, "rows", UI_LINES_VISIBLE);
     list_context_t ctx = {L};
     ui_list_draw(game_runtime_framebuffer(), list, y, rows, list_item, &ctx, app_ms());
