@@ -3,7 +3,7 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
-## Sem versão — 2026-10-09 (aprimoramento do combate)
+## v0.10.0 — 2026-10-09
 
 ### Combate
 - Tempo real: o modal de ações não pausa mais o combate; as barras continuam enchendo e o oponente age. Se o combate terminar com o modal aberto, ele fecha.
