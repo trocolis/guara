@@ -23,9 +23,11 @@ Legenda: **PROVISÓRIO** = valor escolhido na implementação, não vem do READM
 | Saúde | energia ou alimentação < 20% | −0,10%/min |
 | Saúde | alimentação, energia e humor > 50% | +0,10%/min (Feliz: +20%) |
 | HP | Faminto | −1% do HP máximo/min |
+| HP e Energia | recuperação de HP ligada e HP incompleto | +1% do HP máximo/min e −0,20%/min de Energia a mais |
 | HP e Saúde | Envenenado, Queimado, Congelado | −2% do HP máximo/min e −1%/min de Saúde |
 
 - **Multiplicador de desgaste:** `150% − Saúde` (Saúde 100% desgasta a 50%, Saúde 0% a 150%), +20% se Triste e +5% se Entediado. Isso dá efeito à Saúde (**I17**).
+- **Recuperação de HP (README):** liga quando alimentação, saúde e energia passam de 50% e desliga quando a energia chega a 10%; entre os dois limites mantém o que estava. Fica no bit interno `ST_RECOVERING` (10) da máscara de estados, sem ícone, e por isso sobrevive ao save. Com o HP cheio não gasta energia.
 - **I7 resolvido:** os "2% por segundo" do README viraram **2% por minuto**. Por segundo, o Guará desmaiaria em 50 s, o que contradiz o desgaste gradual.
 
 ## Estados

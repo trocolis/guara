@@ -309,6 +309,38 @@ static void lose_hp_percent(guara_t *g, int pct)
     g->hp = (uint16_t)clamp(g->hp - damage, 0, g->hp_max);
 }
 
+/* Ganha `pct`% do HP máximo (pelo menos 1 ponto). */
+static void gain_hp_percent(guara_t *g, int pct)
+{
+    int heal = g->hp_max * pct / 100;
+    if (heal < 1) {
+        heal = 1;
+    }
+    g->hp = (uint16_t)clamp(g->hp + heal, 0, g->hp_max);
+}
+
+/*
+ * Recuperação de HP: liga quando alimentação, saúde e energia passam de 50% e
+ * desliga quando a energia chega a 10%. Ligada, cada minuto com HP incompleto
+ * sobe o HP queimando energia.
+ */
+static void recover_hp(guara_t *g)
+{
+    bool recovering = guara_has_state(g, ST_RECOVERING);
+    if (g->satiety > LIMIT_HP_RECOVERY_STARTS && g->health > LIMIT_HP_RECOVERY_STARTS &&
+        g->energy > LIMIT_HP_RECOVERY_STARTS) {
+        recovering = true;
+    }
+    if (g->energy <= LIMIT_HP_RECOVERY_STOPS) {
+        recovering = false;
+    }
+    if (recovering && g->hp < g->hp_max) {
+        gain_hp_percent(g, REGEN_HP_PCT);
+        add_to_vital(&g->energy, -REGEN_HP_ENERGY_COST);
+    }
+    guara_set_state(g, ST_RECOVERING, recovering);
+}
+
 /* Recalcula a emoção atual a partir dos vitais e do medidor Raiva x Tristeza. */
 static void update_emotion(guara_t *g)
 {
@@ -379,6 +411,8 @@ void guara_tick_minute(guara_t *g, const clock_ctx_t *clock_ctx, bool protected)
     } else if (g->satiety > LIMIT_HEALTH_RISES && g->energy > LIMIT_HEALTH_RISES && g->mood > LIMIT_HEALTH_RISES) {
         add_to_vital(&g->health, REGEN_HEALTH * (guara_has_state(g, ST_HAPPY) ? 120 : 100) / 100);
     }
+
+    recover_hp(g);
 
     /* Estados físicos derivados dos vitais */
     bool hungry = g->satiety <= LIMIT_HUNGER;

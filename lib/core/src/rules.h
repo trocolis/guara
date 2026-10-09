@@ -24,6 +24,8 @@
 #define DECAY_HP_HUNGER_PCT        1 /* % do HP máximo por minuto faminto */
 #define DECAY_HP_STATE_PCT      2    /* % do HP máximo por minuto envenenado/queimado/congelado (README: "2%", por minuto) */
 #define DECAY_HEALTH_STATE      100  /* -1%/min de saúde nesses estados */
+#define REGEN_HP_PCT             1   /* % do HP máximo por minuto na recuperação de HP */
+#define REGEN_HP_ENERGY_COST     20  /* -0,20%/min de energia a mais enquanto o HP sobe */
 #define LIMIT_IDLE_MIN     120       /* minutos sem interação até ficar entediado */
 
 /* --- Limiares do README (Ciclo de vida > Desgaste) --- */
@@ -32,6 +34,8 @@
 #define LIMIT_HUNGER             CENTI(10) /* alimentação <= 10%: Faminto */
 #define LIMIT_TIRED          CENTI(20)     /* energia < 20%: Cansado */
 #define LIMIT_HEALTH_RISES       CENTI(50)
+#define LIMIT_HP_RECOVERY_STARTS CENTI(50) /* alimentação, saúde e energia > 50%: HP sobe */
+#define LIMIT_HP_RECOVERY_STOPS  CENTI(10) /* ... queimando energia até ela chegar a 10% */
 #define LIMIT_MOOD_RISES       CENTI(40)
 #define LIMIT_WAKE          CENTI(50)    /* só acorda com energia > 50% */
 #define LIMIT_HAPPY            CENTI(80) /* todos os vitais > 80%: Feliz */

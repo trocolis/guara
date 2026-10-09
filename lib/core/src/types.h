@@ -58,6 +58,7 @@ typedef enum {
     ST_CURSED = 7,
     ST_TIRED = 8,
     ST_HUNGRY = 9,
+    ST_RECOVERING = 10, /* interno, sem ícone: recuperação de HP ligada (Ciclo de vida > Desgaste) */
     ST_HAPPY = 16,
     ST_SAD = 17,
     ST_ANGRY = 18,

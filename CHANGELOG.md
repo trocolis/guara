@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.6.0 — 2026-10-08
+
+### Ciclo de vida
+- Recuperação de HP: com alimentação, saúde e energia acima de 50%, o HP sobe 1% do máximo por minuto e gasta 0,20%/min a mais de energia, até a energia chegar a 10%. Com o HP cheio, não gasta energia. O estado fica no bit interno 10 da máscara de estados (sem ícone).
+
 ## v0.5.2 — 2026-10-08
 
 ### Correções

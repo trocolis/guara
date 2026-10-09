@@ -155,6 +155,34 @@ static void test_hunger_and_faint(void)
     TEST_ASSERT_EQUAL_INT(0, g.hp);
 }
 
+static void test_hp_recovery_burns_energy(void)
+{
+    guara_t g;
+    guara_birth(&g, "Cura", &rng, 1);
+    clock_ctx_t clock_ctx = {-1, 20 * 60, 8 * 60};
+    g.satiety = g.health = g.mood = CENTI(90);
+    g.energy = CENTI(60);
+    g.hp = 1;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_RECOVERING));
+    TEST_ASSERT_TRUE(g.hp > 1);
+    /* Abaixo de 50% de energia continua até a energia chegar a 10% */
+    g.energy = CENTI(30);
+    g.hp = 1;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_TRUE(g.hp > 1);
+    TEST_ASSERT_TRUE(g.energy < CENTI(30) - DECAY_ENERGY);
+    g.energy = CENTI(10);
+    uint16_t hp = g.hp;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_FALSE(guara_has_state(&g, ST_RECOVERING));
+    TEST_ASSERT_EQUAL_UINT16(hp, g.hp);
+    /* Desligada, não volta só com a energia em 30% */
+    g.energy = CENTI(30);
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_FALSE(guara_has_state(&g, ST_RECOVERING));
+}
+
 static void test_recovery_has_locks(void)
 {
     guara_t g;
@@ -354,6 +382,7 @@ int main(void)
     RUN_TEST(test_birth);
     RUN_TEST(test_initial_skills);
     RUN_TEST(test_hunger_and_faint);
+    RUN_TEST(test_hp_recovery_burns_energy);
     RUN_TEST(test_recovery_has_locks);
     RUN_TEST(test_sleeps_at_bedtime_and_wakes);
     RUN_TEST(test_affinity_opposites_and_birth_nature);
