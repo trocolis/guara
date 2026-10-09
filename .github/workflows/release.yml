@@ -1,0 +1,56 @@
+# Publica uma release a cada tag v#.#.#: compila o firmware, empacota o storage
+# e anexa firmware.bin e storage.bin, que o aparelho baixa em
+# Ajustes > Sistema > Atualizar > GitHub.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache do PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini', 'sdkconfig.defaults') }}
+
+      - name: Instala o PlatformIO
+        run: pip install platformio
+
+      - name: Confere a tag com a versão do firmware
+        run: |
+          VERSION=$(sed -n 's/.*GUARA_VERSION=\\"\([0-9.]*\)\\".*/\1/p' platformio.ini)
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "A tag $GITHUB_REF_NAME não bate com GUARA_VERSION ($VERSION) do platformio.ini"
+            exit 1
+          fi
+
+      - name: Compila o firmware e o storage
+        run: |
+          pio run -e esp32
+          pio run -e esp32 -t build_storage
+          mkdir dist
+          cp .pio/build/esp32/firmware.bin dist/firmware.bin
+          cp .pio/storage.bin dist/storage.bin
+
+      - name: Notas da versão (seção do CHANGELOG)
+        run: |
+          awk -v tag="## $GITHUB_REF_NAME " 'index($0, tag) == 1 {on = 1; next} on && /^## / {exit} on' CHANGELOG.md > notes.md
+          cat notes.md
+
+      - name: Publica a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/firmware.bin dist/storage.bin --title "$GITHUB_REF_NAME" --notes-file notes.md

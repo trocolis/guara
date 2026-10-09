@@ -493,11 +493,73 @@ static void update_sd(void)
     ui_confirm("ATUALIZAR", "sd_card", "Atualizar pelo cartão SD?", "NAO", "SIM", update_sd_confirmed, NULL);
 }
 
-/* Atualização pelo GitHub (ainda não implementada). */
+/* Tela de espera enquanto fala com o GitHub. */
+static void show_waiting(const char *text)
+{
+    static gfx_t g;
+    gfx_init(&g);
+    gfx_text_center(&g, 0, GFX_WIDTH, 28, text, GFX_WHITE);
+    display_send(&g);
+}
+
+static char github_tag[24];
+
+/* Confirmado: baixa e instala a release e reinicia. */
+static void update_github_confirmed(int r, void *ctx)
+{
+    (void)ctx;
+    if (r != 1) {
+        return;
+    }
+    char error[48] = "";
+    app_save();
+    show_waiting("Conectando...");
+    network_use();
+    bool ok = network_wait(15000);
+    if (!ok) {
+        snprintf(error, sizeof(error), "Wi-Fi não conectou.");
+    } else {
+        progress_ota(0);
+        ok = ota_github_install(github_tag, progress_ota, error, sizeof(error));
+    }
+    network_release();
+    if (ok) {
+        ui_alert("GITHUB", "github", "Concluído. Reiniciando.", "OK", restart_now, NULL);
+    } else {
+        audio_error();
+        ui_alert("GITHUB", "github", error, "OK", NULL, NULL);
+    }
+}
+
+/* Confere a última release no GitHub e, se for mais nova, oferece atualizar. */
 static void update_github(void)
 {
-    /* README: TODO "falta implementar a atualização pelo github" */
-    ui_alert("GITHUB", "github", "Em breve: atualização pelo GitHub.", "OK", NULL, NULL);
+    if (!network_allowed()) {
+        audio_error();
+        ui_alert("GITHUB", "github", "Ligue o Wi-Fi em Ajustes.", "OK", NULL, NULL);
+        return;
+    }
+    char error[48] = "";
+    show_waiting("Verificando...");
+    network_use();
+    bool ok = network_wait(15000);
+    if (!ok) {
+        snprintf(error, sizeof(error), "Wi-Fi não conectou.");
+    } else {
+        ok = ota_github_latest(github_tag, sizeof(github_tag), error, sizeof(error));
+    }
+    network_release();
+    char msg[64];
+    if (!ok) {
+        audio_error();
+        ui_alert("GITHUB", "github", error, "OK", NULL, NULL);
+    } else if (!ota_is_newer(github_tag)) {
+        snprintf(msg, sizeof(msg), "Já está na versão mais recente (v%s).", GUARA_VERSION);
+        ui_alert("GITHUB", "github", msg, "OK", NULL, NULL);
+    } else {
+        snprintf(msg, sizeof(msg), "Atualizar de v%s para %s?", GUARA_VERSION, github_tag);
+        ui_confirm("GITHUB", "github", msg, "NAO", "SIM", update_github_confirmed, NULL);
+    }
 }
 
 static const submenu_item_t ITEMS_UPDATE[] = {

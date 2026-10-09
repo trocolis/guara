@@ -20,7 +20,7 @@ Legenda: `[ ]` pendente · `[x]` feito · ✅ decidido/adotado · ⏳ pendente
 | 7 — Combate | ✅ treino; combate online pendente (Bluetooth) |
 | 8 — Mídia | ✅ músicas MIDI e biblioteca |
 | 9 — Lua | ✅ VM 5.4, APIs do README, exemplos em examples/sdcard (apple_catch e boitata) |
-| 10 — Conectividade | ⏳ Wi-Fi sob demanda, NTP automático e OTA pelo SD prontos; Bluetooth e GitHub pendentes |
+| 10 — Conectividade | ⏳ Wi-Fi sob demanda, NTP automático e OTA pelo SD e pelo GitHub prontos; Bluetooth pendente |
 
 Gravado e verificado no NodeMCU do protótipo: boot, storage, cartão SD (10 MHz), nascimento, tela principal, carrossel e lista de músicas. Sem o DS3231 ligado, a hora fica `--:--` até um ajuste manual ou NTP.
 

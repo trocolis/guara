@@ -3,6 +3,12 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.12.0 — 2026-10-09
+
+### Atualização pelo GitHub
+- Ajustes > Sistema > Atualizar > GitHub: busca a última release de `trocolis/guara` (pelo redirecionamento de `/releases/latest`), compara com a versão atual e, com confirmação, baixa por HTTPS o `firmware.bin` e o `storage.bin` (se houver), com barra de progresso, e reinicia. O firmware só é ativado depois de tudo gravado e validado.
+- Workflow `.github/workflows/release.yml`: cada tag `v#.#.#` enviada compila o firmware, empacota o storage e publica a release com os dois arquivos e as notas do CHANGELOG.
+
 ## v0.11.4 — 2026-10-09
 
 ### Combate

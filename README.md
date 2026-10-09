@@ -125,7 +125,7 @@ O cartão microSD (FAT32, montado em `/sdcard`) guarda o conteúdo do usuário: 
 
 ### Três camadas independentes
 
-1. **Firmware** (`ota_0`/`ota_1`): o código C compilado com o PlatformIO, incluindo drivers, interface, regras do jogo, combate e a VM Lua. É atualizado por USB ou pelo cartão SD sem tocar nas outras partições.
+1. **Firmware** (`ota_0`/`ota_1`): o código C compilado com o PlatformIO, incluindo drivers, interface, regras do jogo, combate e a VM Lua. É atualizado por USB, pelo cartão SD ou pelo GitHub sem tocar nas outras partições.
 2. **Dados** (`storage`): a VROM (todos os bitmaps 1-bit) e o catálogo binário (itens, equipamentos e habilidades), gerados pelo `tools/storage-packer/pack_storage.py`. A partição é mapeada na memória com `esp_partition_mmap` e lida direto da Flash, sem cópia para a RAM. Pode ser regravada sem recompilar o firmware e sem apagar o Guará.
 3. **Jogador** (`save` e `nvs`): o save state e as configurações. Só são apagados pela opção **Reiniciar** de Ajustes ou por uma gravação completa da Flash.
 
@@ -311,7 +311,7 @@ Implementação: `src/system/network.c`. O rádio só liga quando alguma tarefa 
 - **Deep sleep:** o rádio é sempre desligado antes de dormir, e o comportamento é o mesmo no boot frio e ao acordar.
 - **Jogos e tarefas pesadas:** `network_suspend()` descarrega o Wi-Fi enquanto um jogo Lua roda, para liberar memória.
 - **Indicador na barra superior:** ícone de Wi-Fi apagado (xadrez) quando a rede está permitida e ociosa; barras subindo durante a conexão; barras de sinal (`wifi_1` a `wifi_3`) conectado; nenhum ícone com o Wi-Fi em `OFF`.
-- **Quem usa a rede:** sincronização NTP (automática e em Relógio > Configurar) e busca, conexão e status em Ajustes > Wi-Fi. Atualização pelo GitHub e combate online estão previstos.
+- **Quem usa a rede:** sincronização NTP (automática e em Relógio > Configurar), busca, conexão e status em Ajustes > Wi-Fi e a atualização pelo GitHub. O combate online está previsto.
 
 ___
 
@@ -679,7 +679,7 @@ Sub-menu com o estado de cada opção à direita.
 7. **Sistema** ![Sistema](./bitmaps/icons/info.bmp):
 	1. **Status** ![status](./bitmaps/icons/info.bmp): versão do firmware, data da compilação, versão do ESP-IDF, memória livre e maior bloco livre.
 	2. **Atualizar** ![atualizar](./bitmaps/icons/satellite.bmp):
-		1. **GitHub** ![GitHub](./bitmaps/icons/github.bmp): ainda não implementado; mostra um aviso.
+		1. **GitHub** ![GitHub](./bitmaps/icons/github.bmp): com o Wi-Fi ligado, mostra "Verificando..." e busca a última release do repositório `trocolis/guara` (`OTA_GITHUB_REPO` em `src/system/ota.h`). Se ela for mais nova que o firmware, pede confirmação ("Atualizar de v0.11.4 para v0.12.0?"), grava o save, baixa o `firmware.bin` com a barra de progresso e, se a release tiver um, o `storage.bin`, e reinicia. Se não houver versão mais nova, avisa "Já está na versão mais recente". Ver *Atualização pelo GitHub*.
 		2. **Micro SD** ![micro SD](./bitmaps/icons/sd_card.bmp): com confirmação, grava `/sdcard/update/firmware.bin` na partição OTA livre e/ou `/sdcard/update/storage.bin` na partição `storage`, e reinicia.
 8. **Reiniciar** ![Reiniciar](./bitmaps/icons/kill.bmp): apaga o Guará e começa de novo (*Factory Rebirth*). Pede duas confirmações ("Apagar o Guará e começar de novo?" e "Perda irreversível! Tem certeza?"). Ao confirmar, o anel de saves é apagado e começa o nascimento de um novo Guará.
 
@@ -876,6 +876,15 @@ O Guará é composto de três partes, desenhadas em modo opaco (`copy`): corpo, 
 ___
 
 ## Implementação
+
+### Atualização pelo GitHub
+
+Implementação: `src/system/ota.c` (`ota_github_latest`, `ota_is_newer`, `ota_github_install`), por HTTPS com os certificados raiz do ESP-IDF (`esp_crt_bundle`).
+
+- **Última versão:** `https://github.com/trocolis/guara/releases/latest` redireciona para `/releases/tag/<tag>`; o aparelho lê a tag do cabeçalho `Location`, sem usar a API do GitHub (sem limite de requisições nem JSON). A tag `v#.#.#` é comparada com `GUARA_VERSION`; só uma versão maior é oferecida.
+- **Arquivos:** `/releases/download/<tag>/firmware.bin` e `/releases/download/<tag>/storage.bin`. O GitHub redireciona para outro servidor, e o download segue até 5 redirecionamentos, lendo em blocos de 4 KB.
+- **Ordem segura:** o firmware é gravado na partição OTA livre e validado (o cabeçalho precisa ser de um app com nome de projeto `guara`, e `esp_ota_end` confere a imagem), mas ainda não vira a de boot. Depois vem o storage: o primeiro bloco precisa começar com `GSTR`, e só então a partição é apagada e regravada. Uma release sem `storage.bin` (404) atualiza só o firmware. Só no fim a partição nova é marcada para o boot. Se o novo firmware não confirmar o boot, o *rollback* volta ao anterior.
+- **Publicação:** o workflow `.github/workflows/release.yml` roda a cada tag `v#.#.#` enviada ao GitHub. Ele confere se a tag bate com `GUARA_VERSION`, compila o firmware, empacota o storage e cria a release com `firmware.bin`, `storage.bin` e a seção da versão no CHANGELOG como notas. Para publicar: `git tag v0.12.0 && git push origin v0.12.0`.
 
 ### Versionamento
 
