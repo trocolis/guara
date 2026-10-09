@@ -3,7 +3,7 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
-## Sem versão — 2026-10-09 (dano legível sobre o modal)
+## v0.11.4 — 2026-10-09
 
 ### Combate
 - O valor do dano (ou cura, ou erro) subindo é desenhado em branco sobre um fundo preto de cantos arredondados (raio 2), no lugar do XOR, para ficar legível por cima do modal de escolha.
