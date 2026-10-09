@@ -27,7 +27,7 @@
 #define HIT_FRAME_MS 33   /* 30 FPS */
 #define HIT_START_MS 150  /* começa no impacto, junto com o recuo */
 #define HIT_SECOND_MS 450 /* segundo impacto do ataque duplo, no mesmo lugar do primeiro */
-#define MENU_GRACE_MS 600 /* depois de um golpe, A não abre o menu (toques atrasados da janela) */
+#define MENU_GRACE_MS 600 /* depois do impacto, A não mexe na barra de ações (toques atrasados da janela) */
 #define ACTION_BAR_X 10 /* barra de ações: no lugar do ícone do A, ao lado da barra ATB */
 #define ACTION_BAR_Y 54
 #define ACTION_COUNT 3
@@ -108,6 +108,7 @@ static void begin_action(int side, combat_action_t action, uint32_t now)
 static void impact(uint32_t now)
 {
     winding = false;
+    menu_free_at = now + MENU_GRACE_MS;
     combat_action_t action = windup_action;
     bool player_hit = player_reaction > 0;
     bool opponent_hit = rng_chance(&g_rng, AI_REACTION_PCT);
@@ -279,35 +280,35 @@ static void on_key(const key_event_t *ev)
         }
         return;
     }
-    if (winding) {
-        if (ev->key == KEY_A && player_reaction == 0) {
-            player_reaction = in_window(now) ? 1 : -1; /* uma tentativa por golpe */
-        }
-        return;
-    }
-    if (animating) {
-        return;
-    }
     if (combat.finished) {
-        if (end_shown && (ev->key == KEY_A || ev->key == KEY_B)) {
+        if (!animating && end_shown && (ev->key == KEY_A || ev->key == KEY_B)) {
             finish();
         }
         return;
     }
+    /* A barra de ações continua ativa durante o preparo e a animação dos golpes;
+       no preparo, o A é a reação (uma tentativa por golpe) */
+    if (winding && ev->key == KEY_A) {
+        if (player_reaction == 0) {
+            player_reaction = in_window(now) ? 1 : -1;
+        }
+        return;
+    }
+    bool a_free = (int32_t)(now - menu_free_at) >= 0;
     if (picking) {
         /* ←/→ movem a seleção, A confirma e B fecha a barra */
         if (ev->key == KEY_LEFT) {
             pick_index = (pick_index + ACTION_COUNT - 1) % ACTION_COUNT;
         } else if (ev->key == KEY_RIGHT) {
             pick_index = (pick_index + 1) % ACTION_COUNT;
-        } else if (ev->key == KEY_A) {
+        } else if (ev->key == KEY_A && a_free) {
             pick_confirm(pick_index);
         } else if (ev->key == KEY_B) {
             picking = false;
         }
         return;
     }
-    if (ev->key == KEY_A && !pending && (int32_t)(now - menu_free_at) >= 0) { /* escolhida a ação, só no próximo ciclo */
+    if (ev->key == KEY_A && !pending && a_free) { /* escolhida a ação, só no próximo ciclo */
         picking = true;
         pick_index = 0;
         notice[0] = '\0';
@@ -385,7 +386,6 @@ static void step(uint32_t now)
     if (animating) {
         if (now - anim_start >= ANIM_MS) {
             animating = false;
-            menu_free_at = now + MENU_GRACE_MS;
             if (combat.finished) {
                 if (at_modal && !modal_hidden) {
                     /* O combate acabou com um modal aberto: fecha os modais */
@@ -530,19 +530,17 @@ static void draw_atb(gfx_t *g, int x, const fighter_t *l)
 }
 
 /*
- * Barra de ações: os três ícones 8x8 lado a lado, separados por 1 px; o
- * selecionado fica sobre um quadrado branco, com a cor invertida.
+ * Barra de ações: os três ícones 8x8 lado a lado, separados por 2 px; o
+ * selecionado fica dentro de um retângulo sem preenchimento.
  */
 static void draw_action_bar(gfx_t *g)
 {
     for (int i = 0; i < ACTION_COUNT; i++) {
-        int x = ACTION_BAR_X + i * 9;
+        int x = ACTION_BAR_X + 1 + i * 10;
         if (i == pick_index) {
-            gfx_rect_filled(g, x, ACTION_BAR_Y, 8, 8, GFX_WHITE);
-            ui_icon_mode(g, ACTION_ICONS[i], x, ACTION_BAR_Y, GFX_XOR, 0);
-        } else {
-            ui_icon_mode(g, ACTION_ICONS[i], x, ACTION_BAR_Y, GFX_COPY, 0);
+            gfx_rect(g, x - 1, ACTION_BAR_Y - 1, 10, 10, GFX_WHITE);
         }
+        ui_icon_mode(g, ACTION_ICONS[i], x, ACTION_BAR_Y, GFX_COPY, 0);
     }
 }
 
@@ -585,10 +583,9 @@ static void on_draw(gfx_t *g, uint32_t now)
         /* Ícone do A piscando ao lado da barra do jogador enquanto ele pode escolher
            a ação; some quando a ação é escolhida (só volta no próximo ciclo). Com a
            barra de ações aberta, os três ícones ficam no lugar dele. */
-        bool can_choose = !pending && !at_modal && !winding && !animating && (int32_t)(now - menu_free_at) >= 0;
-        if (picking && !winding && !animating) {
+        if (picking) {
             draw_action_bar(g);
-        } else if (can_choose && !picking && (now / 300) % 2 == 0) {
+        } else if (!pending && !at_modal && (now / 300) % 2 == 0) {
             ui_icon_mode(g, "button_a", 10, 52, GFX_COPY, 0);
         }
     }

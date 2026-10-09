@@ -3,6 +3,12 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.11.1 — 2026-10-09
+
+### Combate
+- Barra de ações: 2 px entre os ícones e seleção num retângulo sem preenchimento, no lugar da cor invertida.
+- O ícone do A e a barra de ações não somem nem travam durante o preparo e a animação dos golpes (no preparo, A continua sendo a reação); só o modal de escolha some e volta. Os 600 ms de carência do A passam a contar do impacto.
+
 ## v0.11.0 — 2026-10-09
 
 ### Combate
