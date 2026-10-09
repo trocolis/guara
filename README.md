@@ -6,6 +6,10 @@ Este documento é a especificação do projeto. Ele descreve o hardware, os form
 
 ![Tela principal](./bitmaps/exemple/screen_home.bmp)
 
+**Protótipo:**
+
+![Protótipo](./protótipo.jpeg)
+
 **Sumário**
 
 1. [Hardware](#hardware)

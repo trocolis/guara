@@ -529,7 +529,7 @@
                 "ESP_PLATFORM",
                 "PLATFORMIO=60200",
                 "ARDUINO_NodeMCU_32S",
-                "GUARA_VERSION=\"0.8.0\"",
+                "GUARA_VERSION=\"0.9.6\"",
                 "UNITY_INCLUDE_CONFIG_H",
                 ""
             ],
