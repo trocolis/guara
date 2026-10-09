@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.5.2 — 2026-10-08
+
+### Correções
+- Combate: o menu de ações abria com um toque atrasado na janela de reação. Agora, depois de cada golpe, A só abre o menu após 600 ms.
+
 ## v0.5.1 — 2026-10-08
 
 ### Combate

@@ -22,6 +22,7 @@
 #define BASE_Y 50
 #define ANIM_MS 900
 #define INTRO_MS 1800 /* abertura "Fulano  VS  Siclano" */
+#define MENU_GRACE_MS 600 /* depois de um golpe, A não abre o menu (toques atrasados da janela) */
 
 static combat_t combat;
 static fighter_t player, opponent;
@@ -32,6 +33,7 @@ static bool at_modal;
 static bool end_shown;
 static uint32_t end_at;
 static uint32_t intro_until;
+static uint32_t menu_free_at; /* A só abre o menu de ações a partir daqui */
 static char notice[24];
 
 /* Ação escolhida pelo jogador, executada quando a barra ATB encher. */
@@ -210,7 +212,7 @@ static void on_open(void *param)
     memset(&last, 0, sizeof(last));
     animating = at_modal = end_shown = pending = winding = false;
     notice[0] = '\0';
-    intro_until = app_ms() + INTRO_MS;
+    intro_until = menu_free_at = app_ms() + INTRO_MS;
     app_block_sleep(true);
 }
 
@@ -248,7 +250,7 @@ static void on_key(const key_event_t *ev)
         }
         return;
     }
-    if (ev->key == KEY_A && !pending) { /* escolhida a ação, só no próximo ciclo */
+    if (ev->key == KEY_A && !pending && (int32_t)(now - menu_free_at) >= 0) { /* escolhida a ação, só no próximo ciclo */
         static const char *const options[] = {"Atacar", "Habilidade", "Itens", "Desistir"};
         at_modal = true;
         notice[0] = '\0';
@@ -328,6 +330,7 @@ static void step(uint32_t now)
     if (animating) {
         if (now - anim_start >= ANIM_MS) {
             animating = false;
+            menu_free_at = now + MENU_GRACE_MS;
             if (combat.finished) {
                 end_at = now;
                 if (combat.winner == 0) {
