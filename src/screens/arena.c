@@ -337,6 +337,11 @@ static void step(uint32_t now)
             animating = false;
             menu_free_at = now + MENU_GRACE_MS;
             if (combat.finished) {
+                if (at_modal) {
+                    /* O combate acabou com o menu de ações aberto: fecha os modais */
+                    ui_back_until(&SCREEN_COMBAT);
+                    at_modal = pending = false;
+                }
                 end_at = now;
                 if (combat.winner == 0) {
                     audio_victory();
@@ -353,9 +358,7 @@ static void step(uint32_t now)
         }
         return;
     }
-    if (at_modal || ui_top() != &SCREEN_COMBAT) {
-        return;
-    }
+    /* Tempo real: as barras continuam enchendo e o oponente age com o menu aberto */
     unsigned ready_mask = combat_advance(&combat, (int)dt);
     if (ready_mask & 2u) {
         begin_action(1, combat_ai(&combat, 1), now);
@@ -464,14 +467,11 @@ static void draw_vitals(gfx_t *g, int x, const fighter_t *l, bool mirrored)
 
 /*
  * Barra ATB vertical (6 x 16 px) no canto inferior do lado do lutador: enche
- * de baixo para cima e pisca quando cheia.
+ * de baixo para cima.
  */
-static void draw_atb(gfx_t *g, int x, const fighter_t *l, uint32_t now)
+static void draw_atb(gfx_t *g, int x, const fighter_t *l)
 {
     const int y = 46, height = 16, inner = height - 4;
-    if (l->atb_ms >= l->atb_total && (now / 300) % 2 == 0) {
-        return; /* cheia: piscando */
-    }
     gfx_rect(g, x, y, 6, height, GFX_WHITE);
     int rows = l->atb_total > 0 ? inner * l->atb_ms / l->atb_total : 0;
     gfx_rect_filled(g, x + 2, y + 2 + inner - rows, 2, rows, GFX_WHITE);
@@ -511,8 +511,14 @@ static void on_draw(gfx_t *g, uint32_t now)
     draw_hit(g, now);
 
     if (!combat.finished) {
-        draw_atb(g, 2, me, now);
-        draw_atb(g, GFX_WIDTH - 8, op, now);
+        draw_atb(g, 2, me);
+        draw_atb(g, GFX_WIDTH - 8, op);
+        /* Ícone do A piscando ao lado da barra do jogador enquanto ele pode escolher
+           a ação; some quando a ação é escolhida (só volta no próximo ciclo) */
+        bool can_choose = !pending && !at_modal && !winding && !animating && (int32_t)(now - menu_free_at) >= 0;
+        if (can_choose && (now / 300) % 2 == 0) {
+            ui_icon_mode(g, "button_a", 10, 52, GFX_COPY, 0);
+        }
     }
 
     uint32_t t = now - anim_start;

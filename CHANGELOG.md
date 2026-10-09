@@ -6,6 +6,8 @@ Cada escopo executado gera um commit e uma entrada aqui.
 ## Sem versão — 2026-10-09 (aprimoramento do combate)
 
 ### Combate
+- Tempo real: o modal de ações não pausa mais o combate; as barras continuam enchendo e o oponente age. Se o combate terminar com o modal aberto, ele fecha.
+- A barra de ação não pisca mais. Ao lado da barra do jogador, o ícone do A pisca enquanto a ação pode ser escolhida e some depois da escolha; o oponente fica só com a barra.
 - Ataque duplo: o atacante dá um só pulo e a animação de impacto se repete duas vezes no mesmo lugar (antes eram dois pulos e o segundo impacto 8 px mais para dentro do sprite).
 
 ## Sem versão — 2026-10-09 (licença)
