@@ -364,6 +364,8 @@ static void update_emotion(guara_t *g)
     }
 }
 
+static bool in_time_window(int minute, int start, int duration);
+
 /* Avança um minuto do ciclo de vida (desgaste, estados, sono, medidores, emoção). */
 void guara_tick_minute(guara_t *g, const clock_ctx_t *clock_ctx, bool protected)
 {
@@ -428,15 +430,26 @@ void guara_tick_minute(guara_t *g, const clock_ctx_t *clock_ctx, bool protected)
         }
     }
 
-    /* Sono */
+    /*
+     * Sono. A noite vai da hora de dormir até a hora de acordar. À noite o
+     * Guará adormece na hora de dormir ou depois de alguns minutos sem
+     * interação (cobre um minuto pulado e o Guará acordado para comer) e não
+     * acorda com a energia cheia; de manhã acorda se a energia passar de 50%.
+     */
+    bool clock_known = clock_ctx && clock_ctx->minute_of_day >= 0;
+    bool night = clock_known && in_time_window(clock_ctx->minute_of_day, clock_ctx->bedtime_minute,
+                                               (clock_ctx->wake_minute - clock_ctx->bedtime_minute + 1440) % 1440);
+    bool morning = clock_known && in_time_window(clock_ctx->minute_of_day, clock_ctx->wake_minute, MORNING_WINDOW_MIN);
     if (sleeping) {
-        bool is_wake_time = clock_ctx && clock_ctx->minute_of_day == clock_ctx->wake_minute && g->energy > LIMIT_WAKE;
-        if (hungry || g->energy >= VITAL_MAX || is_wake_time) {
+        bool rested = !night && g->energy >= VITAL_MAX;
+        bool wake_time = morning && g->energy > LIMIT_WAKE;
+        if (hungry || rested || wake_time) {
             guara_set_state(g, ST_SLEEPING, false);
         }
     } else if (!hungry) {
-        bool is_bedtime = clock_ctx && clock_ctx->minute_of_day >= 0 && clock_ctx->minute_of_day == clock_ctx->bedtime_minute;
-        if (g->energy == 0 || is_bedtime) {
+        bool bedtime = clock_known && clock_ctx->minute_of_day == clock_ctx->bedtime_minute;
+        bool night_idle = night && g->idle_minutes >= NIGHT_IDLE_SLEEP_MIN;
+        if (g->energy == 0 || bedtime || night_idle) {
             guara_set_state(g, ST_SLEEPING, true);
         }
     }

@@ -34,9 +34,9 @@ Legenda: **PROVISÓRIO** = valor escolhido na implementação, não vem do READM
 
 - **Faminto:** alimentação ≤ 10% (**I6**: só a alimentação; a energia baixa causa *Cansado*).
 - **Cansado:** energia < 20% e acordado. É o "estado de sono" do README (**I8**).
-- **Dormindo:**
-  - Começa quando a energia chega a 0% sem fome, ou no minuto da hora de dormir.
-  - Termina com a energia em 100%, na hora de acordar (se a energia passar de 50%) ou se ficar com fome.
+- **Dormindo:** a noite vai da hora de dormir até a hora de acordar.
+  - Começa quando a energia chega a 0% sem fome, no minuto da hora de dormir ou, à noite, após **5 min** sem interação (PROVISÓRIO). Isso cobre um minuto pulado pelo relógio e o Guará acordado para comer de madrugada.
+  - Termina se ficar com fome; nas **2 h** depois da hora de acordar, se a energia passar de 50% (PROVISÓRIO); ou, fora da noite, com a energia em 100%. À noite, a energia cheia não acorda o Guará.
   - Comer acorda o Guará, mas ele volta a dormir se a energia não passar de 50%.
 - **Desmaiado:**
   - Ocorre com HP 0. Bloqueia tudo por 10 min (README); depois disso, aceita itens que curam HP.

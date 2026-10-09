@@ -221,6 +221,44 @@ static void test_sleeps_at_bedtime_and_wakes(void)
     TEST_ASSERT_FALSE(guara_has_state(&g, ST_SLEEPING));
 }
 
+static void test_respects_the_night(void)
+{
+    guara_t g;
+    guara_birth(&g, "Noite", &rng, 1);
+    g.satiety = g.health = g.mood = VITAL_MAX;
+    g.energy = CENTI(90);
+    clock_ctx_t clock_ctx = {20 * 60 + 3, 20 * 60, 8 * 60};
+    /* Minuto da hora de dormir pulado: à noite, dorme depois de alguns minutos sem interação */
+    g.idle_minutes = NIGHT_IDLE_SLEEP_MIN;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_SLEEPING));
+    /* Energia cheia no meio da noite: continua dormindo */
+    g.energy = VITAL_MAX;
+    g.satiety = VITAL_MAX;
+    clock_ctx.minute_of_day = 23 * 60;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_SLEEPING));
+    clock_ctx.minute_of_day = 2 * 60;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_SLEEPING));
+    /* Acordado para comer à noite: volta a dormir sem interação, não na hora */
+    guara_set_state(&g, ST_SLEEPING, false);
+    g.idle_minutes = 0;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_FALSE(guara_has_state(&g, ST_SLEEPING));
+    g.idle_minutes = NIGHT_IDLE_SLEEP_MIN;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_SLEEPING));
+    /* De manhã acorda; de dia, sem interação, continua acordado */
+    clock_ctx.minute_of_day = 8 * 60 + 10;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_FALSE(guara_has_state(&g, ST_SLEEPING));
+    g.idle_minutes = 60;
+    clock_ctx.minute_of_day = 14 * 60;
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_FALSE(guara_has_state(&g, ST_SLEEPING));
+}
+
 static void test_affinity_opposites_and_birth_nature(void)
 {
     guara_t g;
@@ -397,6 +435,7 @@ int main(void)
     RUN_TEST(test_hp_recovery_burns_energy);
     RUN_TEST(test_recovery_has_locks);
     RUN_TEST(test_sleeps_at_bedtime_and_wakes);
+    RUN_TEST(test_respects_the_night);
     RUN_TEST(test_affinity_opposites_and_birth_nature);
     RUN_TEST(test_evolution_steam);
     RUN_TEST(test_item_heal_and_blocks);

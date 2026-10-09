@@ -38,6 +38,8 @@
 #define LIMIT_HP_RECOVERY_STOPS  CENTI(10) /* ... queimando energia até ela chegar a 10% */
 #define LIMIT_MOOD_RISES       CENTI(40)
 #define LIMIT_WAKE          CENTI(50)    /* só acorda com energia > 50% */
+#define MORNING_WINDOW_MIN   120 /* PROVISÓRIO: acorda até 2 h depois da hora de acordar, se a energia passar de 50% */
+#define NIGHT_IDLE_SLEEP_MIN 5   /* PROVISÓRIO: à noite, dorme após 5 min sem interação */
 #define LIMIT_HAPPY            CENTI(80) /* todos os vitais > 80%: Feliz */
 #define LIMIT_LOW_MOOD      CENTI(30)    /* abaixo disso surge emoção negativa (PROVISÓRIO) */
 

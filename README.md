@@ -782,7 +782,7 @@ A cada minuto, energia e alimentação diminuem (a alimentação cai pela metade
 - A **saúde sobe** quando alimentação, energia e humor estão acima de 50%.
 - O **humor sobe** quando energia e alimentação estão acima de 40%. Os minijogos também dão humor, e muito tempo sem interação faz o humor cair.
 - **Recuperação de HP:** quando alimentação, saúde e energia passam de 50%, o HP começa a subir queimando energia, e continua até a energia chegar a 10%. A energia só é gasta enquanto o HP não está cheio, e a recuperação fica em pausa enquanto o Guará dorme.
-- **Sono:** com energia abaixo de 20% (acordado), o Guará fica **Cansado**. Com energia 0 e sem fome, ou no minuto da hora de dormir, ele **dorme**. Dormindo, a energia volta a subir. Ele acorda com a energia cheia, na hora de acordar (se a energia passar de 50%) ou se ficar com fome. Comer acorda o Guará, mas ele volta a dormir se a energia não passar de 50%.
+- **Sono:** com energia abaixo de 20% (acordado), o Guará fica **Cansado**. A noite vai da hora de dormir até a hora de acordar (Relógio > Hora de dormir). Sem fome, ele **dorme** com energia 0, na hora de dormir ou, à noite, depois de alguns minutos sem interação. Dormindo, a energia volta a subir. À noite ele continua dormindo mesmo com a energia cheia; acorda de manhã, depois da hora de acordar, se a energia passar de 50%, ou se ficar com fome. De dia, um cochilo termina com a energia cheia. Comer acorda o Guará, mas à noite ele volta a dormir quando fica sem interação.
 - O descaso aumenta a **Negligência**; o tempo com tudo acima de 50% aumenta o **Cuidado**.
 
 #### Estados

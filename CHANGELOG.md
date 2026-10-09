@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.9.6 — 2026-10-09
+
+### Correções
+- O Guará respeita a hora de dormir: à noite (da hora de dormir à de acordar) ele não acorda com a energia cheia, e adormece também depois de 5 min sem interação, cobrindo um minuto pulado pelo relógio e o Guará acordado para comer. Acorda nas 2 h depois da hora de acordar, se a energia passar de 50%.
+
 ## Sem versão — 2026-10-09
 
 ### Documentação
