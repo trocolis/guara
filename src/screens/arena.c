@@ -21,6 +21,7 @@
 #define X_OPPONENT 98 /* direita do usuário: espelhado para os dois se olharem */
 #define BASE_Y 50
 #define ANIM_MS 900
+#define INTRO_MS 1800 /* abertura "Fulano  VS  Siclano" */
 
 static combat_t combat;
 static fighter_t player, opponent;
@@ -30,28 +31,89 @@ static uint32_t anim_start;
 static bool at_modal;
 static bool end_shown;
 static uint32_t end_at;
+static uint32_t intro_until;
 static char notice[24];
+
+/* Ação escolhida pelo jogador, executada quando a barra ATB encher. */
+static bool pending;
+static combat_action_t pending_action;
+static catalog_record_t pending_item;
+
+/* Preparo do golpe com a janela de reação (A no fim do preparo). */
+static bool winding;
+static uint32_t windup_start;
+static int windup_side;
+static combat_action_t windup_action;
+static int player_reaction; /* 0 sem apertar, 1 no tempo, -1 fora do tempo */
 
 static void finish(void);
 static const screen_t SCREEN_COMBAT;
 
-/* ---------------- Ações do jogador ---------------- */
+/* ---------------- Ações ---------------- */
 
-/* Executa a ação escolhida pelo jogador e inicia a animação. */
-static void run(combat_action_t action, const catalog_record_t *item)
+/* Executa a ação de um lado e inicia a animação do resultado. */
+static void execute_now(int side, combat_action_t action, const catalog_record_t *item, uint32_t now)
 {
-    at_modal = false;
-    combat_execute(&combat, 0, action, item, &last);
-    if (action.type == ACTION_ITEM && item && !last.failed) {
+    combat_execute(&combat, side, action, item, &last);
+    if (side == 0 && action.type == ACTION_ITEM && item && !last.failed) {
         g_guara.inventory[item->id]--;
         app_mark_changed();
     }
     animating = true;
-    anim_start = app_ms();
+    anim_start = now;
+    if (side == 1) {
+        audio_tone(last.damage ? 220 : 660, 60);
+    }
+}
+
+/* Começa a ação: golpes contra o outro lado passam pelo preparo com a janela de reação. */
+static void begin_action(int side, combat_action_t action, uint32_t now)
+{
+    if (!combat_has_window(&combat, side, action)) {
+        execute_now(side, action, action.type == ACTION_ITEM ? &pending_item : NULL, now);
+        return;
+    }
+    winding = true;
+    windup_start = now;
+    windup_side = side;
+    windup_action = action;
+    player_reaction = 0;
+}
+
+/* Fim do preparo: junta a reação do jogador e a do oponente e resolve o golpe. */
+static void impact(uint32_t now)
+{
+    winding = false;
+    combat_action_t action = windup_action;
+    bool player_hit = player_reaction > 0;
+    bool opponent_hit = rng_chance(&g_rng, AI_REACTION_PCT);
+    if (windup_side == 0) {
+        action.reaction = (player_hit ? COMBAT_TIMED_STRIKE : 0) | (opponent_hit ? COMBAT_GUARD : 0);
+    } else {
+        action.reaction = (opponent_hit ? COMBAT_TIMED_STRIKE : 0) | (player_hit ? COMBAT_GUARD : 0);
+    }
+    execute_now(windup_side, action, NULL, now);
+}
+
+/* Verdadeiro durante a janela de reação (fim do preparo). */
+static bool in_window(uint32_t now)
+{
+    return winding && now - windup_start >= REACTION_WINDUP_MS - REACTION_WINDOW_MS;
+}
+
+/* Guarda a ação escolhida; ela só executa com a barra cheia. */
+static void choose(combat_action_t action, const catalog_record_t *item)
+{
+    at_modal = false;
+    pending = true;
+    pending_action = action;
+    if (item) {
+        pending_item = *item;
+    }
 }
 
 static int combat_items[COUNT_ITEMS], n_items;
-/* Usa o item escolhido no combate. */
+/* Guarda o item escolhido para o combate. */
 static void item_chosen(int r, void *ctx)
 {
     (void)ctx;
@@ -60,11 +122,11 @@ static void item_chosen(int r, void *ctx)
         at_modal = false;
         return;
     }
-    run((combat_action_t){ACTION_ITEM, item.id}, &item);
+    choose((combat_action_t){ACTION_ITEM, item.id, 0}, &item);
 }
 
 static int skill_slots[COUNT_SKILL_ACTIVE], skill_count;
-/* Usa a habilidade escolhida. */
+/* Guarda a habilidade escolhida. */
 static void skill_chosen(int r, void *ctx)
 {
     (void)ctx;
@@ -72,17 +134,17 @@ static void skill_chosen(int r, void *ctx)
         at_modal = false;
         return;
     }
-    run((combat_action_t){ACTION_SKILL, skill_slots[r]}, NULL);
+    choose((combat_action_t){ACTION_SKILL, skill_slots[r], 0}, NULL);
 }
 
-/* Resposta da confirmação de desistência. */
+/* Resposta da confirmação de desistência: desistir vale na hora. */
 static void forfeit_answer(int r, void *ctx)
 {
     (void)ctx;
+    at_modal = false;
     if (r == 1) {
-        run((combat_action_t){ACTION_FORFEIT, 0}, NULL);
-    } else {
-        at_modal = false;
+        pending = false;
+        execute_now(0, (combat_action_t){ACTION_FORFEIT, 0, 0}, NULL, app_ms());
     }
 }
 
@@ -91,7 +153,7 @@ static void action_chosen(int r, void *ctx)
 {
     (void)ctx;
     if (r == 0) {
-        run((combat_action_t){ACTION_ATTACK, 0}, NULL);
+        choose((combat_action_t){ACTION_ATTACK, 0, 0}, NULL);
     } else if (r == 1) {
         static char names[COUNT_SKILL_ACTIVE][24];
         const char *options[COUNT_SKILL_ACTIVE];
@@ -145,8 +207,10 @@ static void on_open(void *param)
     combat_generate_opponent(&g_guara, &g_rng, &opponent);
     combat_start(&combat, &player, &opponent, &g_rng);
     player = combat.side[0];
-    animating = at_modal = end_shown = false;
+    memset(&last, 0, sizeof(last));
+    animating = at_modal = end_shown = pending = winding = false;
     notice[0] = '\0';
+    intro_until = app_ms() + INTRO_MS;
     app_block_sleep(true);
 }
 
@@ -156,10 +220,26 @@ static void on_close(void)
     app_block_sleep(false);
 }
 
-/* A abre o modal de ações quando a barra enche; B oferece desistir. */
+/* A escolhe a ação a qualquer momento (ou reage na janela do golpe); B oferece desistir. */
 static void on_key(const key_event_t *ev)
 {
-    if (ev->type != KEY_PRESSED || animating) {
+    if (ev->type != KEY_PRESSED) {
+        return;
+    }
+    uint32_t now = app_ms();
+    if ((int32_t)(intro_until - now) > 0) {
+        if (ev->key == KEY_A || ev->key == KEY_B) {
+            intro_until = now; /* pula a abertura */
+        }
+        return;
+    }
+    if (winding) {
+        if (ev->key == KEY_A && player_reaction == 0) {
+            player_reaction = in_window(now) ? 1 : -1; /* uma tentativa por golpe */
+        }
+        return;
+    }
+    if (animating) {
         return;
     }
     if (combat.finished) {
@@ -168,7 +248,7 @@ static void on_key(const key_event_t *ev)
         }
         return;
     }
-    if (ev->key == KEY_A && combat_ready(&combat, 0)) {
+    if (ev->key == KEY_A) {
         static const char *const options[] = {"Atacar", "Habilidade", "Itens", "Desistir"};
         at_modal = true;
         notice[0] = '\0';
@@ -227,7 +307,7 @@ static void finish(void)
     ui_alert("VITORIA", drop >= 0 ? NULL : "level", summary, "OK", card_closed, NULL);
 }
 
-/* Avança o combate: animações, barras e ações do oponente. */
+/* Avança o combate: abertura, preparo dos golpes, animações, barras e ações. */
 static void step(uint32_t now)
 {
     static uint32_t previous;
@@ -235,6 +315,15 @@ static void step(uint32_t now)
     previous = now;
     if (dt > 100) {
         dt = 100;
+    }
+    if ((int32_t)(intro_until - now) > 0) {
+        return;
+    }
+    if (winding) {
+        if (now - windup_start >= REACTION_WINDUP_MS) {
+            impact(now);
+        }
+        return;
     }
     if (animating) {
         if (now - anim_start >= ANIM_MS) {
@@ -261,10 +350,10 @@ static void step(uint32_t now)
     }
     unsigned ready_mask = combat_advance(&combat, (int)dt);
     if (ready_mask & 2u) {
-        combat_execute(&combat, 1, combat_ai(&combat, 1), NULL, &last);
-        animating = true;
-        anim_start = now;
-        audio_tone(last.damage ? 220 : 660, 60);
+        begin_action(1, combat_ai(&combat, 1), now);
+    } else if ((ready_mask & 1u) && pending) {
+        pending = false;
+        begin_action(0, pending_action, now);
     }
 }
 
@@ -285,7 +374,7 @@ static const char *eye_fighter(int side, uint32_t now)
     return EYE_ANGER;
 }
 
-/* Desenha o lutador com pulo de ataque, recuo e piscar ao ser atingido. */
+/* Desenha o lutador: recua no preparo, pula no golpe e pisca ao ser atingido. */
 static void draw_fighter(gfx_t *g, int side, uint32_t now)
 {
     const fighter_t *l = &combat.side[side];
@@ -293,11 +382,15 @@ static void draw_fighter(gfx_t *g, int side, uint32_t now)
     int dir = side == 0 ? 1 : -1; /* direção do oponente */
     uint32_t t = now - anim_start;
     bool visible = true;
+    if (winding && windup_side == side) {
+        uint32_t tw = now - windup_start;
+        x -= dir * (tw < 300 ? (int)tw / 100 : 3); /* toma impulso */
+    }
     if (animating && last.actor == side && !last.failed && last.type == ACTION_ATTACK && t < 300) {
         x += dir * (t < 150 ? (int)t / 25 : (int)(300 - t) / 25); /* pulinho na direção do alvo */
     }
     if (animating && last.target == side && last.damage > 0 && t > 150 && t < 600) {
-        x -= dir * 2; /* recuo */
+        x -= dir * (last.guarded ? 1 : 2); /* recuo */
         visible = (t / 60) % 2 == 0;
     }
     bool defeated = combat.finished && combat.winner != side && !animating;
@@ -308,29 +401,49 @@ static void draw_fighter(gfx_t *g, int side, uint32_t now)
     }
 }
 
-/* Desenha HP, lutadores, barra ATB, ícones e mensagens de dano. */
+/* Abertura: "Fulano  VS  Siclano" numa linha, ou em três se não couber. */
+static void draw_intro(gfx_t *g)
+{
+    char line[48];
+    snprintf(line, sizeof(line), "%s  VS  %s", combat.side[0].name, combat.side[1].name);
+    if (gfx_text_width(line) <= GFX_WIDTH - 4) {
+        gfx_text_center(g, 0, GFX_WIDTH, 28, line, GFX_WHITE);
+    } else {
+        gfx_text_center(g, 0, GFX_WIDTH, 18, combat.side[0].name, GFX_WHITE);
+        gfx_text_center(g, 0, GFX_WIDTH, 28, "VS", GFX_WHITE);
+        gfx_text_center(g, 0, GFX_WIDTH, 38, combat.side[1].name, GFX_WHITE);
+    }
+}
+
+/* Desenha HP/MP, lutadores, barra ATB, ícones e mensagens de dano. */
 static void on_draw(gfx_t *g, uint32_t now)
 {
     step(now);
     const fighter_t *me = &combat.side[0], *op = &combat.side[1];
 
-    /* HP no topo de cada lado */
+    if ((int32_t)(intro_until - now) > 0) {
+        draw_intro(g);
+        return;
+    }
+
+    /* HP no topo de cada lado e MP logo abaixo, com metade do comprimento */
     ui_progress(g, 2, 2, 56, 6, me->hp, me->hp_max);
     ui_progress(g, 70, 2, 56, 6, op->hp, op->hp_max);
-    gfx_text(g, 2, 10, me->name, GFX_WHITE);
-    int w = gfx_text_width(op->name);
-    gfx_text(g, 126 - w, 10, op->name, GFX_WHITE);
+    ui_progress(g, 2, 9, 28, 5, me->mp, me->mp_max);
+    ui_progress(g, 98, 9, 28, 5, op->mp, op->mp_max);
 
     draw_fighter(g, 0, now);
     draw_fighter(g, 1, now);
 
-    /* Barra ATB do jogador: menor e mais fina, no canto inferior */
-    ui_progress(g, 2, 59, 50, 3, me->atb_ms, me->atb_total);
-    char mp[12];
-    snprintf(mp, sizeof(mp), "MP %d", me->mp);
-    gfx_text(g, 56, 56, mp, GFX_WHITE);
-    if (!combat.finished && combat_ready(&combat, 0) && !animating && (now / 300) % 2) {
-        ui_icon_mode(g, "button_a", 116, 53, GFX_COPY, 0);
+    /* Ícone do botão A (10x10): pisca até a ação ser escolhida; depois, a barra ATB de 32 px */
+    if (!combat.finished && (pending || (now / 300) % 2)) {
+        ui_icon_mode(g, "button_a", 2, 53, GFX_COPY, 0);
+    }
+    ui_progress(g, 14, 57, 32, 3, me->atb_ms, me->atb_total);
+
+    /* Janela de reação: o A aparece entre os lutadores */
+    if (in_window(now) && player_reaction == 0) {
+        ui_icon_mode(g, "button_a", 59, 20, GFX_COPY, 0);
     }
 
     uint32_t t = now - anim_start;
@@ -350,7 +463,7 @@ static void on_draw(gfx_t *g, uint32_t now)
         } else if (last.missed && !last.self_hit) {
             snprintf(msg, sizeof(msg), "Errou!");
         } else if (last.damage > 0) {
-            snprintf(msg, sizeof(msg), "%s-%d", last.critical ? "!" : "", last.damage);
+            snprintf(msg, sizeof(msg), "%s%s-%d", last.hits == 2 ? "2x" : "", last.critical ? "!" : "", last.damage);
         } else if (last.heal > 0) {
             snprintf(msg, sizeof(msg), "+%d", last.heal);
         }
@@ -358,6 +471,11 @@ static void on_draw(gfx_t *g, uint32_t now)
             int xa = last.target == 0 ? X_PLAYER : X_OPPONENT;
             int dy = (int)(t - 150) / 60;
             gfx_text_center(g, xa - 20, 40, 22 - dy, msg, GFX_INVERT);
+        }
+        /* Reação acertada */
+        const char *label = last.timed ? "Certeiro!" : (last.guarded ? "Defesa!" : NULL);
+        if (label && t < 700) {
+            gfx_text_center(g, 0, GFX_WIDTH, 16, label, GFX_WHITE);
         }
     } else if (combat.finished) {
         gfx_text_center(g, 0, GFX_WIDTH, 22, combat.winner == 0 ? "VITORIA!" : "DERROTA", GFX_WHITE);

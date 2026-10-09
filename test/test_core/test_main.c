@@ -302,9 +302,47 @@ static void test_forfeit(void)
     combat_t c;
     combat_result_t r;
     combat_start(&c, &me, &op, &rng);
-    combat_execute(&c, 0, (combat_action_t){ACTION_FORFEIT, 0}, NULL, &r);
+    combat_execute(&c, 0, (combat_action_t){ACTION_FORFEIT, 0, 0}, NULL, &r);
     TEST_ASSERT_TRUE(c.finished);
     TEST_ASSERT_EQUAL_INT(1, c.winner);
+}
+
+/* Soma o dano de muitos ataques físicos com a reação indicada (HP restaurado a cada golpe). */
+static long attack_total(unsigned reaction, int *criticals, int *doubles)
+{
+    guara_t g;
+    rng_t local;
+    rng_seed(&local, 1234);
+    guara_birth(&g, "Golpe", &local, 1);
+    fighter_t me, op;
+    combat_fighter_from_guara(&g, &me);
+    op = me; /* mesma AGI: sem esquiva */
+    combat_t c;
+    combat_start(&c, &me, &op, &local);
+    combat_result_t r;
+    long total = 0;
+    *criticals = *doubles = 0;
+    for (int i = 0; i < 2000; i++) {
+        c.side[1].hp = c.side[1].hp_max = 30000;
+        combat_execute(&c, 0, (combat_action_t){ACTION_ATTACK, 0, reaction}, NULL, &r);
+        total += r.damage;
+        *criticals += r.critical;
+        *doubles += r.hits == 2;
+    }
+    return total;
+}
+
+static void test_combat_reaction(void)
+{
+    int crit_none, crit_timed, crit_guard, dbl_none, dbl_timed, dbl_guard;
+    long none = attack_total(0, &crit_none, &dbl_none);
+    long timed = attack_total(COMBAT_TIMED_STRIKE, &crit_timed, &dbl_timed);
+    long guard = attack_total(COMBAT_GUARD, &crit_guard, &dbl_guard);
+    TEST_ASSERT_EQUAL_INT(0, dbl_none);
+    TEST_ASSERT_TRUE(dbl_timed > 0);
+    TEST_ASSERT_TRUE(crit_timed > crit_none);
+    TEST_ASSERT_TRUE(timed > none);
+    TEST_ASSERT_TRUE(guard * 10 < none * 6); /* metade do dano e mais erros */
 }
 
 int main(void)
@@ -325,5 +363,6 @@ int main(void)
     RUN_TEST(test_combat_formulas);
     RUN_TEST(test_combat_ends);
     RUN_TEST(test_forfeit);
+    RUN_TEST(test_combat_reaction);
     return UNITY_END();
 }

@@ -342,12 +342,14 @@ Ao brir o menu arena, um sub-menu padrão com duas opções:
 
 ###### Combate
 
-A tela de combate consiste no sprite, em esla 1x, dos gurás combatentes, um de cada lado da tela o do lado esquerdo da tela  espelhado no eixo vertical, para dar a impreção que eles estão se olhando, a animação do sprite continua a 3 FPS e eles fica com o olhar de raiva, no topo de cada lado uma barra de progresso representando o HP da cada um. 
-O mecanismo de batalha é baseado em um contador representado por uma barra de progresso menor e mais fina que a do HP no canto inferior que pode encher mais rápido ou mais devagar dependendo do estado e da AGI. Quando a barra enche, é exibido piscando ao lado da barra o ícone do Botão A (![botão a](./bitmaps/ui/button_a.bmp)) indicando que o Guará pode agir, e em seguida zera o contador. Para executar uma ação, surge um modal padrão com as opções:
+A tela de combate consiste no sprite, em esla 1x, dos gurás combatentes, um de cada lado da tela o do lado esquerdo da tela  espelhado no eixo vertical, para dar a impreção que eles estão se olhando, a animação do sprite continua a 3 FPS e eles fica com o olhar de raiva, no topo de cada lado uma barra de progresso representando o HP da cada um e, logo abaixo, a barra de MP com metade do comprimento e 5 px de espessura. No início do combate os nomes são apresentados no formato "Fulano  VS  Siclano".
+O mecanismo de batalha é baseado em um contador representado por uma barra de progresso de 32 px no canto inferior, que pode encher mais rápido ou mais devagar dependendo do estado e da AGI. Antes da barra fica o ícone do Botão A (![botão a](./bitmaps/ui/button_a.bmp)) piscando: o jogador pode escolher a ação a qualquer momento, mesmo com a barra incompleta, e ao escolher o ícone para de piscar; a ação só é executada quando a barra enche, e em seguida o contador zera. Para escolher a ação, surge um modal padrão com as opções:
 - Atacar: Executa um ataque físico direto.
 - Habilidade: Abre sub-menu padrão com a lista de habilidades ativas para conjuração.
 - Itens: Abre sub-menu padrão contendo exclusivamente itens de cura e suporte.
 - Desistir: Exibe modal de confirmação; se confirmado, encerra a batalha com animação de derrota.
+
+Durante um golpe (ataque físico ou habilidade contra o oponente) há uma janela curta, no fim do preparo do golpe, em que o ícone do Botão A aparece entre os lutadores. Se quem ataca apertar A dentro da janela, aumenta a chance de crítico e pode sair um ataque duplo; se quem está sendo atacado apertar A na mesma janela, ele se defende, diminuindo o dano e aumentando a chance de erro do atacante. Só vale uma tentativa por golpe: apertar antes da janela perde a reação.
 
 ####### Fórmulas do Sistema de Combate
 

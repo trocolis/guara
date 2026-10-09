@@ -87,4 +87,13 @@
 #define DECAY_HP_STATE_TURN_PCT 5 /* PROVISÓRIO: veneno/queimadura/gelo por ação em combate */
 #define DROP_BASE_PCT       10    /* PROVISÓRIO */
 
+/* --- Reação no tempo certo (PROVISÓRIO) --- */
+#define REACTION_WINDUP_MS       600 /* preparo do golpe até o impacto */
+#define REACTION_WINDOW_MS       250 /* janela de A no fim do preparo */
+#define TIMED_CRITICAL_BONUS_X10 200 /* +20% de crítico para quem ataca */
+#define TIMED_DOUBLE_PCT         30  /* chance de ataque duplo (só ataque físico) */
+#define GUARD_DAMAGE_PCT         50  /* dano recebido ao se defender */
+#define GUARD_MISS_X10           150 /* +15% de chance de erro do atacante */
+#define AI_REACTION_PCT          25  /* chance do oponente acertar a janela */
+
 #endif

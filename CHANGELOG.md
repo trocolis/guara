@@ -3,7 +3,15 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
-## v0.4.1 — 2026-10-08
+## v0.5.0 — 2026-10-08
+
+### Combate
+- Barra de MP (28 x 5 px) abaixo da barra de HP de cada lutador; os nomes saíram da tela de luta.
+- Abertura "Fulano  VS  Siclano" no início do combate (A ou B pula).
+- Barra de ação com 32 px, precedida pelo ícone do botão A piscando. A ação pode ser escolhida antes de a barra encher e só executa com ela cheia; depois da escolha o ícone para de piscar.
+- Janela de reação no fim do preparo de cada golpe: quem ataca e aperta A ganha +20% de crítico e 30% de chance de ataque duplo; quem é atacado e aperta A recebe metade do dano e o atacante tem +15% de chance de errar. O oponente acerta a janela com 25% de chance.
+
+ — 2026-10-08
 
 ### Animação
 - Mordidas mais lentas: 450 ms por quadro (antes 300 ms).

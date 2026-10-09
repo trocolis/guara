@@ -193,11 +193,39 @@ static bool dodged(combat_t *c, const fighter_t *atk, const fighter_t *def)
     return rng_range(c->rng, 0, 999) < chance;
 }
 
-/* Sorteia o crítico: 5% + 0,4% por ponto de SOR, até 50%. */
-static bool critical(combat_t *c, const fighter_t *atk)
+/* Sorteia o crítico: 5% + 0,4% por ponto de SOR, até 50%, mais o bônus do golpe no tempo certo. */
+static bool critical(combat_t *c, const fighter_t *atk, bool timed)
 {
     int chance = clamp(CRITICAL_BASE_X10 + attribute(atk, ATTR_LUK) * CRITICAL_PER_LUK_X10, 0, CRITICAL_MAX_X10);
+    if (timed) {
+        chance += TIMED_CRITICAL_BONUS_X10;
+    }
     return rng_range(c->rng, 0, 999) < chance;
+}
+
+/* Erro extra do atacante quando o alvo se defendeu na janela. */
+static bool guard_miss(combat_t *c, const combat_result_t *r)
+{
+    return r->guarded && rng_range(c->rng, 0, 999) < GUARD_MISS_X10;
+}
+
+/* Aplica o crítico (x1,5) a um golpe e devolve o dano. */
+static int with_critical(combat_t *c, const fighter_t *atk, int damage, combat_result_t *r)
+{
+    if (critical(c, atk, r->timed)) {
+        r->critical = true;
+        damage = damage * 15 / 10;
+    }
+    return damage;
+}
+
+/* Reduz o dano quando o alvo se defendeu (mínimo 1). */
+static int with_guard(int damage, const combat_result_t *r)
+{
+    if (r->guarded) {
+        damage = damage * GUARD_DAMAGE_PCT / 100;
+    }
+    return damage < 1 ? 1 : damage;
 }
 
 /* Dano físico do README: ATK x 1,2 + FOR x 0,8 - DEF x 0,7 (mínimo 1). */
@@ -232,6 +260,7 @@ void combat_execute(combat_t *c, int side, combat_action_t action, const catalog
     r->type = action.type;
     r->applied_state = -1;
     r->multiplier = 100;
+    r->hits = 1;
     if (c->finished) {
         return;
     }
@@ -304,14 +333,20 @@ void combat_execute(combat_t *c, int side, combat_action_t action, const catalog
 
     if (action.type == ACTION_ATTACK) {
         snprintf(r->icon, sizeof(r->icon), "attack");
+        r->timed = (action.reaction & COMBAT_TIMED_STRIKE) != 0;
+        r->guarded = (action.reaction & COMBAT_GUARD) != 0;
         if (dodged(c, me, other)) {
             r->dodged = true;
             return;
         }
-        r->damage = physical_damage(me, other);
-        if (critical(c, me)) {
-            r->critical = true;
-            r->damage = r->damage * 15 / 10;
+        if (guard_miss(c, r)) {
+            r->missed = true;
+            return;
+        }
+        r->damage = with_guard(with_critical(c, me, physical_damage(me, other), r), r);
+        if (r->timed && rng_chance(c->rng, TIMED_DOUBLE_PCT)) {
+            r->hits = 2;
+            r->damage += with_guard(with_critical(c, me, physical_damage(me, other), r), r);
         }
         other->hp -= r->damage;
         check_combat_end(c);
@@ -344,9 +379,17 @@ void combat_execute(combat_t *c, int side, combat_action_t action, const catalog
 
     fighter_t *target = h.target == TARGET_USER ? me : other;
     r->target = h.target == TARGET_USER ? side : 1 - side;
-    if (target != me && dodged(c, me, target)) {
-        r->dodged = true;
-        return;
+    if (target != me) {
+        r->timed = (action.reaction & COMBAT_TIMED_STRIKE) != 0;
+        r->guarded = (action.reaction & COMBAT_GUARD) != 0;
+        if (dodged(c, me, target)) {
+            r->dodged = true;
+            return;
+        }
+        if (guard_miss(c, r)) {
+            r->missed = true;
+            return;
+        }
     }
     if (h.type == SKILL_ATTACK) {
         r->multiplier = combat_multiplier((nature_t)h.nature, (nature_t)target->nature);
@@ -354,10 +397,7 @@ void combat_execute(combat_t *c, int side, combat_action_t action, const catalog
         if (r->damage < 1) {
             r->damage = 1;
         }
-        if (critical(c, me)) {
-            r->critical = true;
-            r->damage = r->damage * 15 / 10;
-        }
+        r->damage = with_guard(with_critical(c, me, r->damage, r), r);
         target->hp -= r->damage;
     }
     for (int i = 0; i < h.n_status; i++) {
@@ -366,12 +406,26 @@ void combat_execute(combat_t *c, int side, combat_action_t action, const catalog
     check_combat_end(c);
 }
 
+/* Golpes com janela: ataque físico e habilidades (exceto cura) contra o outro lado. */
+bool combat_has_window(const combat_t *c, int side, combat_action_t action)
+{
+    if (action.type == ACTION_ATTACK) {
+        return true;
+    }
+    if (action.type != ACTION_SKILL || action.position < 0 || action.position >= COUNT_SKILL_ACTIVE) {
+        return false;
+    }
+    catalog_record_t h;
+    uint8_t id = c->side[side].skills[action.position];
+    return id != SLOT_EMPTY && catalog_read(CAT_SKILLS, id, &h) && h.type != SKILL_HEAL && h.target != TARGET_USER;
+}
+
 /* Escolhe a ação do oponente: cura com HP baixo, às vezes uma habilidade, senão ataca. */
 combat_action_t combat_ai(combat_t *c, int side)
 {
     fighter_t *me = &c->side[side];
     catalog_record_t h;
-    combat_action_t action = {ACTION_ATTACK, 0};
+    combat_action_t action = {ACTION_ATTACK, 0, 0};
     int heal = -1, attacks[COUNT_SKILL_ACTIVE], n_attacks = 0;
     for (int i = 0; i < COUNT_SKILL_ACTIVE; i++) {
         if (me->skills[i] == SLOT_EMPTY || !catalog_read(CAT_SKILLS, me->skills[i], &h)) {

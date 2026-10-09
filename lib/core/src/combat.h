@@ -26,7 +26,12 @@ typedef enum { ACTION_ATTACK, ACTION_SKILL, ACTION_ITEM, ACTION_FORFEIT } combat
 typedef struct {
     combat_action_type_t type;
     int position; /* slot da habilidade (0..3) ou id do item */
+    unsigned reaction; /* COMBAT_TIMED_STRIKE e/ou COMBAT_GUARD, apertados na janela */
 } combat_action_t;
+
+/* Reações na janela de A durante o preparo de um golpe. */
+#define COMBAT_TIMED_STRIKE 1u /* quem ataca acertou o tempo: mais crítico e chance de ataque duplo */
+#define COMBAT_GUARD        2u /* quem é atacado se defendeu: menos dano e mais chance de erro */
 
 typedef struct {
     int actor, target;
@@ -35,6 +40,9 @@ typedef struct {
     bool missed; /* confusão */
     bool dodged;
     bool critical;
+    bool timed;   /* golpe no tempo certo */
+    bool guarded; /* alvo se defendeu */
+    int hits;     /* 2 no ataque duplo */
     bool self_hit;    /* confuso atingiu a si mesmo */
     int damage;
     int heal;
@@ -63,6 +71,8 @@ unsigned combat_advance(combat_t *c, int dt_ms);
 bool combat_ready(const combat_t *c, int side);
 /* Executa a ação de um lado pronto. `item` é necessário para ACTION_ITEM. */
 void combat_execute(combat_t *c, int side, combat_action_t action, const catalog_record_t *item, combat_result_t *r);
+/* Verdadeiro se a ação é um golpe contra o outro lado, com janela de reação. */
+bool combat_has_window(const combat_t *c, int side, combat_action_t action);
 /* Escolha automática do oponente. */
 combat_action_t combat_ai(combat_t *c, int side);
 

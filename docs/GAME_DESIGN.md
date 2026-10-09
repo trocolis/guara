@@ -135,6 +135,14 @@ As fórmulas de ATB, dano físico, crítico, esquiva e multiplicador elemental s
   - Naturezas compostas usam os dois elementos, e a fraqueza é neutralizada quando o defensor também contém o elemento atacante (exemplo do Vapor no README).
   - Luz e Sombra têm vantagem mútua.
   - Neutra e Psíquica são neutras contra tudo.
+- **Reação no tempo certo (janela de A):**
+  - Golpes com janela: ataque físico e habilidades (exceto cura) contra o outro lado.
+  - O golpe tem 600 ms de preparo; a janela são os últimos 250 ms. Uma tentativa por golpe: apertar antes da janela perde a reação.
+  - **Golpe certeiro (quem ataca):** +20% de chance de crítico (somado depois do limite de 50%) e, só no ataque físico, 30% de chance de ataque duplo (o segundo golpe sorteia o próprio crítico).
+  - **Defesa (quem é atacado):** dano ×0,5 (mínimo 1) e +15% de chance de o atacante errar, sorteada depois da esquiva.
+  - O oponente acerta a janela com 25% de chance, tanto para atacar quanto para se defender.
+  - Ordem de aplicação: esquiva → erro da defesa → dano base → elemento → crítico → defesa.
+- **Escolha antecipada:** a ação pode ser escolhida com a barra ATB incompleta e só executa quando ela enche; desistir vale na hora. O tempo para enquanto o modal de ações está aberto.
 - **IA do oponente:** cura com HP < 30% (se tiver habilidade e MP); senão, 40% de chance de usar uma habilidade de ataque; senão, ataca.
 - **Treino:**
   - Oponente com o mesmo nível e atributos ±10%.
