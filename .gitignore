@@ -16,3 +16,6 @@ storage.bin
 sdkconfig
 sdkconfig.*
 !sdkconfig.defaults
+
+# Banco de compilação gerado pelo PlatformIO (caminhos locais)
+compile_commands.json
