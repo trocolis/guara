@@ -448,6 +448,40 @@ static void draw_hit(gfx_t *g, uint32_t now)
     ui_icon_mode(g, name, cx - 8, cy - 8, GFX_XOR, 0);
 }
 
+/*
+ * Barra dupla de um lutador (56 x 9 px): HP com 3 px de altura em cima e MP
+ * numa linha de 1 px embaixo, dentro da mesma moldura. No oponente, espelhado,
+ * o preenchimento parte da borda direita.
+ */
+static void draw_vitals(gfx_t *g, int x, const fighter_t *l, bool mirrored)
+{
+    const int width = 56, inner = width - 4;
+    gfx_rect(g, x, 2, width, 9, GFX_WHITE);
+    int hp = l->hp_max > 0 ? inner * (l->hp < 0 ? 0 : l->hp) / l->hp_max : 0;
+    int mp = l->mp_max > 0 ? inner * (l->mp < 0 ? 0 : l->mp) / l->mp_max : 0;
+    gfx_rect_filled(g, mirrored ? x + 2 + inner - hp : x + 2, 4, hp, 3, GFX_WHITE);
+    gfx_line_h(g, mirrored ? x + 2 + inner - mp : x + 2, 8, mp, GFX_WHITE);
+}
+
+/*
+ * Barra ATB no próprio ícone do botão A (10x10): o interior (6x6) inverte de
+ * baixo para cima conforme o tempo passa. Cheio, pisca até a ação ser
+ * escolhida; com a ação escolhida, fica fixo.
+ */
+static void draw_atb(gfx_t *g, const fighter_t *me, uint32_t now)
+{
+    const int x = 2, y = 53, inner = 6;
+    bool full = me->atb_ms >= me->atb_total;
+    if (full && !pending && (now / 300) % 2 == 0) {
+        return; /* piscando */
+    }
+    ui_icon_mode(g, "button_a", x, y, GFX_COPY, 0);
+    int rows = me->atb_total > 0 ? inner * me->atb_ms / me->atb_total : 0;
+    if (rows > 0) {
+        gfx_rect_filled(g, x + 2, y + 2 + inner - rows, inner, rows, GFX_INVERT);
+    }
+}
+
 /* Abertura: "Fulano  VS  Siclano" numa linha, ou em três se não couber. */
 static void draw_intro(gfx_t *g)
 {
@@ -473,21 +507,17 @@ static void on_draw(gfx_t *g, uint32_t now)
         return;
     }
 
-    /* HP no topo de cada lado e MP logo abaixo, com metade do comprimento */
-    ui_progress(g, 2, 2, 56, 6, me->hp, me->hp_max);
-    ui_progress(g, 70, 2, 56, 6, op->hp, op->hp_max);
-    ui_progress(g, 2, 9, 28, 5, me->mp, me->mp_max);
-    ui_progress(g, 98, 9, 28, 5, op->mp, op->mp_max);
+    /* HP e MP numa moldura só por lutador, no topo de cada lado */
+    draw_vitals(g, 2, me, false);
+    draw_vitals(g, 70, op, true);
 
     draw_fighter(g, 0, now);
     draw_fighter(g, 1, now);
     draw_hit(g, now);
 
-    /* Ícone do botão A (10x10): pisca até a ação ser escolhida; depois, a barra ATB de 32 px */
-    if (!combat.finished && (pending || (now / 300) % 2)) {
-        ui_icon_mode(g, "button_a", 2, 53, GFX_COPY, 0);
+    if (!combat.finished) {
+        draw_atb(g, me, now);
     }
-    ui_progress(g, 14, 57, 32, 3, me->atb_ms, me->atb_total);
 
     uint32_t t = now - anim_start;
     if (animating) {

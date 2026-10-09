@@ -3,6 +3,12 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.9.3 — 2026-10-08
+
+### Combate
+- HP e MP numa barra dupla por lutador (56 x 9 px): HP com 3 px em cima e MP numa linha de 1 px embaixo, na mesma moldura. No oponente, o preenchimento parte da borda direita.
+- Barra ATB substituída pelo próprio ícone do A, que enche de baixo para cima (interior invertido), pisca quando cheio e fica fixo depois de escolher a ação.
+
 ## v0.9.2 — 2026-10-08
 
 ### Combate
