@@ -449,37 +449,34 @@ static void draw_hit(gfx_t *g, uint32_t now)
 }
 
 /*
- * Barra dupla de um lutador (56 x 9 px): HP com 3 px de altura em cima e MP
- * numa linha de 1 px embaixo, dentro da mesma moldura. No oponente, espelhado,
- * o preenchimento parte da borda direita.
+ * Barra dupla de um lutador (56 x 8 px): HP com 2 px de altura em cima e MP
+ * numa linha de 1 px embaixo, dentro da mesma moldura, com o nome logo abaixo.
+ * No oponente, espelhado, o preenchimento e o nome partem da borda direita.
  */
 static void draw_vitals(gfx_t *g, int x, const fighter_t *l, bool mirrored)
 {
     const int width = 56, inner = width - 4;
-    gfx_rect(g, x, 2, width, 9, GFX_WHITE);
+    gfx_rect(g, x, 2, width, 8, GFX_WHITE);
     int hp = l->hp_max > 0 ? inner * (l->hp < 0 ? 0 : l->hp) / l->hp_max : 0;
     int mp = l->mp_max > 0 ? inner * (l->mp < 0 ? 0 : l->mp) / l->mp_max : 0;
-    gfx_rect_filled(g, mirrored ? x + 2 + inner - hp : x + 2, 4, hp, 3, GFX_WHITE);
-    gfx_line_h(g, mirrored ? x + 2 + inner - mp : x + 2, 8, mp, GFX_WHITE);
+    gfx_rect_filled(g, mirrored ? x + 2 + inner - hp : x + 2, 4, hp, 2, GFX_WHITE);
+    gfx_line_h(g, mirrored ? x + 2 + inner - mp : x + 2, 7, mp, GFX_WHITE);
+    gfx_text(g, mirrored ? x + width - gfx_text_width(l->name) : x, 11, l->name, GFX_WHITE);
 }
 
 /*
- * Barra ATB no próprio ícone do botão A (10x10): o interior (6x6) inverte de
- * baixo para cima conforme o tempo passa. Cheio, pisca até a ação ser
- * escolhida; com a ação escolhida, fica fixo.
+ * Barra ATB vertical (6 x 16 px) no canto inferior do lado do lutador: enche
+ * de baixo para cima e pisca quando cheia.
  */
-static void draw_atb(gfx_t *g, const fighter_t *me, uint32_t now)
+static void draw_atb(gfx_t *g, int x, const fighter_t *l, uint32_t now)
 {
-    const int x = 2, y = 53, inner = 6;
-    bool full = me->atb_ms >= me->atb_total;
-    if (full && !pending && (now / 300) % 2 == 0) {
-        return; /* piscando */
+    const int y = 46, height = 16, inner = height - 4;
+    if (l->atb_ms >= l->atb_total && (now / 300) % 2 == 0) {
+        return; /* cheia: piscando */
     }
-    ui_icon_mode(g, "button_a", x, y, GFX_COPY, 0);
-    int rows = me->atb_total > 0 ? inner * me->atb_ms / me->atb_total : 0;
-    if (rows > 0) {
-        gfx_rect_filled(g, x + 2, y + 2 + inner - rows, inner, rows, GFX_INVERT);
-    }
+    gfx_rect(g, x, y, 6, height, GFX_WHITE);
+    int rows = l->atb_total > 0 ? inner * l->atb_ms / l->atb_total : 0;
+    gfx_rect_filled(g, x + 2, y + 2 + inner - rows, 2, rows, GFX_WHITE);
 }
 
 /* Abertura: "Fulano  VS  Siclano" numa linha, ou em três se não couber. */
@@ -516,7 +513,8 @@ static void on_draw(gfx_t *g, uint32_t now)
     draw_hit(g, now);
 
     if (!combat.finished) {
-        draw_atb(g, me, now);
+        draw_atb(g, 2, me, now);
+        draw_atb(g, GFX_WIDTH - 8, op, now);
     }
 
     uint32_t t = now - anim_start;

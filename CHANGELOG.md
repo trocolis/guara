@@ -3,6 +3,12 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.9.4 — 2026-10-08
+
+### Combate
+- Nome de cada lutador de volta, logo abaixo da barra dupla; HP com 2 px de altura (barra de 56 x 8 px).
+- Barra de ação vertical de 6 x 16 px no canto inferior do lado de cada lutador, inclusive o oponente, enchendo de baixo para cima e piscando quando cheia. O ícone do A saiu.
+
 ## v0.9.3 — 2026-10-08
 
 ### Combate
