@@ -25,6 +25,8 @@ void app_mark_changed(void);
 void app_save(void);
 /* Impede o deep sleep por inatividade (jogos, cronômetro na tela, etc.). */
 void app_block_sleep(bool should_block);
+/* Pede o deep sleep imediato (console de depuração); o laço principal atende no próximo segundo. */
+void app_request_sleep(void);
 /* Concede XP; trata level up (som + gravação). Retorna os níveis ganhos. */
 int app_gain_xp(uint32_t points);
 void app_birth(const char *name);

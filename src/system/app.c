@@ -37,6 +37,7 @@ rng_t g_rng;
 
 static gfx_t screen;
 static bool sleep_blocked;
+static volatile bool sleep_requested;
 static uint32_t monotonic_minutes;
 static int consecutive_critical;
 
@@ -271,6 +272,12 @@ static void run_pet_minute(void)
     }
 }
 
+/* Pede o deep sleep imediato; atendido pelo laço principal (console de depuração). */
+void app_request_sleep(void)
+{
+    sleep_requested = true;
+}
+
 /* Grava o que estiver pendente e entra em deep sleep até o próximo alarme. */
 static void sleep_due_to_inactivity(void)
 {
@@ -396,6 +403,9 @@ void app_run(void)
             }
             if (timer_check()) {
                 screens_trigger_alarm("Temporizador");
+            }
+            if (sleep_requested) {
+                sleep_due_to_inactivity();
             }
             check_inactivity(now);
             check_idle(now);

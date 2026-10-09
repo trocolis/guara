@@ -3,16 +3,56 @@
  */
 #include "i2c.h"
 
+#include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_rom_sys.h"
 #include "pins.h"
 
 static const char *TAG = "i2c";
 static i2c_master_bus_handle_t bus_handle;
 
+/*
+ * Destrava o barramento: se um dispositivo ficou segurando o SDA em nível
+ * baixo (transmissão cortada por um reset ou deep sleep), até 9 pulsos no SCL
+ * terminam o byte dele, e uma condição de STOP libera o barramento.
+ */
+static void clear_bus(void)
+{
+    gpio_config_t cfg = {
+        .pin_bit_mask = (1ull << PIN_SDA) | (1ull << PIN_SCL),
+        .mode = GPIO_MODE_INPUT_OUTPUT_OD,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+    };
+    gpio_config(&cfg);
+    gpio_set_level(PIN_SDA, 1);
+    gpio_set_level(PIN_SCL, 1);
+    esp_rom_delay_us(10);
+    if (gpio_get_level(PIN_SDA) == 0) {
+        ESP_LOGW(TAG, "SDA preso em nível baixo: destravando o barramento");
+        for (int i = 0; i < 9 && gpio_get_level(PIN_SDA) == 0; i++) {
+            gpio_set_level(PIN_SCL, 0);
+            esp_rom_delay_us(10);
+            gpio_set_level(PIN_SCL, 1);
+            esp_rom_delay_us(10);
+        }
+        /* STOP: SDA sobe com o SCL em nível alto */
+        gpio_set_level(PIN_SCL, 0);
+        gpio_set_level(PIN_SDA, 0);
+        esp_rom_delay_us(10);
+        gpio_set_level(PIN_SCL, 1);
+        esp_rom_delay_us(10);
+        gpio_set_level(PIN_SDA, 1);
+        esp_rom_delay_us(10);
+    }
+    gpio_reset_pin(PIN_SDA);
+    gpio_reset_pin(PIN_SCL);
+}
+
 /* Cria o barramento na primeira chamada e devolve o handle. */
 i2c_master_bus_handle_t i2c_bus(void)
 {
     if (bus_handle == NULL) {
+        clear_bus();
         i2c_master_bus_config_t cfg = {
             .i2c_port = I2C_NUM_0,
             .sda_io_num = PIN_SDA,

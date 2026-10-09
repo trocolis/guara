@@ -8,6 +8,7 @@ Console de depuração do Guará pela serial: envia teclas e captura a tela.
     python3 tools/console.py state                                 # estado do Guará
     python3 tools/console.py log [segundos]                        # mostra o log
     python3 tools/console.py script "wait 4" "screen a.png" "keys jj" "screen b.png" "state"
+    python3 tools/console.py script "wait 4" "sleep" "log 60"         # dorme e mostra o log ao acordar
 
 Neste adaptador USB (CH343) abrir a porta reinicia o ESP32: use "script" para
 executar vários passos na mesma conexão.
@@ -140,6 +141,10 @@ def run_script(port, steps, scale):
             print(request_state(port) or "state: sem resposta")
         elif name == "log":
             show_log(port, float(argument or 2))
+        elif name == "sleep":
+            wake(port)
+            port.write(b"Z")  # deep sleep imediato
+            port.flush()
         else:
             print(f"passo desconhecido: {step}", file=sys.stderr)
 

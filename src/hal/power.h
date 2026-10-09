@@ -21,8 +21,8 @@ bool power_is_idle(void);
 
 wake_reason_t power_wake_reason(void);
 /*
- * Entra em deep sleep. Acorda por qualquer um dos quatro botões (Cima/Baixo
- * pelo RTC, A/B pelo ULP) e, se `seconds` > 0, pelo timer. Não retorna.
+ * Entra em deep sleep. Acorda pelos botões Cima, Baixo, A e B (conferidos
+ * pelo ULP) e, se `seconds` > 0, pelo timer. Não retorna.
  */
 void power_deep_sleep(uint32_t seconds);
 

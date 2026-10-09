@@ -3,6 +3,14 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.7.1 — 2026-10-08
+
+### Correções
+- Deep sleep: a placa acordava sozinha (o light sleep automático deixava o timer e a UART como fontes de despertar) ou não acordava. Agora as fontes são limpas antes de dormir e o ULP confere os quatro botões (o `ext0` do Cima não pode ser usado junto com o ULP).
+- Display apagado depois de acordar: o deep sleep podia cortar uma transmissão I2C no meio e o SH1106 ficava segurando o SDA. O display só é desligado depois da transmissão em andamento, e o boot destrava o barramento se o SDA estiver preso.
+- O ULP para depois de acordar o chip.
+- Console: comando `Z` (passo `sleep` no `console.py`) para entrar em deep sleep na hora.
+
 ## v0.7.0 — 2026-10-08
 
 ### Energia

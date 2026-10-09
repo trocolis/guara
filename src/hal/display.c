@@ -25,6 +25,7 @@ static const char *TAG = "display";
 
 static i2c_master_dev_handle_t dev;
 static SemaphoreHandle_t lock;
+static SemaphoreHandle_t sending; /* segurado durante a transmissão das páginas */
 static TaskHandle_t job;
 static uint8_t pending[GFX_HEIGHT / 8][GFX_WIDTH];
 static uint8_t sent[GFX_HEIGHT / 8][GFX_WIDTH];
@@ -69,6 +70,7 @@ static void job_display(void *arg)
         bool all = force;
         force = false;
         xSemaphoreGive(lock);
+        xSemaphoreTake(sending, portMAX_DELAY);
         for (int p = 0; p < GFX_HEIGHT / 8; p++) {
             if (all || memcmp(local[p], sent[p], GFX_WIDTH) != 0) {
                 if (send_page(p, local[p]) == ESP_OK) {
@@ -78,6 +80,7 @@ static void job_display(void *arg)
                 }
             }
         }
+        xSemaphoreGive(sending);
     }
 }
 
@@ -91,6 +94,7 @@ bool display_init(void)
     if (dev == NULL) {
         dev = i2c_add_device(ADDRESS_SH1106);
         lock = xSemaphoreCreateMutex();
+        sending = xSemaphoreCreateMutex();
     }
     static const uint8_t init[] = {
         0xAE,       /* display desligado */
@@ -147,6 +151,19 @@ void display_set_power(bool enabled)
     if (dev) {
         const uint8_t c = enabled ? 0xAF : 0xAE;
         commands(&c, 1);
+    }
+}
+
+/*
+ * Desliga o painel antes do deep sleep: espera a transmissão em andamento
+ * terminar e não devolve a trava, para nenhuma página começar depois. Um
+ * sono no meio de um byte deixaria o SH1106 segurando o SDA em nível baixo.
+ */
+void display_shutdown(void)
+{
+    if (dev && sending) {
+        xSemaphoreTake(sending, pdMS_TO_TICKS(200));
+        display_set_power(false);
     }
 }
 

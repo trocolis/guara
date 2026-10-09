@@ -67,6 +67,7 @@ static void job(void *arg)
         case 'k': buttons_inject(KEY_B); break;
         case 'P': print_framebuffer(); break;
         case 'S': print_state(); break;
+        case 'Z': app_request_sleep(); break;
         default: break;
         }
     }

@@ -1,7 +1,7 @@
 /*
  * Gerenciamento de energia: motivo do despertar, modo Ocioso (frequência
  * dinâmica e light sleep automático) e entrada em deep sleep com despertar
- * pelos quatro botões (Cima/Baixo pelo RTC, A/B pelo coprocessador ULP).
+ * pelos botões Cima, Baixo, A e B, conferidos pelo coprocessador ULP.
  */
 #include "power.h"
 
@@ -18,7 +18,7 @@ static const char *TAG = "energia";
 
 #define CPU_MAX_MHZ 160
 #define CPU_MIN_MHZ 80   /* mantém o APB em 80 MHz: UART, LEDC e I2C sem mudar de clock */
-#define ULP_PERIOD_US 20000 /* o ULP confere A e B a cada 20 ms durante o deep sleep */
+#define ULP_PERIOD_US 20000 /* o ULP confere os botões a cada 20 ms durante o deep sleep */
 
 static esp_pm_lock_handle_t lock_cpu, lock_no_sleep;
 static bool idle;
@@ -26,6 +26,9 @@ static bool idle;
 /* Configura o gerenciamento de energia; começa no modo Ativo (travas seguradas). */
 void power_init(void)
 {
+    /* O ULP continua rodando depois de acordar o chip: só serve durante o sono */
+    ulp_timer_stop();
+
     esp_pm_config_t config = {
         .max_freq_mhz = CPU_MAX_MHZ,
         .min_freq_mhz = CPU_MIN_MHZ,
@@ -76,7 +79,7 @@ bool power_is_idle(void)
 wake_reason_t power_wake_reason(void)
 {
     uint32_t causes = esp_sleep_get_wakeup_causes();
-    if (causes & (BIT(ESP_SLEEP_WAKEUP_EXT0) | BIT(ESP_SLEEP_WAKEUP_EXT1) | BIT(ESP_SLEEP_WAKEUP_ULP))) {
+    if (causes & (BIT(ESP_SLEEP_WAKEUP_EXT0) | BIT(ESP_SLEEP_WAKEUP_ULP))) {
         return WOKE_BUTTON;
     }
     if (causes & BIT(ESP_SLEEP_WAKEUP_TIMER)) {
@@ -86,17 +89,25 @@ wake_reason_t power_wake_reason(void)
 }
 
 /*
- * Programa do ULP: lê A e B no RTC_GPIO_IN e acorda o chip se algum estiver
- * em nível baixo (botão apertado); senão, para até o próximo período.
+ * Programa do ULP: lê os botões no RTC_GPIO_IN e acorda o chip se algum
+ * estiver em nível baixo (apertado); senão, para até o próximo período.
+ * No ESP32 o ULP não pode ser usado junto com o ext0, e o ext1 só acorda com
+ * "todos os pinos em nível baixo", então o ULP cuida de todos os botões.
  */
-static void start_ulp_buttons(void)
+static bool start_ulp_buttons(const gpio_num_t *pins)
 {
-    int bit_a = RTC_GPIO_IN_NEXT_S + rtc_io_number_get(PIN_A);
-    int bit_b = RTC_GPIO_IN_NEXT_S + rtc_io_number_get(PIN_B);
+    int bit[4];
+    for (int i = 0; i < 4; i++) {
+        bit[i] = RTC_GPIO_IN_NEXT_S + rtc_io_number_get(pins[i]);
+    }
     const ulp_insn_t program[] = {
-        I_RD_REG(RTC_GPIO_IN_REG, bit_a, bit_a), /* R0 = nível do A */
-        M_BL(1, 1),                              /* R0 < 1: apertado */
-        I_RD_REG(RTC_GPIO_IN_REG, bit_b, bit_b), /* R0 = nível do B */
+        I_RD_REG(RTC_GPIO_IN_REG, bit[0], bit[0]), /* R0 = nível do botão */
+        M_BL(1, 1),                                /* R0 < 1: apertado */
+        I_RD_REG(RTC_GPIO_IN_REG, bit[1], bit[1]),
+        M_BL(1, 1),
+        I_RD_REG(RTC_GPIO_IN_REG, bit[2], bit[2]),
+        M_BL(1, 1),
+        I_RD_REG(RTC_GPIO_IN_REG, bit[3], bit[3]),
         M_BL(1, 1),
         I_HALT(),
         M_LABEL(1),
@@ -104,20 +115,28 @@ static void start_ulp_buttons(void)
         I_HALT(),
     };
     size_t size = sizeof(program) / sizeof(ulp_insn_t);
-    if (ulp_process_macros_and_load(0, program, &size) != ESP_OK) {
-        ESP_LOGW(TAG, "ULP: falha ao carregar; A e B não vão acordar o aparelho");
-        return;
+    esp_err_t err = ulp_process_macros_and_load(0, program, &size);
+    if (err == ESP_OK) {
+        err = ulp_set_wakeup_period(0, ULP_PERIOD_US);
     }
-    ulp_set_wakeup_period(0, ULP_PERIOD_US);
-    esp_sleep_enable_ulp_wakeup();
-    ulp_run(0);
+    if (err == ESP_OK) {
+        err = esp_sleep_enable_ulp_wakeup();
+    }
+    if (err == ESP_OK) {
+        err = ulp_run(0);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "ULP: %s", esp_err_to_name(err));
+        return false;
+    }
+    return true;
 }
 
 /* Desliga o display, mantém os pull-ups dos botões no domínio RTC e dorme. */
 void power_deep_sleep(uint32_t seconds)
 {
     ESP_LOGI(TAG, "Deep sleep (timer: %lu s)", (unsigned long)seconds);
-    display_set_power(false);
+    display_shutdown();
 
     /* Pull-ups dos botões mantidos pelo domínio RTC durante o sono */
     const gpio_num_t pins[] = {PIN_UP, PIN_DOWN, PIN_A, PIN_B};
@@ -127,12 +146,13 @@ void power_deep_sleep(uint32_t seconds)
         rtc_gpio_pullup_en(pins[i]);
         rtc_gpio_pulldown_dis(pins[i]);
     }
+    /* O light sleep automático deixa fontes ligadas (timer, UART): começa do zero */
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-    esp_sleep_enable_ext0_wakeup(PIN_UP, 0);
-    /* No ESP32, ALL_LOW com um único pino equivale a "pino em nível baixo";
-       por isso A e B (mais de um pino) ficam com o ULP. */
-    esp_sleep_enable_ext1_wakeup_io(1ull << PIN_DOWN, ESP_EXT1_WAKEUP_ALL_LOW);
-    start_ulp_buttons();
+    if (!start_ulp_buttons(pins)) {
+        /* Sem ULP, ao menos o Cima acorda (ext0) */
+        esp_sleep_enable_ext0_wakeup(PIN_UP, 0);
+    }
     if (seconds > 0) {
         esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ull);
     }
