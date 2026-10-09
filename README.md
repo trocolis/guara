@@ -462,7 +462,7 @@ Roda a 30 FPS e não deixa o aparelho entrar no modo Ocioso nem no deep sleep.
 	- ![Habilidade](./bitmaps/ui/action_skill.bmp) **Habilidade:** abre o modal de escolha entre as habilidades ativas, com o custo de MP.
 	- ![Poções](./bitmaps/ui/action_potion.bmp) **Poções:** abre o modal de escolha entre os itens do tipo poção possuídos.
 	- **Desistir:** B abre a confirmação; desistir vale na hora e encerra o combate como derrota.
-	- **Tempo real:** o combate não pausa com a barra ou um modal aberto: as barras ATB continuam enchendo e o oponente age. O modal de escolha continua aberto durante os golpes (com ele aberto, as teclas vão para o modal, e o A não reage na janela), e o valor do dano subindo é desenhado por cima dele em XOR. Se o combate terminar, o modal fecha.
+	- **Tempo real:** o combate não pausa com a barra ou um modal aberto: as barras ATB continuam enchendo e o oponente age. O modal de escolha continua aberto durante os golpes (com ele aberto, as teclas vão para o modal, e o A não reage na janela), e o valor do dano subindo é desenhado por cima dele, em branco sobre um fundo preto de cantos arredondados (raio 2). Se o combate terminar, o modal fecha.
 
 	![Ações do combate](./bitmaps/exemple/screen_combat_actions.bmp)
 

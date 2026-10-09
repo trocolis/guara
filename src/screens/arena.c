@@ -598,7 +598,7 @@ static void on_draw(gfx_t *g, uint32_t now)
 
 /*
  * Valor do dano (ou cura, ou erro) subindo sobre o alvo, desenhado por cima
- * dos modais em XOR: com o modal de escolha aberto, o combate continua visível.
+ * dos modais, sobre um fundo preto de cantos arredondados.
  */
 static void draw_over(gfx_t *g, uint32_t now)
 {
@@ -621,7 +621,10 @@ static void draw_over(gfx_t *g, uint32_t now)
     if (msg[0]) {
         int xa = last.target == 0 ? X_PLAYER : X_OPPONENT;
         int dy = (int)(t - 150) / 60;
-        gfx_text_center(g, xa - 20, 40, 22 - dy, msg, GFX_INVERT); /* INVERT = XOR com o fundo */
+        /* Fundo preto de cantos arredondados (raio 2) para o número ficar legível sobre o modal */
+        int w = gfx_text_width(msg);
+        gfx_rect_rounded_filled(g, xa - w / 2 - 2, 21 - dy, w + 4, 10, 2, GFX_BLACK);
+        gfx_text(g, xa - w / 2, 22 - dy, msg, GFX_WHITE);
     }
 }
 
