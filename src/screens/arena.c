@@ -1,6 +1,6 @@
 /*
  * Arena: menu (Treino e Combate) e a tela de combate de treino, com barras ATB,
- * modal de ações, animações e a ficha de vitória.
+ * barra de ações, animações e a ficha de vitória.
  */
 #include <stdio.h>
 #include <string.h>
@@ -28,6 +28,9 @@
 #define HIT_START_MS 150  /* começa no impacto, junto com o recuo */
 #define HIT_SECOND_MS 450 /* segundo impacto do ataque duplo, no mesmo lugar do primeiro */
 #define MENU_GRACE_MS 600 /* depois de um golpe, A não abre o menu (toques atrasados da janela) */
+#define ACTION_BAR_X 10 /* barra de ações: no lugar do ícone do A, ao lado da barra ATB */
+#define ACTION_BAR_Y 54
+#define ACTION_COUNT 3
 
 static combat_t combat;
 static fighter_t player, opponent;
@@ -35,6 +38,8 @@ static combat_result_t last;
 static bool animating;
 static uint32_t anim_start;
 static bool at_modal;
+static bool modal_hidden; /* modal escondido durante um golpe; volta depois da animação */
+static int modal_kind;    /* qual modal está aberto (MODAL_*) */
 static bool end_shown;
 static uint32_t end_at;
 static uint32_t intro_until;
@@ -52,6 +57,13 @@ static uint32_t windup_start;
 static int windup_side;
 static combat_action_t windup_action;
 static int player_reaction; /* 0 sem apertar, 1 no tempo, -1 fora do tempo */
+
+/* Barra de ações (Atacar, Habilidade, Poções) aberta pelo A no lugar do ícone. */
+static bool picking;
+static int pick_index;
+static const char *const ACTION_ICONS[ACTION_COUNT] = {"action_atk", "action_skill", "action_potion"};
+
+enum { MODAL_SKILLS = 1, MODAL_ITEMS, MODAL_FORFEIT };
 
 static void finish(void);
 static const screen_t SCREEN_COMBAT;
@@ -76,6 +88,11 @@ static void execute_now(int side, combat_action_t action, const catalog_record_t
 /* Começa a ação: golpes contra o outro lado passam pelo preparo com a janela de reação. */
 static void begin_action(int side, combat_action_t action, uint32_t now)
 {
+    if (at_modal && !modal_hidden && ui_top() != &SCREEN_COMBAT) {
+        /* Esconde o modal de escolha para mostrar o golpe; ele volta depois da animação */
+        ui_back_until(&SCREEN_COMBAT);
+        modal_hidden = true;
+    }
     if (!combat_has_window(&combat, side, action)) {
         execute_now(side, action, action.type == ACTION_ITEM ? &pending_item : NULL, now);
         return;
@@ -155,52 +172,74 @@ static void forfeit_answer(int r, void *ctx)
     }
 }
 
-/* Trata a ação escolhida no modal (atacar, habilidade, itens, desistir). */
-static void action_chosen(int r, void *ctx)
+/* Abre o modal de escolha das habilidades ativas; sem nenhuma, avisa. */
+static bool open_skills(void)
 {
-    (void)ctx;
-    if (r == 0) {
-        choose((combat_action_t){ACTION_ATTACK, 0, 0}, NULL);
-    } else if (r == 1) {
-        static char names[COUNT_SKILL_ACTIVE][24];
-        const char *options[COUNT_SKILL_ACTIVE];
-        skill_count = 0;
-        catalog_record_t h;
-        for (int i = 0; i < COUNT_SKILL_ACTIVE; i++) {
-            if (player.skills[i] != SLOT_EMPTY && catalog_read(CAT_SKILLS, player.skills[i], &h)) {
-                snprintf(names[skill_count], sizeof(names[skill_count]), "%s (%d)", h.name, h.mp_cost);
-                options[skill_count] = names[skill_count];
-                skill_slots[skill_count++] = i;
-            }
+    static char names[COUNT_SKILL_ACTIVE][24];
+    static const char *options[COUNT_SKILL_ACTIVE];
+    skill_count = 0;
+    catalog_record_t h;
+    for (int i = 0; i < COUNT_SKILL_ACTIVE; i++) {
+        if (player.skills[i] != SLOT_EMPTY && catalog_read(CAT_SKILLS, player.skills[i], &h)) {
+            snprintf(names[skill_count], sizeof(names[skill_count]), "%s (%d)", h.name, h.mp_cost);
+            options[skill_count] = names[skill_count];
+            skill_slots[skill_count++] = i;
         }
-        if (skill_count == 0) {
-            at_modal = false;
-            snprintf(notice, sizeof(notice), "Sem habilidades");
-            return;
+    }
+    if (skill_count == 0) {
+        snprintf(notice, sizeof(notice), "Sem habilidades");
+        return false;
+    }
+    ui_choice("HABILIDADE", options, skill_count, skill_chosen, NULL);
+    return true;
+}
+
+/* Abre o modal de escolha das poções do inventário; sem nenhuma, avisa. */
+static bool open_items(void)
+{
+    static char names[16][24];
+    static const char *options[16];
+    n_items = 0;
+    catalog_record_t it;
+    for (int id = 0; id < catalog_record_count(CAT_ITEMS) && n_items < 16; id++) {
+        if (g_guara.inventory[id] && catalog_read(CAT_ITEMS, id, &it) && it.type == ITEM_POTION) {
+            snprintf(names[n_items], sizeof(names[n_items]), "%s x%d", it.name, g_guara.inventory[id]);
+            options[n_items] = names[n_items];
+            combat_items[n_items++] = id;
         }
-        ui_choice("HABILIDADE", options, skill_count, skill_chosen, NULL);
-    } else if (r == 2) {
-        static char names[16][24];
-        const char *options[16];
-        n_items = 0;
-        catalog_record_t it;
-        for (int id = 0; id < catalog_record_count(CAT_ITEMS) && n_items < 16; id++) {
-            if (g_guara.inventory[id] && catalog_read(CAT_ITEMS, id, &it) && it.type == ITEM_POTION) {
-                snprintf(names[n_items], sizeof(names[n_items]), "%s x%d", it.name, g_guara.inventory[id]);
-                options[n_items] = names[n_items];
-                combat_items[n_items++] = id;
-            }
-        }
-        if (n_items == 0) {
-            at_modal = false;
-            snprintf(notice, sizeof(notice), "Sem itens de cura");
-            return;
-        }
-        ui_choice("ITENS", options, n_items, item_chosen, NULL);
-    } else if (r == 3) {
-        ui_confirm("DESISTIR", "fight", "Desistir do combate?", "NAO", "SIM", forfeit_answer, NULL);
+    }
+    if (n_items == 0) {
+        snprintf(notice, sizeof(notice), "Sem pocoes");
+        return false;
+    }
+    ui_choice("POCOES", options, n_items, item_chosen, NULL);
+    return true;
+}
+
+/* Abre (ou reabre, depois de um golpe) um modal do combate. */
+static void open_modal(int kind)
+{
+    modal_kind = kind;
+    modal_hidden = false;
+    if (kind == MODAL_SKILLS) {
+        at_modal = open_skills();
+    } else if (kind == MODAL_ITEMS) {
+        at_modal = open_items();
     } else {
-        at_modal = false;
+        at_modal = true;
+        ui_confirm("DESISTIR", "fight", "Desistir do combate?", "NAO", "SIM", forfeit_answer, NULL);
+    }
+}
+
+/* Confirma o ícone da barra de ações: atacar vale direto; habilidade e poção abrem a escolha. */
+static void pick_confirm(int index)
+{
+    picking = false;
+    notice[0] = '\0';
+    if (index == 0) {
+        choose((combat_action_t){ACTION_ATTACK, 0, 0}, NULL);
+    } else {
+        open_modal(index == 1 ? MODAL_SKILLS : MODAL_ITEMS);
     }
 }
 
@@ -215,7 +254,7 @@ static void on_open(void *param)
     combat_start(&combat, &player, &opponent, &g_rng);
     player = combat.side[0];
     memset(&last, 0, sizeof(last));
-    animating = at_modal = end_shown = pending = winding = false;
+    animating = at_modal = modal_hidden = picking = end_shown = pending = winding = false;
     notice[0] = '\0';
     intro_until = menu_free_at = app_ms() + INTRO_MS;
     app_block_sleep(true);
@@ -227,7 +266,7 @@ static void on_close(void)
     app_block_sleep(false);
 }
 
-/* A escolhe a ação uma vez por ciclo (ou reage na janela do golpe); B oferece desistir. */
+/* A abre a barra de ações uma vez por ciclo (ou reage na janela do golpe); B oferece desistir. */
 static void on_key(const key_event_t *ev)
 {
     if (ev->type != KEY_PRESSED) {
@@ -255,14 +294,25 @@ static void on_key(const key_event_t *ev)
         }
         return;
     }
+    if (picking) {
+        /* ←/→ movem a seleção, A confirma e B fecha a barra */
+        if (ev->key == KEY_LEFT) {
+            pick_index = (pick_index + ACTION_COUNT - 1) % ACTION_COUNT;
+        } else if (ev->key == KEY_RIGHT) {
+            pick_index = (pick_index + 1) % ACTION_COUNT;
+        } else if (ev->key == KEY_A) {
+            pick_confirm(pick_index);
+        } else if (ev->key == KEY_B) {
+            picking = false;
+        }
+        return;
+    }
     if (ev->key == KEY_A && !pending && (int32_t)(now - menu_free_at) >= 0) { /* escolhida a ação, só no próximo ciclo */
-        static const char *const options[] = {"Atacar", "Habilidade", "Itens", "Desistir"};
-        at_modal = true;
+        picking = true;
+        pick_index = 0;
         notice[0] = '\0';
-        ui_choice("ACAO", options, 4, action_chosen, NULL);
     } else if (ev->key == KEY_B) {
-        at_modal = true;
-        ui_confirm("DESISTIR", "fight", "Desistir do combate?", "NAO", "SIM", forfeit_answer, NULL);
+        open_modal(MODAL_FORFEIT);
     }
 }
 
@@ -337,17 +387,19 @@ static void step(uint32_t now)
             animating = false;
             menu_free_at = now + MENU_GRACE_MS;
             if (combat.finished) {
-                if (at_modal) {
-                    /* O combate acabou com o menu de ações aberto: fecha os modais */
+                if (at_modal && !modal_hidden) {
+                    /* O combate acabou com um modal aberto: fecha os modais */
                     ui_back_until(&SCREEN_COMBAT);
-                    at_modal = pending = false;
                 }
+                at_modal = modal_hidden = picking = pending = false;
                 end_at = now;
                 if (combat.winner == 0) {
                     audio_victory();
                 } else {
                     audio_defeat();
                 }
+            } else if (modal_hidden) {
+                open_modal(modal_kind); /* o modal escondido pelo golpe volta */
             }
         }
         return;
@@ -477,6 +529,23 @@ static void draw_atb(gfx_t *g, int x, const fighter_t *l)
     gfx_rect_filled(g, x + 2, y + 2 + inner - rows, 2, rows, GFX_WHITE);
 }
 
+/*
+ * Barra de ações: os três ícones 8x8 lado a lado, separados por 1 px; o
+ * selecionado fica sobre um quadrado branco, com a cor invertida.
+ */
+static void draw_action_bar(gfx_t *g)
+{
+    for (int i = 0; i < ACTION_COUNT; i++) {
+        int x = ACTION_BAR_X + i * 9;
+        if (i == pick_index) {
+            gfx_rect_filled(g, x, ACTION_BAR_Y, 8, 8, GFX_WHITE);
+            ui_icon_mode(g, ACTION_ICONS[i], x, ACTION_BAR_Y, GFX_XOR, 0);
+        } else {
+            ui_icon_mode(g, ACTION_ICONS[i], x, ACTION_BAR_Y, GFX_COPY, 0);
+        }
+    }
+}
+
 /* Abertura: "Fulano  VS  Siclano" numa linha, ou em três se não couber. */
 static void draw_intro(gfx_t *g)
 {
@@ -514,9 +583,12 @@ static void on_draw(gfx_t *g, uint32_t now)
         draw_atb(g, 2, me);
         draw_atb(g, GFX_WIDTH - 8, op);
         /* Ícone do A piscando ao lado da barra do jogador enquanto ele pode escolher
-           a ação; some quando a ação é escolhida (só volta no próximo ciclo) */
+           a ação; some quando a ação é escolhida (só volta no próximo ciclo). Com a
+           barra de ações aberta, os três ícones ficam no lugar dele. */
         bool can_choose = !pending && !at_modal && !winding && !animating && (int32_t)(now - menu_free_at) >= 0;
-        if (can_choose && (now / 300) % 2 == 0) {
+        if (picking && !winding && !animating) {
+            draw_action_bar(g);
+        } else if (can_choose && !picking && (now / 300) % 2 == 0) {
             ui_icon_mode(g, "button_a", 10, 52, GFX_COPY, 0);
         }
     }

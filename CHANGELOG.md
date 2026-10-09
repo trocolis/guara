@@ -3,6 +3,17 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.11.0 — 2026-10-09
+
+### Combate
+- Barra de ações no lugar do modal: A mostra, no lugar do ícone do A, os ícones Atacar, Habilidade e Poções (8x8, separados por 1 px), com o selecionado invertido sobre um quadrado branco. ←/→ escolhem, A confirma e B fecha. Atacar vale direto; Habilidade e Poções abrem o modal de escolha. Desistir fica só no B.
+- Quando um golpe começa, o modal de escolha aberto some, a animação do ataque e do dano é exibida e depois ele volta.
+
+### Artes
+- Novos ícones `bitmaps/ui/action_atk`, `action_skill` e `action_potion` (8x8, com os PNG de origem).
+- Mordidas movidas para `bitmaps/animations/bite/`.
+- `bitmaps/ASSETS.md`: artes de `ui/` e `animations/` marcadas como próprias.
+
 ## v0.10.0 — 2026-10-09
 
 ### Combate

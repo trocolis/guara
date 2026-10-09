@@ -144,7 +144,7 @@ As fórmulas de ATB, dano físico, crítico, esquiva e multiplicador elemental s
   - **Defesa (quem é atacado):** dano ×0,5 (mínimo 1) e +15% de chance de o atacante errar, sorteada depois da esquiva.
   - O oponente acerta a janela com 25% de chance, tanto para atacar quanto para se defender.
   - Ordem de aplicação: esquiva → erro da defesa → dano base → elemento → crítico → defesa.
-- **Escolha antecipada:** a ação pode ser escolhida com a barra ATB incompleta e só executa quando ela enche. Depois de escolhida, não muda até o próximo ciclo (A não abre o modal). Depois de cada golpe, A só volta a abrir o modal após 600 ms, para um toque atrasado da janela não abrir o menu; desistir vale na hora. O combate segue em tempo real com o modal de ações aberto (o oponente continua agindo); se o combate terminar, os modais fecham.
+- **Escolha antecipada:** a ação pode ser escolhida com a barra ATB incompleta e só executa quando ela enche. Depois de escolhida, não muda até o próximo ciclo (A não abre a barra de ações). Depois de cada golpe, A só volta a abrir a barra após 600 ms, para um toque atrasado da janela não abrir o menu; desistir vale na hora. O combate segue em tempo real com a barra de ações ou um modal de escolha aberto (o oponente continua agindo); quando um golpe começa, o modal some e volta depois da animação; se o combate terminar, os modais fecham.
 - **IA do oponente:** cura com HP < 30% (se tiver habilidade e MP); senão, 40% de chance de usar uma habilidade de ataque; senão, ataca.
 - **Treino:**
   - Oponente com o mesmo nível e atributos ±10%.

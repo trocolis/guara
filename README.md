@@ -377,7 +377,7 @@ Mostra o Guará e suas animações, a barra superior e o balão de estados. A ab
 - **Área do Guará:** o sprite composto (ver *Sprites*) ampliado 2x, centralizado em X=64, com a base em Y=61 (2 px acima da borda inferior).
 - **Balão de estados:** do lado direito do aparelho (esquerda de quem olha, X=18, Y=14), o balão ![balão](./bitmaps/ui/speech_balloon.bmp) com o ícone do estado ou da emoção dentro, 2 px abaixo do topo do balão. O balão "respira": desce 8 px e volta suavemente num ciclo de 3 s. Estados físicos aparecem sempre; as emoções seguem as regras de exibição de [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
 - **Área de itens:** do lado esquerdo do aparelho (direita de quem olha, X=100, Y=34). Ao usar um item, a tela principal aparece com a animação e depois volta para onde estava; a animação não pode ser interrompida.
-	- **Comida:** o ícone aparece e, a cada 450 ms, é coberto por uma das mordidas ![mordida 1](./bitmaps/animations/bite_1.bmp) ![mordida 2](./bitmaps/animations/bite_2.bmp) ![mordida 3](./bitmaps/animations/bite_3.bmp) ![mordida 4](./bitmaps/animations/bite_4.bmp) ![mordida 5](./bitmaps/animations/bite_5.bmp) em modo máscara: o preto da mordida apaga a comida e o branco é transparente. Cada mordida toca um som no buzzer e deixa o Guará com o olhar feliz por meio quadro.
+	- **Comida:** o ícone aparece e, a cada 450 ms, é coberto por uma das mordidas ![mordida 1](./bitmaps/animations/bite/bite_1.bmp) ![mordida 2](./bitmaps/animations/bite/bite_2.bmp) ![mordida 3](./bitmaps/animations/bite/bite_3.bmp) ![mordida 4](./bitmaps/animations/bite/bite_4.bmp) ![mordida 5](./bitmaps/animations/bite/bite_5.bmp) em modo máscara: o preto da mordida apaga a comida e o branco é transparente. Cada mordida toca um som no buzzer e deixa o Guará com o olhar feliz por meio quadro.
 	- **Bebidas, poções e remédios:** o ícone pisca cada vez mais rápido por 1,6 s até sumir.
 	- Depois do uso, o Guará dá uma piscadela por 1,5 s.
 
@@ -457,12 +457,12 @@ Roda a 30 FPS e não deixa o aparelho entrar no modo Ocioso nem no deep sleep.
 - **Lutadores:** os dois Guarás em 1x, com a base em Y=50: o do jogador do lado esquerdo de quem olha (X=30) e o oponente do outro lado (X=98), espelhado, para os dois se olharem. A animação continua a 3 FPS, com o olhar de raiva.
 - **Vitais:** no topo de cada lado, uma barra dupla de 56 x 8 px. O HP preenche a parte de cima (2 px de altura) e o MP é uma linha de 1 px embaixo, na mesma moldura. O nome do lutador fica logo abaixo. No oponente, o preenchimento e o nome partem da borda direita.
 - **Barra de ação (ATB):** uma barra vertical de 6 x 16 px no canto inferior do lado de cada lutador. Enche de baixo para cima, no tempo dado pela AGI, e não pisca. Ao lado da barra do jogador, o ícone ![A](./bitmaps/ui/button_a.bmp) pisca enquanto ele pode escolher a ação e some depois da escolha; o oponente tem só a barra.
-- **Escolha da ação:** A abre o modal de ações a qualquer momento, mesmo com a barra incompleta. Depois da escolha, ela não muda até o próximo ciclo (A não abre o modal), e a ação só é executada quando a barra enche. O combate segue em tempo real com o modal aberto: as barras continuam enchendo e o oponente age; se o combate terminar, o modal fecha. Depois de cada golpe, A só volta a abrir o modal após 600 ms, para um toque atrasado da janela de reação não abrir o menu. As ações são:
-	- **Atacar:** ataque físico.
-	- **Habilidade:** escolha entre as habilidades ativas, com o custo de MP.
-	- **Itens:** escolha entre os itens do tipo poção possuídos.
-	- **Desistir:** confirmação; desistir vale na hora e encerra o combate como derrota.
-	- B também oferece desistir.
+- **Escolha da ação:** A abre a barra de ações a qualquer momento, mesmo com a barra ATB incompleta. Ela aparece no lugar do ícone do A: três ícones 8x8 lado a lado, separados por 1 px, e o selecionado fica sobre um quadrado branco, com a cor invertida. ←/→ movem a seleção, A confirma e B fecha a barra. Depois da escolha, a ação não muda até o próximo ciclo (A não abre a barra), e só é executada quando a barra ATB enche. Depois de cada golpe, A só volta a abrir a barra após 600 ms, para um toque atrasado da janela de reação não abrir o menu. As ações são:
+	- ![Atacar](./bitmaps/ui/action_atk.bmp) **Atacar:** ataque físico, escolhido direto.
+	- ![Habilidade](./bitmaps/ui/action_skill.bmp) **Habilidade:** abre o modal de escolha entre as habilidades ativas, com o custo de MP.
+	- ![Poções](./bitmaps/ui/action_potion.bmp) **Poções:** abre o modal de escolha entre os itens do tipo poção possuídos.
+	- **Desistir:** B abre a confirmação; desistir vale na hora e encerra o combate como derrota.
+	- **Tempo real:** o combate não pausa com a barra ou um modal aberto: as barras ATB continuam enchendo e o oponente age. Quando um golpe começa, o modal aberto some, a animação do ataque e do dano é exibida e depois ele volta. Se o combate terminar, o modal fecha.
 
 	![Ações do combate](./bitmaps/exemple/screen_combat_actions.bmp)
 
@@ -871,7 +871,7 @@ O Guará é composto de três partes, desenhadas em modo opaco (`copy`): corpo, 
 | Assustado (`scared`) | ![](./bitmaps/sprites/sprite_eye_black_scared.bmp) | ![](./bitmaps/sprites/sprite_eye_white_scared.bmp) | Veneno, queimadura ou gelo. |
 | Piscadela (`wink`) | ![](./bitmaps/sprites/sprite_eye_black_wink.bmp) | ![](./bitmaps/sprites/sprite_eye_white_wink.bmp) | Logo depois de comer ou usar um item. |
 
-**Outras animações:** `bite_1` a `bite_5` (mordidas da comida) e `hit_1` a `hit_7` (impacto no combate), em `bitmaps/animations/`.
+**Outras animações:** `bite_1` a `bite_5` (mordidas da comida), em `bitmaps/animations/bite/`, e `hit_1` a `hit_7` (impacto no combate), em `bitmaps/animations/hit/`.
 
 ___
 

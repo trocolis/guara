@@ -10,27 +10,27 @@ Lista de todos os bitmaps de `bitmaps/`, para registrar a origem e a licença de
 
 A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exemplo. `sem uso` indica bitmaps que nada referencia pelo nome; antes de apagar um deles, lembre que os jogos Lua do cartão podem usar qualquer bitmap da VROM.
 
-## `animations/`
+## `animations/bite/`
 
 | Arquivo | Tamanho | Uso | Origem |
 |---|---|---|---|
-| `bite_1.bmp` | 16x16 | mordidas da comida |  |
-| `bite_2.bmp` | 16x16 | mordidas da comida |  |
-| `bite_3.bmp` | 16x16 | mordidas da comida |  |
-| `bite_4.bmp` | 16x16 | mordidas da comida |  |
-| `bite_5.bmp` | 16x16 | mordidas da comida |  |
+| `bite_1.bmp` | 16x16 | mordidas da comida | Próprio |
+| `bite_2.bmp` | 16x16 | mordidas da comida | Próprio |
+| `bite_3.bmp` | 16x16 | mordidas da comida | Próprio |
+| `bite_4.bmp` | 16x16 | mordidas da comida | Próprio |
+| `bite_5.bmp` | 16x16 | mordidas da comida | Próprio |
 
 ## `animations/hit/`
 
 | Arquivo | Tamanho | Uso | Origem |
 |---|---|---|---|
-| `hit_1.bmp` | 16x16 | impacto no combate |  |
-| `hit_2.bmp` | 16x16 | impacto no combate |  |
-| `hit_3.bmp` | 16x16 | impacto no combate |  |
-| `hit_4.bmp` | 16x16 | impacto no combate |  |
-| `hit_5.bmp` | 16x16 | impacto no combate |  |
-| `hit_6.bmp` | 16x16 | impacto no combate |  |
-| `hit_7.bmp` | 16x16 | impacto no combate |  |
+| `hit_1.bmp` | 16x16 | impacto no combate | Próprio |
+| `hit_2.bmp` | 16x16 | impacto no combate | Próprio |
+| `hit_3.bmp` | 16x16 | impacto no combate | Próprio |
+| `hit_4.bmp` | 16x16 | impacto no combate | Próprio |
+| `hit_5.bmp` | 16x16 | impacto no combate | Próprio |
+| `hit_6.bmp` | 16x16 | impacto no combate | Próprio |
+| `hit_7.bmp` | 16x16 | impacto no combate | Próprio |
 
 ## `bitart/`
 
@@ -326,24 +326,27 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 
 | Arquivo | Tamanho | Uso | Origem |
 |---|---|---|---|
-| `battery_0.bmp` | 8x8 | barra superior |  |
-| `battery_1.bmp` | 8x8 | barra superior |  |
-| `battery_2.bmp` | 8x8 | barra superior |  |
-| `battery_3.bmp` | 8x8 | barra superior |  |
-| `button_a.bmp` | 10x10 | firmware / jogos de exemplo |  |
-| `button_b.bmp` | 10x10 | firmware / jogos de exemplo |  |
-| `mannequin.bmp` | 32x56 | firmware / jogos de exemplo |  |
-| `speech_balloon.bmp` | 20x24 | firmware / jogos de exemplo |  |
-| `status_alarm.bmp` | 8x8 | firmware / jogos de exemplo |  |
-| `status_bateria_ausente_8x8.bmp` | 8x8 | firmware / jogos de exemplo |  |
-| `status_bluetooth.bmp` | 8x8 | firmware / jogos de exemplo |  |
-| `status_mute.bmp` | 8x8 | firmware / jogos de exemplo |  |
-| `status_relogio_8x8.bmp` | 8x8 | **sem uso** |  |
-| `status_timer.bmp` | 8x8 | firmware / jogos de exemplo |  |
-| `wifi_1.bmp` | 8x8 | barra superior |  |
-| `wifi_2.bmp` | 8x8 | barra superior |  |
-| `wifi_3.bmp` | 8x8 | barra superior |  |
+| `action_atk.bmp` | 8x8 | barra de ações do combate | Próprio |
+| `action_potion.bmp` | 8x8 | barra de ações do combate | Próprio |
+| `action_skill.bmp` | 8x8 | barra de ações do combate | Próprio |
+| `battery_0.bmp` | 8x8 | barra superior | Próprio |
+| `battery_1.bmp` | 8x8 | barra superior | Próprio |
+| `battery_2.bmp` | 8x8 | barra superior | Próprio |
+| `battery_3.bmp` | 8x8 | barra superior | Próprio |
+| `button_a.bmp` | 10x10 | firmware / jogos de exemplo | Próprio |
+| `button_b.bmp` | 10x10 | firmware / jogos de exemplo | Próprio |
+| `mannequin.bmp` | 32x56 | firmware / jogos de exemplo | Próprio |
+| `speech_balloon.bmp` | 20x24 | firmware / jogos de exemplo | Próprio |
+| `status_alarm.bmp` | 8x8 | firmware / jogos de exemplo | Próprio |
+| `status_bateria_ausente_8x8.bmp` | 8x8 | firmware / jogos de exemplo | Próprio |
+| `status_bluetooth.bmp` | 8x8 | firmware / jogos de exemplo | Próprio |
+| `status_mute.bmp` | 8x8 | firmware / jogos de exemplo | Próprio |
+| `status_relogio_8x8.bmp` | 8x8 | **sem uso** | Próprio |
+| `status_timer.bmp` | 8x8 | firmware / jogos de exemplo | Próprio |
+| `wifi_1.bmp` | 8x8 | barra superior | Próprio |
+| `wifi_2.bmp` | 8x8 | barra superior | Próprio |
+| `wifi_3.bmp` | 8x8 | barra superior | Próprio |
 
 ## Arquivos de origem
 
-Algumas pastas também guardam os PNG de origem (por exemplo, `sprites/*.png` e `animations/hit/*.png`). Eles têm a mesma origem do BMP correspondente e não entram na VROM.
+Algumas pastas também guardam os PNG de origem (por exemplo, `sprites/*.png`, `animations/hit/*.png` e `ui/action_*.png`). Eles têm a mesma origem do BMP correspondente e não entram na VROM.
