@@ -3,6 +3,14 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## Sem versão — 2026-10-09
+
+### Documentação
+- README revisado para servir de especificação completa: alinhado ao firmware atual (telas, combate, energia, Wi-Fi, API Lua), com os formatos binários do `storage.bin`, do catálogo e do save, a organização do código e a ortografia corrigida.
+- Imagens no Markdown padrão (`![nome](./bitmaps/...)`) no lugar das referências do Obsidian, para aparecerem em qualquer leitor.
+- 33 capturas reais das telas em `bitmaps/exemple/screen_*.bmp`, ampliadas 4x.
+- `tools/console.py`: `screen arquivo.bmp` salva a captura no formato dos exemplos (BMP RGB565 512x256).
+
 ## v0.9.5 — 2026-10-09
 
 ### Combate

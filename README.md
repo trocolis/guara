@@ -1,8 +1,21 @@
 # Guará
 
-## Descrição do Projeto
+O Guará é um *pet* virtual com elementos de RPG para um console portátil baseado em ESP32. O jogador cria uma criatura, o Guará, que precisa ser alimentada, cuidada e equipada. Ela evolui por estágios e por naturezas elementais de acordo com o modo como é criada, luta na arena e joga minijogos em Lua carregados do cartão SD. No futuro, um Guará poderá se conectar a outro para trocar itens, jogar junto e batalhar.
 
-O projeto conciste em um eco sistema para criaturas virtuais chamadas Guarás. O Guará é um pet virtual que deve ser alimentado, cuidado e vestido pelo usuário, ele possui a capacidade de evoluir por diferentes linhas evolutivas dependendo do modo como é criado. Um Gurá pode se conectar com outro para realizar atividades como, troca de itens, jogos multiplayer, cooperativo e competitivo, e batalhas nos moldes de RPGs.
+Este documento é a especificação do projeto. Ele descreve o hardware, os formatos de dados, a interface e as regras do jogo com detalhe suficiente para que uma pessoa ou um agente recrie o sistema. Os números de balanceamento que esta especificação deixa em aberto estão em [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md), e o plano de fases e as decisões de hardware estão em [docs/PLAN.md](docs/PLAN.md).
+
+![Tela principal](./bitmaps/exemple/screen_home.bmp)
+
+**Sumário**
+
+1. [Hardware](#hardware)
+2. [Memória e armazenamento](#memória-e-armazenamento)
+3. [Firmware](#firmware)
+4. [Interface](#interface)
+5. [Menus](#menus)
+6. [Regras do jogo](#regras-do-jogo)
+7. [Sprites](#sprites)
+8. [Implementação](#implementação)
 
 ___
 
@@ -10,438 +23,512 @@ ___
 
 ### Componentes
 
-1. **CPU** - ESP32 WROOM 32 (Node MCU ESP32).
-2. **Vídeo** - Modulo Display OLED monocromatico SPI ou I2C com resolução de 128x64px 1.3" ( SH1106 1.3" I2C ou OLED 1.3" SPI ).
-3. **Áudio** - Buzer piezoelétrico (Buzer Genérico + BC337 + Res 1 K).
-4. **Armazenamento** - Além da memoria flash interna do ESP32, será utilizado um modulo Micro SD (Micro SD SPI TF).
-5. **Alimentação** - O dispositivo será alimentado por uma bateria de LiPo de 3.7V 1200mAh, com modulo de controle de carga e descarga e um modulo step-down para 3.3v (TP4056 + S09 DC-DC). O step-down S09 fornece até 1100 mA, bem acima do consumo medido do sistema (ver *Gerenciamento de Energia e Bateria*).
-6. **Controles** - Serão utilizados 6 botoes ligados as portas com pull-up interno do ESP32, Cima, Baixo, Esquerda, Direita, A (Confirmar) e B (Voltar/Cancelar) (Chaves Tates ).
-7. **Conectividade** - O dispositivo possui conexão Wifi e Bluetooth já presentes no modulo da CPU (Node MCU ESP32). 
-8. **Relógio (RTC)** - Módulo RTC DS3231 (I2C, endereço 0x68) com bateria própria (CR2032), compartilhando o barramento I2C do display. É a fonte de hora do sistema: mantém a hora com precisão em Deep Sleep e mesmo com a bateria LiPo descarregada. O RTC interno do ESP32 não é usado como referência de tempo, pois os pinos do cristal de 32 kHz (GPIO32/33) estão ocupados pelos botões e o oscilador RC interno deriva vários minutos por hora.
+1. **CPU:** ESP32-WROOM-32 (placa NodeMCU-32S), 4 MB de Flash.
+2. **Vídeo:** display OLED monocromático de 1,3" e 128x64 px, SH1106 em I2C (endereço `0x3C`). O suporte a OLED SPI fica para revisões futuras do hardware.
+3. **Áudio:** buzzer piezoelétrico acionado por transistor (buzzer + BC337 + resistor de 1 kΩ).
+4. **Armazenamento:** Flash interna do ESP32 e cartão microSD em SPI (módulo Micro SD SPI TF), formatado em FAT32.
+5. **Alimentação:** bateria LiPo de 3,7 V e 1200 mAh, módulo de carga TP4056 e conversor DC-DC S09 para 3,3 V (até 1100 mA).
+6. **Controles:** 6 botões táteis ligados ao GND, com pull-up interno: Cima, Baixo, Esquerda, Direita, A (confirmar) e B (voltar/cancelar).
+7. **Conectividade:** Wi-Fi e Bluetooth do próprio ESP32. Só o Wi-Fi está implementado.
+8. **Relógio (RTC):** módulo DS3231 (I2C, endereço `0x68`) com bateria CR2032, no mesmo barramento do display. É a fonte de hora do sistema e mantém a hora no deep sleep e com a LiPo descarregada. O RTC interno do ESP32 não serve de referência: os pinos do cristal de 32 kHz (GPIO32/33) estão ocupados pelos botões, e o oscilador RC interno deriva vários minutos por hora. Sem o DS3231, o firmware usa o RTC interno e sincroniza pela rede (NTP).
 
-### Esquema
+### Pinagem
 
-| #   | Portas do Node MCU                   | Conexão                       | Modulo             | Descrição                                                                          |
-| --- | ------------------------------------ | ----------------------------- | ------------------ | ---------------------------------------------------------------------------------- |
-| 1   | 3V3                                  | OUT+                          | S09 DC-DC          | Alimentação positiva de 3.3V regulada do sistema                                   |
-| 2   | GND                                  | GND (0V)                      | Todos              | Referência comum de terra (Ground)                                                 |
-| 3   | GPIO15 / ADC2_3 / Touch3 / HSPI_CS   | NC                            |                    |                                                                                    |
-| 4   | GPIO2 / ADC2_2 / Touch2 / CS         | NC                            |                    |                                                                                    |
-| 5   | GPIO4 / ADC2_0 / Touch0              | NC                            |                    |                                                                                    |
-| 6   | GPIO16 / U2_RXD                      | NC                            |                    |                                                                                    |
-| 7   | GPIO17 / U2_TXD                      | NC                            |                    |                                                                                    |
-| 8   | GPIO5 / VSPI_CS                      | CS                            | Micro SD SPI TF    | Chip Select (SS) do barramento SPI para o MicroSD                                  |
-| 9   | GPIO18 / SCK / VSPI_CLK              | SCK / CLK                     | Micro SD SPI TF    | Clock do barramento SPI (VSPI)                                                     |
-| 10  | GPIO19 / MISO / VSPI_MISO            | MISO / DO                     | Micro SD SPI TF    | Master In Slave Out (dados do MicroSD para o ESP32)                                |
-| 11  | GPIO21 / SDA                         | SDA                           | SH1106 1.3" I2C / DS3231 | Linha de dados seriais do barramento I2C (compartilhado entre display e RTC) |
-| 12  | GPIO3 / U0_RXD / CLK2                | RX (USB-Serial CP2102)        | CPU / Gravação USB | UART0 RX: recepção serial, upload de firmware e logs                               |
-| 13  | GPIO1 / U0_TXD / CLK3                | TX (USB-Serial CP2102)        | CPU / Gravação USB | UART0 TX: transmissão serial para log de console                                   |
-| 14  | GPIO22 / SCL                         | SCL                           | SH1106 1.3" I2C / DS3231 | Linha de clock serial do barramento I2C (400 kHz, compartilhado entre display e RTC) |
-| 15  | GPIO23 / MOSI / VSPI_MOSI            | MOSI / DI                     | Micro SD SPI TF    | Master Out Slave In (dados do ESP32 para o MicroSD)                                |
-| 16  | EN                                   | NC                            |                    |                                                                                    |
-| 17  | GPIO36 / ADC1_0 / SensVP             | NC                            |                    |                                                                                    |
-| 18  | GPIO39 / ADC1_3 / SensVN             | NC                            |                    |                                                                                    |
-| 19  | GPIO34 / ADC1_6                      | Divisor 100kΩ / 100kΩ         | Monitor de Bateria | Entrada ADC1_CH6 para leitura de tensão da bateria LiPo (funciona com Wi-Fi ativo) |
-| 20  | GPIO35 / ADC1_7                      | CHRG (pull-up externo 100kΩ)  | TP4056             | Detecção de carga: nível baixo enquanto a bateria carrega pelo USB (GPIO35 é só entrada e não tem pull-up interno) |
-| 21  | GPIO32 / ADC1_4 / Touch9 / XTAL32    | Botão Cima (Pull-up int.)     | Controles          | Direcional Cima (conecta ao GND; pino RTC para Deep Sleep Wake-up)                 |
-| 22  | GPIO33 / ADC1_5 / Touch8 / XTAL32    | Botão Baixo (Pull-up int.)    | Controles          | Direcional Baixo (conecta ao GND; pino RTC para Deep Sleep Wake-up)                |
-| 23  | GPIO25 / ADC2_8 / DAC1               | Buzzer / Transistor           | Áudio (Buzzer)     | Saída de áudio PWM (LEDC canal 0) para buzzer piezoelétrico                        |
-| 24  | GPIO26 / ADC2_9 / DAC2               | Botão B (Pull-up int.)        | Controles          | Botão B / Cancelar / Voltar (conecta ao GND ao pressionar)                         |
-| 25  | GPIO27 / ADC2_7 / Touch7             | Botão Direita (Pull-up int.)  | Controles          | Direcional Direita (conecta ao GND ao pressionar)                                  |
-| 26  | GPIO14 / ADC2_6 / Touch6 / HSPI_CLK  | Botão Esquerda (Pull-up int.) | Controles          | Direcional Esquerda (conecta ao GND ao pressionar)                                 |
-| 27  | GPIO12 / ADC2_5 / Touch5 / HSPI_MISO | Livre / NC                    | ESP32              | Strapping MTDI (deve estar LOW no boot para Flash 3.3V)                            |
-| 28  | GPIO13 / ADC2_4 / Touch4 / HSPI_MOSI | Botão A (Pull-up int.)        | Controles          | Botão A / Confirmar / Ação (conecta ao GND ao pressionar)                          |
-| 29  | GND                                  | GND (0V)                      | Todos              | Referência comum de terra (Ground)                                                 |
-| 30  | VIN                                  | IN+                           | TP4056 / USB       | Entrada de alimentação 5V (USB ou saída do módulo de bateria)                      |
+| # | Porta do NodeMCU | Conexão | Módulo | Descrição |
+|---|---|---|---|---|
+| 1 | 3V3 | OUT+ | S09 DC-DC | Alimentação de 3,3 V regulada |
+| 2 | GND | GND | Todos | Terra comum |
+| 3 | GPIO15 | — | — | Livre |
+| 4 | GPIO2 | — | — | Livre |
+| 5 | GPIO4 | — | — | Livre (reservado para o INT/SQW do DS3231, decisão D10) |
+| 6 | GPIO16 | — | — | Livre |
+| 7 | GPIO17 | — | — | Livre |
+| 8 | GPIO5 / VSPI_CS | CS | Micro SD | Chip select do cartão |
+| 9 | GPIO18 / VSPI_CLK | SCK | Micro SD | Clock do SPI |
+| 10 | GPIO19 / VSPI_MISO | MISO | Micro SD | Dados do cartão para o ESP32 |
+| 11 | GPIO21 | SDA | SH1106 / DS3231 | Dados do I2C (400 kHz, compartilhado) |
+| 12 | GPIO3 / U0_RXD | RX | USB-serial | UART0: gravação e console de depuração |
+| 13 | GPIO1 / U0_TXD | TX | USB-serial | UART0: log |
+| 14 | GPIO22 | SCL | SH1106 / DS3231 | Clock do I2C |
+| 15 | GPIO23 / VSPI_MOSI | MOSI | Micro SD | Dados do ESP32 para o cartão |
+| 16 | EN | — | — | Reset |
+| 17 | GPIO36 | — | — | Livre |
+| 18 | GPIO39 | — | — | Livre |
+| 19 | GPIO34 / ADC1_6 | Divisor 100 kΩ / 100 kΩ | Bateria | Tensão da LiPo (ADC1 funciona com o Wi-Fi ligado) |
+| 20 | GPIO35 / ADC1_7 | CHRG (pull-up externo de 100 kΩ) | TP4056 | Nível baixo enquanto carrega (o GPIO35 não tem pull-up interno) |
+| 21 | GPIO32 | Botão Cima | Controles | Pino RTC: acorda do deep sleep |
+| 22 | GPIO33 | Botão Baixo | Controles | Pino RTC: acorda do deep sleep |
+| 23 | GPIO25 | Base do transistor | Buzzer | PWM do LEDC (timer 0, canal 0) |
+| 24 | GPIO26 | Botão B | Controles | Pino RTC: acorda do deep sleep |
+| 25 | GPIO27 | Botão Direita | Controles | Move para a direita de quem olha (+X) |
+| 26 | GPIO14 | Botão Esquerda | Controles | Move para a esquerda de quem olha (−X) |
+| 27 | GPIO12 | — | — | Livre; *strapping* MTDI, precisa estar em nível baixo no boot |
+| 28 | GPIO13 | Botão A | Controles | Pino RTC: acorda do deep sleep |
+| 29 | GND | GND | Todos | Terra comum |
+| 30 | VIN | IN+ | TP4056 / USB | Entrada de 5 V |
+
+O mapeamento fica em `src/hal/pins.h`.
 
 ### Montagem
 
-Como o pino VIN do Node MCU sera ligado no modulo de recarga de bateria e o pino 3.3V na saída do modulo step-down, o regulador de tensão do Node MCU é removido, juntamente com o LED indicado de alimentação, o mesmo se aplica ao modulo Micro SD, caso ele possua um regulador integrado. Também sera removido os LEDs indicadores de todos o módulos que o possuam, com exceção o indicado de regarga.
+O VIN do NodeMCU vai ao módulo de carga e o 3V3 à saída do S09. Por isso o regulador de tensão do NodeMCU é removido, junto com o LED de alimentação. O mesmo vale para o módulo microSD, se ele tiver regulador. Os LEDs indicadores de todos os módulos são removidos, menos o de carga.
 
-A montagem dos protótipo sere feito em uma estrutura modelada e impressa em 3D, com os módulos inteigados por cabo paralelos estilo IDE,  posteriormente sera desenvolvida uma PCB que comporte todos os modulos.
+O protótipo é montado numa estrutura impressa em 3D, com os módulos ligados por cabos paralelos no estilo IDE. Depois será feita uma PCB para todos os módulos.
 
-O protótipo usado nos testes utiliza um display OLED SH1106 1.3" I2C (GPIO 21 SDA / GPIO 22 SCL) e o RTC DS3231 no mesmo barramento I2C. O pino CHRG do TP4056 (saída open-drain) é ligado ao GPIO 35 com resistor de pull-up externo de 100 kΩ para o 3.3V. O suporte a displays OLED SPI (compartilhando barramento VSPI) e circuitos dedicados de medição avançada de bateria serão implementados em revisões futuras de hardware e mantidos em branches dedicadas.
+### Energia e bateria
 
-### Gerenciamento de Energia e Bateria
+- **Detecção de carga:** o pino CHRG do TP4056 (GPIO35) fica em nível baixo enquanto a bateria carrega. Com a carga completa ele volta ao nível alto, então o sistema mostra só a porcentagem.
+- **Leitura da bateria:** divisor resistivo de 100 kΩ / 100 kΩ no GPIO34 (ADC1, canal 6), com calibração do ADC e média móvel.
+- **Curva de descarga:** mapeamento não linear entre 3,27 V (0%) e 4,20 V (100%).
+- **Modos de operação:**
+	1. **Ativo:** CPU em 160 MHz, telas a 20 FPS (30 FPS em jogos, combate e cronômetro).
+	2. **Ocioso:** entra após **30 s** sem nenhum botão.
+		- O brilho do display cai para o mínimo e as telas são desenhadas a no máximo **5 FPS** (a animação do Guará já roda a 3 FPS).
+		- A CPU varia entre 80 e 160 MHz (frequência dinâmica do ESP-IDF) e entra em *light sleep* automático sempre que não há tarefa para executar. O barramento APB fica em 80 MHz, então UART, LEDC e I2C não mudam de clock.
+		- Os botões passam a ser lidos a cada 20 ms em vez de 5 ms.
+		- Enquanto o buzzer toca, o *light sleep* fica bloqueado, porque o LEDC para no *light sleep*. A música continua tocando no modo Ocioso.
+		- As telas que impedem o deep sleep (jogos, combate, cronômetro e alarme tocando) também impedem o modo Ocioso.
+		- O primeiro toque em qualquer botão só volta ao modo Ativo, sem agir na tela; a tecla é ignorada até ser solta.
+		- O modo Ocioso não depende da configuração de Economia e vale também com o USB ligado.
+	3. **Deep sleep:** entra após o tempo de **Economia** sem uso (Ajustes > Energia: 1, 2, 5 ou 10 min, ou desativado). Antes de dormir, o sistema grava o save pendente, desmonta o cartão SD e desliga o Wi-Fi. A CPU e os rádios desligam; ficam ligados o domínio RTC e a RTC RAM, com o estado do Guará. O display fica desligado (comando `0xAE`).
+		> ⏳ Pendente (decisão D7 em `docs/PLAN.md`): o consumo real em deep sleep ainda precisa ser medido. Com a montagem atual (divisor da bateria ligado direto, conversor USB-serial do NodeMCU, OLED e SD sem corte de energia), ele fica bem acima dos ~10 µA do ESP32 sozinho.
+	4. **Despertar:** pelos botões Cima, Baixo, A e B, ou pelo timer, no horário do próximo despertador ou do fim do temporizador.
+		- O coprocessador **ULP** confere os quatro botões a cada ~20–30 ms e acorda o chip quando um deles vai a nível baixo. No ESP32, o `ext1` só acorda com "todos os pinos em nível baixo" ou "algum pino em nível alto", o que não serve para vários botões ligados ao GND, e o `ext0` não pode ser usado junto com o ULP. Se o ULP falhar, o Cima volta a acordar pelo `ext0`. Esquerda e Direita não acordam o aparelho.
+		- Antes de dormir, todas as fontes de despertar são limpas (o *light sleep* automático deixa o timer e a UART ligados), e o display só é desligado depois de terminar a transmissão em andamento. Um corte no meio de um byte deixaria o SH1106 segurando o SDA. No boot, um SDA preso é destravado com até 9 pulsos no SCL e uma condição de STOP.
+		- O timer do deep sleep usa o oscilador RC interno e pode atrasar despertadores longos (decisão D10, pendente).
+- **Bateria crítica:** três leituras seguidas abaixo de 10% (3,45 V) sem carregar disparam um salvamento de emergência na Flash, o aviso "Bateria fraca / Conecte o carregador" por 3 s e um deep sleep sem timer.
+- **Recuperação temporal:** no boot e ao acordar, o sistema carrega o último save válido (da RTC RAM ou da Flash), calcula o tempo decorrido (Δt) entre a hora atual e o horário do save e simula o ciclo de vida minuto a minuto, até 7 dias. Durante essa simulação, travas impedem que o HP fique abaixo de 20% e os vitais abaixo de 5%, para o Guará não desmaiar sem chance de reação.
 
-O sistema possui um subsistema dedicado de gerenciamento de energia para maximizar a autonomia da bateria LiPo de 3.7V 1200mAh:
-- **Detecção de Carga:** O pino CHRG do TP4056 no GPIO 35 indica quando a bateria está sendo carregada pelo USB (nível baixo). Com a carga completa, o CHRG volta ao nível alto, então nesse estado o sistema exibe apenas a porcentagem da bateria.
-- **Monitoramento Analógico:** Utiliza um divisor de tensão resistivo (100 kΩ / 100 kΩ) conectado ao pino GPIO 34 (ADC1 canal 6). Como o canal pertence ao ADC1, as medições de tensão funcionam perfeitamente mesmo com o rádio Wi-Fi ligado e transmitindo.
-- **Curva de Descarga LiPo:** Mapeamento não-linear calibrado entre 3.27V (0% de carga) e 4.20V (100% de carga completa).
-- **Estados de Operação e Economia:**
-	1. **Modo Ativo (Normal):** Consumo entre 80 mA e 120 mA, tela OLED ativa a 20 FPS (30 FPS em jogos).
-	2. **Ocioso (Light Sleep):** Após **30 s** sem nenhum botão, o sistema entra no modo Ocioso:
-		- O brilho do display cai para o mínimo e as telas passam a ser desenhadas a no máximo **5 FPS** (a animação do Guará já roda a 3 FPS).
-		- A CPU passa a variar entre 80 e 160 MHz (frequência dinâmica do ESP-IDF) e entra em *light sleep* automático sempre que não há tarefa para executar; o barramento APB fica em 80 MHz, então UART, LEDC e I2C não mudam de clock.
-		- Os botões passam a ser lidos a cada 20 ms (em vez de 5 ms).
-		- Enquanto o buzzer toca, o *light sleep* fica bloqueado (o LEDC para no *light sleep*); a música continua tocando no modo Ocioso.
-		- Telas que impedem o deep sleep (jogos, combate, cronômetro e alarme tocando) também impedem o modo Ocioso.
-		- O primeiro toque em qualquer botão só restaura o modo Ativo, sem agir na tela; a tecla é ignorada até ser solta.
-		- O modo Ocioso não depende da configuração de Economia e vale também com o USB conectado.
-	3. **Deep Sleep (Hibernação Total):** Desligamento da CPU principal e dos rádios, preservando unicamente o coprocessador RTC e a memória RTC Fast RAM (8 KB) com o estado completo do Guará e da mochila, com o display e o cartão SD em modo de espera.
-	   > ⏳ Pendente (decisão D7 em `docs/PLAN.md`): o consumo real em Deep Sleep ainda precisa ser medido. Com a montagem atual (divisor de bateria ligado direto, conversor USB-serial do NodeMCU, OLED e SD sem corte de energia) ele fica bem acima dos ~10 µA do ESP32 isolado.
-	4. **Despertar (*Wake-up*):** O sistema acorda pelos botões Cima, Baixo, A e B ou por alarme temporizado configurado no RTC (`esp_sleep_enable_timer_wakeup`) para acionamento de despertadores e temporizadores:
-		- Os quatro botões (Cima GPIO 32, Baixo GPIO 33, A GPIO 13 e B GPIO 26) são conferidos pelo coprocessador **ULP** a cada ~20–30 ms, que acorda o chip quando um deles vai a nível baixo. No ESP32, o `ext1` só acorda com "todos os pinos em nível baixo" ou "algum em nível alto" (não serve para vários botões ligados ao GND) e o `ext0` não pode ser usado junto com o ULP. Se o ULP falhar, o Cima volta a acordar pelo `ext0`.
-		- Antes de dormir, todas as fontes de despertar são limpas (o *light sleep* automático deixa timer e UART ligados) e o display é desligado só depois de terminar a transmissão em andamento; um corte no meio de um byte deixaria o SH1106 segurando o SDA. No boot, um SDA preso é destravado com até 9 pulsos no SCL e uma condição de STOP.
-		- Os direcionais Esquerda e Direita não acordam o aparelho.
-- **Proteção Crítica contra Queda de Energia (*Emergency Flush*):** Quando a tensão da bateria atinge o limite crítico (< 10% / 3.45V), o sistema dispara um salvamento de emergência forçado para os setores rotativos da Flash (*Pilar 3*) e entra em suspensão profunda indefinida com display e periféricos desenergizados, prevenindo corrupção de dados.
-- **Recuperação Temporal Pós-Sono / Reinício (Cálculo de Desgaste Acumulado):** Ao inicializar ou acordar de um longo período de repouso, o sistema recupera o último Save State válido (da RTC Fast RAM ou do setor rotativo da Flash) e calcula o $\Delta t$ (tempo decorrido em minutos entre o timestamp atual do DS3231 e o timestamp do último save). O motor do ciclo de vida projeta o desgaste acumulado de Necessidades (Alimentação, Energia, Humor e Saúde) de forma gradual e segura, aplicando travas de proteção que evitam que o Guará desmaie imediatamente sem chance de reação do jogador.
+___
 
-### Memória e Armazenamento
+## Memória e armazenamento
 
-A Flash interna de 4 MB é dividida pela tabela de partições `partitions.csv`:
+### Partições
+
+A Flash de 4 MB é dividida pela tabela `partitions.csv`:
 
 | Partição | Tipo | Subtipo | Offset | Tamanho | Conteúdo |
 |---|---|---|---|---|---|
-| `nvs` | data | nvs | 0x9000 | 20 KB | Configurações do sistema (Wi-Fi e redes salvas, mudo, tempo de economia, hora de dormir, fuso horário) |
-| `otadata` | data | ota | 0xE000 | 8 KB | Controle de qual partição OTA está ativa |
-| `ota_0` | app | ota_0 | 0x10000 | 1.472 KB | Imagem ativa do firmware |
-| `ota_1` | app | ota_1 | 0x180000 | 1.472 KB | Imagem secundária para atualização segura (Dual OTA com rollback) |
-| `storage` | data | 0x99 | 0x2F0000 | 1.024 KB | VROM e catálogo binário, **somente leitura** em execução |
-| `save` | data | 0x9A | 0x3F0000 | 8 KB | Save State rotativo (Pilar 3) |
+| `nvs` | data | nvs | 0x9000 | 20 KB | Configurações (Wi-Fi e redes salvas, mudo, volume, economia, hora de dormir e de acordar, fuso horário) |
+| `otadata` | data | ota | 0xE000 | 8 KB | Qual partição OTA está ativa |
+| `ota_0` | app | ota_0 | 0x10000 | 1472 KB | Firmware ativo |
+| `ota_1` | app | ota_1 | 0x180000 | 1472 KB | Firmware secundário, para atualização segura com *rollback* |
+| `storage` | data | 0x99 | 0x2F0000 | 1024 KB | VROM e catálogo, **somente leitura** |
+| `save` | data | 0x9A | 0x3F0000 | 8 KB | Anel de saves |
 
-Além da Flash interna, o **Cartão MicroSD (FAT32 SPI)** é o armazenamento em massa para mídias externas, jogos do console virtual, músicas MIDI, livros, despertadores e backups.
+O cartão microSD (FAT32, montado em `/sdcard`) guarda o conteúdo do usuário: jogos, músicas MIDI, livros, imagens, despertadores e arquivos de atualização.
 
-#### Proteção da Memória Flash: Os 3 Pilares
+### Três camadas independentes
 
-Para evitar o desgaste prematuro da memória Flash interna do ESP32 (que suporta tipicamente 100.000 ciclos de gravação), o sistema adota uma arquitetura em 3 pilares:
+1. **Firmware** (`ota_0`/`ota_1`): o código C compilado com o PlatformIO, incluindo drivers, interface, regras do jogo, combate e a VM Lua. É atualizado por USB ou pelo cartão SD sem tocar nas outras partições.
+2. **Dados** (`storage`): a VROM (todos os bitmaps 1-bit) e o catálogo binário (itens, equipamentos e habilidades), gerados pelo `tools/storage-packer/pack_storage.py`. A partição é mapeada na memória com `esp_partition_mmap` e lida direto da Flash, sem cópia para a RAM. Pode ser regravada sem recompilar o firmware e sem apagar o Guará.
+3. **Jogador** (`save` e `nvs`): o save state e as configurações. Só são apagados pela opção **Reiniciar** de Ajustes ou por uma gravação completa da Flash.
+
+### Proteção da Flash: os 3 pilares
+
+A Flash suporta cerca de 100.000 ciclos de gravação por setor. Para não desgastá-la, o save segue três pilares:
 
 ```mermaid
 graph TD
-    subgraph "Camada 1: Execução e Jogo (20 FPS)"
-        RAM["SRAM Principal (Heap)<br/>Atualização instantânea"]
+    subgraph "Execução"
+        RAM["SRAM: estado do Guará (g_guara)"]
     end
-
-    subgraph "Camada 2: Hibernação Sem Desgaste"
-        RTC["ESP32 RTC Fast RAM (8 KB)<br/>Mantém Guará + Inventário em Deep Sleep<br/>Desgaste: ZERO"]
+    subgraph "Hibernação sem desgaste"
+        RTC["RTC RAM: espelho de 512 bytes, mantido no deep sleep"]
     end
-
-    subgraph "Camada 3: Cofre Não-Volátil (Flash)"
-        DF["Filtro de Gatilhos (Dirty Flag)<br/>Salva em Level Up, Saída de Menus e Bateria Baixa"]
-        RING["2 Setores Rotativos (8 KB Ping-Pong)<br/>16 slots circulares de 512 bytes<br/>1.600.000 gravações garantidas"]
+    subgraph "Flash"
+        DF["Dirty flag: grava só em eventos importantes"]
+        RING["Anel: 2 setores de 4 KB, 16 slots de 512 bytes"]
     end
-
-    RAM -->|Sync no loop| RTC
-    RTC -->|Gatilho disparado| DF
-    DF -->|Gravação no próximo slot| RING
-    RING -->|Restauração no boot frio| RTC
-    RTC -->|Carga inicial| RAM
+    RAM -->|a cada alteração| RTC
+    RTC -->|evento importante com alterações| DF
+    DF -->|próximo slot| RING
+    RING -->|boot frio| RAM
+    RTC -->|acordar do deep sleep| RAM
 ```
 
-1. **Pilar 1: Memória RTC Fast RAM (`RTC_DATA_ATTR`)**
-   - O **Save State compacto de 512 bytes** fica residente na RTC Fast RAM do ESP32.
-   - Durante a rotina normal do jogador (alimentar, brincar, hibernar/Deep Sleep), **nenhum ciclo de Flash é gasto**. A bateria mantém os dados preservados enquanto o ESP32 dorme.
-2. **Pilar 2: Gravação Inteligente por Eventos Críticos (*Event-Driven Flush* com *Dirty Flag*)**
-   - A gravação física na Flash não ocorre por ciclos de tempo rápidos ou decaimento natural de fome.
-   - É disparada apenas em eventos de alto valor: *Level Up*, evolução, saída de telas com alterações pendentes (*Dirty Flag* ao sair da mochila) e emergência de bateria fraca (< 10% / 3,45V).
-3. **Pilar 3: Setores Rotativos com Nivelamento de Desgaste (*Wear-Leveling Ping-Pong*)**
-   - São reservados **2 setores físicos de 4.096 bytes** (8 KB no total), que formam a partição dedicada `save`.
-   - Cada setor abriga 8 slots de 512 bytes, totalizando **16 posições rotativas sequenciais**.
-   - Cada salvamento avança para o próximo slot livre; um setor só é apagado após o preenchimento de seus 8 slots.
-   - Isso multiplica a vida útil da Flash por 16: **1.600.000 gravações suportadas (> 87 anos de uso diário)**.
+1. **RTC RAM:** toda alteração no Guará é espelhada na RTC RAM (`RTC_DATA_ATTR`), que sobrevive ao deep sleep. A rotina normal (alimentar, brincar, dormir) não grava na Flash.
+2. **Gravação por eventos:** a gravação na Flash acontece só quando há alterações pendentes (*dirty flag*) e ocorre um destes eventos: voltar ao menu principal ou à tela principal, subir de nível, evoluir, desmaiar, entrar em deep sleep ou bateria crítica.
+3. **Anel com nivelamento de desgaste:** a partição `save` tem 2 setores de 4 KB com 8 slots de 512 bytes cada, 16 slots no total. Cada gravação usa o próximo slot, e um setor só é apagado quando o anel volta a ele. No boot vale o slot com CRC válido e o maior contador de gravações. Isso multiplica a vida útil por 16: cerca de 1.600.000 gravações.
 
-#### Arquitetura em Camadas: Firmware, Storage e Dados do Jogador
+### Formato do `storage.bin`
 
-O sistema é estritamente dividido em três camadas desacopladas. Firmware e storage podem ser atualizados de forma independente, e nenhuma das duas atualizações apaga os dados do jogador:
+Gerado por `tools/storage-packer/pack_storage.py` e lido por `lib/core/src/storage.c`. Tudo em *little-endian*; o espaço não usado fica com `0xFF`, o valor da Flash apagada. Qualquer mudança neste formato precisa ser feita no packer, no leitor do firmware e neste README.
 
-1. **Camada 1 — Lógica do Firmware (Partições `ota_0` e `ota_1` - 1.472 KB cada):**
-   - Contém o código executável C/C++ compilado pelo PlatformIO: kernel do sistema, FreeRTOS tasks, drivers de periféricos (I2C, SPI, ADC, PWM LEDC), máquina de estados da UI, motor de RPG/combate e a máquina virtual Lua 5.4.
-   - Atualizada via compilação/upload de firmware ou Dual OTA via Wi-Fi sem afetar as partições `storage`, `save` e `nvs`.
+| Offset | Bloco | Conteúdo |
+|---|---|---|
+| 0x00 | Cabeçalho (64 bytes) | `GSTR` (4), versão do formato = 2 (u16), flags (u16), offset da VROM (u32), tamanho da VROM (u32), offset do catálogo (u32), tamanho do catálogo (u32), 36 bytes reservados, CRC32 dos 60 bytes anteriores (u32) |
+| 0x40 | VROM | Cabeçalho `GVRO` (4), número de bitmaps (u32), tamanho de cada entrada do índice = 44 (u32), tamanho dos dados (u32); índice; dados dos bitmaps |
+| alinhado a 4 bytes | Catálogo | Cabeçalho `GCAT` (4), versão = 1 (u16), tamanho do registro = 176 (u16), número de itens, de equipamentos e de habilidades (u16 cada), reservado (u16); registros |
 
-2. **Camada 2 — Dados, VROM e Catálogos (Partição `storage` - 1.024 KB, subtipo `0x99`):**
-   - Contém os ativos empacotados em binário dedicados:
-     - **VROM (Virtual ROM de Gráficos):** Setor da partição que armazena todos os bitmaps monocromáticos de 1-bit do sistema (ícones 16x16, partes modulares dos sprites do Guará, manequim de 32x56 e telas).
-     - **Catálogo Binário:** Banco de dados imutável com as definições, tipos, efeitos e afinidades dos 64 itens, 64 equipamentos e 64 habilidades.
-   - **Atualização Independente:** A partição `storage` pode ser regravada ou atualizada via imagem binária (`storage.bin`) separadamente, permitindo expandir o catálogo com novos itens, trocar ou corrigir sprites e ícones da VROM sem precisar recompilar ou alterar o executável do firmware (e vice-versa). Como os saves ficam em outra partição, regravar o `storage` não apaga o Guará.
-   - Em execução, a partição é mapeada na memória (`esp_partition_mmap`) e lida diretamente, sem cópia para a RAM.
+**Índice da VROM:** uma entrada de 44 bytes por bitmap, ordenada pelo nome em bytes UTF-8, para busca binária: nome (32 bytes, terminado em zero), largura (u16), altura (u16), offset dos pixels a partir do início dos dados (u32) e tamanho em bytes (u32). Os pixels ficam em linhas (*row-major*), cada linha com `ceil(largura / 8)` bytes, bit mais significativo primeiro, 1 = pixel aceso.
 
-3. **Camada 3 — Dados do Jogador (Partições `save` e `nvs`):**
-   - **`save` (8 KB, subtipo `0x9A`):** Os dois setores de 4 KB do Save State com wear-leveling (Pilar 3).
-   - **`nvs`:** Configurações do sistema, gravadas pela API NVS do ESP-IDF, que já faz o próprio nivelamento de desgaste.
-   - Só são apagadas pela opção **Reiniciar** (*Factory Rebirth*) ou por uma gravação completa da Flash.
+- O nome do bitmap é o nome do arquivo sem `.bmp`, com até 31 bytes. A pasta não faz parte do nome, então os nomes precisam ser únicos em toda a pasta `bitmaps/`.
+- Entram todos os `.bmp` de `bitmaps/` e das subpastas, menos os de `bitmaps/exemple/` (capturas e mockups). Outros formatos, como PNG, são ignorados.
+- O packer só aceita BMP de 1 bit (paleta de 2 cores) e falha em nomes duplicados.
 
-#### Domínios do Save State (512 Bytes)
+**Registro do catálogo (176 bytes)**, igual para itens, equipamentos e habilidades:
 
-O Save State é um bloco fixo de 512 bytes (little-endian) com domínios em offsets fixos, serializado por `lib/core/src/save.c`. São 190 bytes úteis; o restante fica reservado para expansão:
+| Offset | Campo |
+|---|---|
+| 0 | id, tipo, natureza/afinidade, alvo, poder, custo de MP, número de efeitos, número de sobre-efeitos (u8 cada) |
+| 8 | 4 efeitos: alvo (u8), preenchimento (u8), valor (i16) |
+| 24 | 2 sobre-efeitos: estado (u8), valor (i8, em %) |
+| 28 | 4 bytes reservados |
+| 32 | slug (16 bytes), ícone (32 bytes, nome na VROM), nome (32 bytes), descrição (64 bytes), textos em UTF-8 terminados em zero |
 
-| Offset | Domínio | Tamanho | Descrição dos Dados |
+Os registros ficam em sequência: primeiro os itens, depois os equipamentos e as habilidades. O registro do item N é o N-ésimo da sua tabela, então a leitura é direta pelo ID.
+
+### Catálogo
+
+O catálogo é definido pelo autor em [CATALOG.md](CATALOG.md) e convertido para `catalog/items.csv`, `catalog/equipment.csv` e `catalog/skills.csv`, que o packer lê. Cada catálogo tem até 64 registros, com IDs sequenciais a partir de 0.
+
+| Coluna | Itens | Equipamentos | Habilidades |
 |---|---|---|---|
-| 0 | **HeaderDomain** | 16 bytes | Magic (`GUARA`, 5 bytes), versão do formato (u8), flags (u16), timestamp UNIX (u32) e contador sequencial de escrita (u32) |
-| 16 | **IdentityDomain** | 20 bytes | Nome (10 chars + terminador), UID (u32), variante da cabeça (1..9), cor (0/1), natureza de nascimento, natureza atual, estágio de evolução |
-| 36 | **VitalsDomain** | 16 bytes | HP, HP máx., MP, MP máx. (u16) e Energia, Humor, Alimentação, Saúde em centésimos de % (u16, 10000 = 100%) |
-| 52 | **StatsDomain** | 21 bytes | Nível (1..99), XP (u32), idade em minutos (u32), ATK, DEF, FOR, AGI, INT, SOR (u16) |
-| 73 | **GaugesDomain** | 8 bytes | Medidores ocultos com balanço bipolar (4 × i16: Vitórias×Derrotas, Cuidado×Negligência, Raiva×Tristeza, Dia×Noite) |
-| 81 | **AffinitiesDomain** | 10 bytes | Afinidade elemental em centésimos de % (Fogo, Terra, Água, Ar, Neutro) |
-| 91 | **InventoryDomain** | 64 bytes | Quantidade (0..255) de cada um dos 64 itens do catálogo, indexada pelo ID |
-| 155 | **EquipmentDomain** | 15 bytes | Máscara de bits dos 64 equipamentos possuídos (8 bytes) + 7 slots equipados (0xFF = vazio) |
-| 170 | **SkillsDomain** | 12 bytes | Máscara de bits das 64 habilidades possuídas (8 bytes) + 4 habilidades ativas |
-| 182 | **StatusFlagsDomain** | 8 bytes | Máscara de estados físicos/emocionais (u32), minutos desmaiado (u16), minutos sem interação (u16) |
-| 190 | *Reservado* | 318 bytes | Expansão futura (zeros) |
-| 508 | **ChecksumDomain** | 4 bytes | CRC32 dos 508 bytes anteriores; saves corrompidos são descartados |
+| `id`, `slug` | ID numérico; identificador textual (até 15 caracteres, usado pelos jogos Lua) | igual | igual |
+| `name`, `description` | até 20 e 48 caracteres | igual | igual |
+| `icon` | nome de um bitmap da VROM | igual | igual |
+| `type` | `FOOD`, `DRINK`, `POTION` | `HEAD`, `BODY`, `HAND_ATK`, `HAND_DEF`, `FEET`, `ACCESSORY` | `ATTACK`, `HEAL`, `EFFECT` |
+| `affinity` / `nature` | `FIRE`, `EARTH`, `WATER`, `AIR`, `NEUTRAL` | igual | qualquer natureza |
+| `effects` | até 4 modificadores `ALVO±valor` separados por `;`, entre −9999 e 9999. Alvos: `HP`, `MP`, `ENERGY`, `MOOD`, `SATIETY`, `HEALTH`, `ATK`, `DEF`, `STR`, `AGI`, `INT`, `LUK` | igual | — (usa `power` e `mp_cost`) |
+| `status_effects` | até 2 `ESTADO±%`; valor negativo é chance de cura (`POISONED-100`), `ALL-100` cura todos | igual | chance (%) de aplicar o estado |
+| `target` | — | — | `USER` ou `OPPONENT` |
 
-Os números de jogo que o README não define (taxas de desgaste, curva de XP, níveis dos estágios, fórmulas complementares de combate) estão em [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
+Os nomes dos estados são `SLEEPING`, `FAINTED`, `POISONED`, `PARALYZED`, `BURNED`, `FROZEN`, `CONFUSED`, `CURSED`, `TIRED`, `HUNGRY`, `HAPPY`, `SAD`, `ANGRY` e `BORED`. As enumerações estão em `lib/core/src/types.h` e precisam bater com as do packer.
+
+O **catálogo** é o conjunto de objetos que existem no jogo e não muda durante o uso. O **inventário** é o que o jogador possui: a quantidade de cada item, indexada pelo ID, e as máscaras de equipamentos e habilidades possuídos, todos no save state.
+
+### Save state (512 bytes)
+
+Bloco fixo serializado por `lib/core/src/save.c`, com os domínios em offsets fixos. São 190 bytes úteis; o resto fica reservado:
+
+| Offset | Domínio | Tamanho | Conteúdo |
+|---|---|---|---|
+| 0 | Header | 16 | Magic `GUARA` (5 bytes), versão do formato (u8), flags (u16), horário UNIX do save (u32), contador de gravações (u32) |
+| 16 | Identity | 20 | Nome (10 caracteres + terminador), UID (u32), variante da cabeça (1..9), cor (0 preto, 1 branco), natureza de nascimento, natureza atual, estágio (0..4) |
+| 36 | Vitals | 16 | HP, HP máximo, MP, MP máximo (u16); Energia, Humor, Alimentação, Saúde em centésimos de % (u16, 10000 = 100%) |
+| 52 | Stats | 21 | Nível (u8), XP (u32), idade em minutos (u32), ATK, DEF, FOR, AGI, INT, SOR (u16) |
+| 73 | Gauges | 8 | Medidores ocultos (4 × i16, de −10000 a 10000): Vitórias × Derrotas, Cuidado × Negligência, Raiva × Tristeza, Dia × Noite |
+| 81 | Affinities | 10 | Afinidades em centésimos de % (Fogo, Terra, Água, Ar, Neutro) |
+| 91 | Inventory | 64 | Quantidade (0..255) de cada item, indexada pelo ID |
+| 155 | Equipment | 15 | Máscara dos 64 equipamentos possuídos (8 bytes) e IDs dos 7 slots equipados (`0xFF` = vazio) |
+| 170 | Skills | 12 | Máscara das 64 habilidades possuídas (8 bytes) e as 4 habilidades ativas |
+| 182 | StatusFlags | 8 | Máscara de estados (u32), minutos desmaiado (u16), minutos sem interação (u16) |
+| 190 | Reservado | 318 | Zeros |
+| 508 | Checksum | 4 | CRC32 dos 508 bytes anteriores; saves corrompidos são descartados |
+
+A máscara de estados usa o bit N para o estado N de `types.h`. O bit 10 (`ST_RECOVERING`) é interno: indica que a recuperação de HP está ligada (ver *Desgaste*).
 
 ___
 
 ## Firmware
 
-### Ambiente de Desenvolvimento & Ferramenta de Build
+### Ambiente de desenvolvimento
 
-O desenvolvimento, gerenciamento de dependências e compilação do firmware do Guará são padronizados através do **PlatformIO** (utilizando a extensão oficial **PlatformIO IDE** já instalada no ambiente):
+- **Build:** PlatformIO (`platformio.ini` na raiz), plataforma `espressif32@7.1.3`, placa `nodemcu-32s`.
+- **Framework:** ESP-IDF 6.1 puro (`framework = espidf`), com FreeRTOS e drivers próprios. O Arduino não é usado.
+- **Lua:** Lua 5.4.7 incorporado em `lib/lua`, compilado com `LUA_32BITS` e sem as bibliotecas `io`, `os`, `package` e `debug`.
+- **Ambientes:** `esp32` (firmware) e `native` (testes unitários da lógica no computador, com Unity).
+- **`sdkconfig.defaults`:** tabela de partições própria, `FREERTOS_HZ=1000`, pilha da task principal de 16 KB, nomes longos em UTF-8 no FAT, gerenciamento de energia (`PM_ENABLE`, `FREERTOS_USE_TICKLESS_IDLE`) e ULP FSM com 128 bytes reservados.
+- **Serial:** 115200 baud pela UART0.
 
-- **Gerenciador de Build:** PlatformIO (`platformio.ini` na raiz do projeto).
-- **Plataforma:** `espressif32`.
-- **Placa Alvo:** `nodemcu-32s` (ESP32 WROOM-32, 4MB Flash interna).
-- **Framework:** ESP-IDF 6.1 puro (`framework = espidf`, plataforma `espressif32@7.1.3` fixada no `platformio.ini`), com FreeRTOS nativo e drivers próprios para os periféricos. O Arduino não é usado.
-- **Máquina Virtual:** Lua 5.4 embutida como componente.
-- **Mapeamento de Partições:** Tabela customizada `partitions.csv` (`nvs`, `otadata`, `ota_0` e `ota_1` de 1472 KB, `storage` de 1024 KB subtipo `0x99` e `save` de 8 KB subtipo `0x9A`; ver *Memória e Armazenamento*).
-- **Ambientes:** `esp32` para o firmware do aparelho e `native` para os testes unitários da lógica de jogo e de serialização, executados no computador.
-- **Gravação do Storage:** A imagem `storage.bin` gerada por `tools/storage-packer` é gravada apenas no offset da partição `storage` (0x2F0000), sem tocar no firmware nem nos saves.
-- **Comunicação Serial:** Velocidade de monitor serial em 115200 baud e upload via UART0 (CP2102).
-
-### Comandos de Desenvolvimento
+### Comandos
 
 O `pio` fica em `~/.platformio/penv/bin/pio` quando instalado pela extensão PlatformIO IDE.
 
 ```bash
-pio run -e esp32                          # compila o firmware
+pio run -e esp32                          # compila o firmware (sem warnings, com -Wshadow)
 pio run -e esp32 -t upload                # grava bootloader, tabela de partições e firmware
 pio run -e esp32 -t upload_storage        # gera e grava só a partição storage (VROM + catálogo)
-pio run -e esp32 -t monitor               # monitor serial (115200)
-pio test -e native                        # testes unitários no computador
-python3 tools/console.py script "wait 4" "keys jj" "screen tela.png"   # console de depuração
+pio run -e esp32 -t build_storage         # só gera .pio/storage.bin
+pio run -e esp32 -t monitor               # monitor serial
+pio test -e native                        # testes no computador (test_crc32, test_gfx, test_core, test_midi_ini)
 ```
 
-- **Catálogo:** itens, equipamentos e habilidades ficam em `catalog/items.csv`, `catalog/equipment.csv` e `catalog/skills.csv` (colunas e valores em inglês, como `FOOD`, `FIRE`, `SATIETY+15`) e entram no `storage.bin` pelo `tools/storage-packer`.
-- **Fonte:** a fonte 5x8 (com acentos) é desenhada em `tools/font-builder/font_5x8.txt` e gerada com `build_font.py`.
-- **Console de depuração:** pela serial aceita teclas (`w` `s` `a` `d` = direcional, `j` = A, `k` = B), `P` para capturar a tela e `S` para o estado do Guará.
+Gravar o firmware ou o storage nunca apaga as partições `save` e `nvs`.
 
-### Versionamento e Política de Releases
+### Ferramentas
 
-O projeto adota o padrão de Versionamento Semântico (**`MAJOR.MINOR.PATCH`** / `#.#.#`), documentado em [CHANGELOG](CHANGELOG.md):
-- **PATCH (`#.#.+1`):** Correções de bugs, ajustes de estabilidade e hotfixes pontuais no firmware ou nos dados do storage.
-- **MINOR (`#.+1.0`):** Inclusão ou modificação substancial de novas funcionalidades, novas mecânicas de gameplay ou novos itens no catálogo/VROM.
-- **MAJOR (`+1.0.0`):** Lançamentos e marcos oficiais (releases consolidadas da plataforma).
-- **Versões de desenvolvimento (`0.x.x`):** o Guará tem todo o catálogo liberado: todos os itens com 255 unidades no inventário e todos os equipamentos e habilidades possuídos. A liberação é feita no nascimento e a cada boot, para facilitar os testes. A regra deixa de valer a partir da `1.0.0`.
-- **Critério de Incremento de Versão:** A numeração de versão é atualizada **exclusivamente** mediante alterações funcionais no **Firmware** (código compilado C/C++) e/ou no **Storage** (VROM, catálogo binário, formato de save state). Alterações puramente conceituais ou em arquivos de documentação Markdown geram apenas commit de histórico sem incrementar a versão do sistema.
+- **`tools/storage-packer/pack_storage.py`:** monta o `storage.bin` a partir de `bitmaps/` e `catalog/` e valida tudo: BMP de 1 bit, nomes únicos, ícones existentes, IDs sequenciais, textos dentro dos limites. O alvo `upload_storage` do PlatformIO (script `tools/pio_storage.py`) chama o packer e grava só a partição. Os testes usam um catálogo próprio em `test/fixtures/catalog/`, empacotado por `tools/pio_storage_test.py`.
+- **`tools/bmp-builder/bmp_builder.py`:** converte PNG, JPG, WebP, GIF, SVG ou BMP para o BMP canônico do Guará (2 cores, índice 0 = preto, índice 1 = branco, linhas alinhadas a 4 bytes, de baixo para cima). Tem os *presets* `icon` (16x16), `sprite` (32x32), `mannequin` (32x56), `boss` (64x64) e `screen` (128x64), métodos de binarização (`threshold`, `otsu`, `floyd-steinberg`, `atkinson`, `bayer`) e `-p` para pré-visualizar no terminal. Uma versão em C++ compila com `make` em `tools/bmp-builder`.
+- **`tools/font-builder/build_font.py`:** gera `lib/gfx/src/font_5x8.c` a partir do desenho em `font_5x8.txt` (fonte 5x8 com acentos do português).
+- **`tools/console.py`:** console de depuração pela serial. Envia teclas (`w` `s` `a` `d` = direcional, `j` = A, `k` = B), captura a tela (`P`), mostra o estado do Guará (`S`) e coloca o aparelho em deep sleep (`Z`). Neste adaptador USB, abrir a porta reinicia o ESP32, então o modo `script` executa vários passos numa só conexão. As capturas saem em PNG ou, com extensão `.bmp`, no formato das imagens de `bitmaps/exemple/` (512x256 em RGB565).
 
-### Conectividade: Wi-Fi sob Demanda
+```bash
+python3 tools/console.py script "wait 4" "keys jd" "screen tela.bmp" "state"
+python3 tools/console.py script "wait 4" "sleep" "log 60"     # dorme e mostra o log ao acordar
+```
 
-Implementação: `src/system/network.c`.
+O console nunca abre a porta com o DTR ativo, porque o GPIO0 iria a nível baixo e a placa entraria em modo de gravação. No modo Ocioso, o chip acorda pelos bytes recebidos, que se perdem; por isso o `console.py` manda um preâmbulo antes de cada comando.
 
-O rádio Wi-Fi só é ligado quando alguma tarefa precisa de rede. Para o usuário, o Wi-Fi continua simplesmente "ligado".
+### Organização do código
 
-- **Significado de `ON` e `OFF` (Ajustes > Wi-Fi):**
-  - `ON` quer dizer **rede permitida**, não "rádio ligado". Fora das tarefas de rede, o rádio fica desligado e o driver descarregado, o que economiza bateria e libera cerca de 60 KB de RAM.
-  - `OFF` proíbe qualquer uso de rede.
-- **Serviço de rede com contador de uso:** quem precisa de rede pede acesso (`network_use()`) e devolve ao terminar (`network_release()`).
-  - No primeiro pedido, o serviço liga o rádio e conecta à última rede salva que estiver disponível.
-  - Quando o contador volta a zero, o rádio desliga após **30 segundos** ociosos. Assim, tarefas próximas aproveitam a mesma conexão.
-  - Uso contínuo, como um combate online, mantém o pedido aberto durante todo o uso.
-- **Execução em segundo plano:** a conexão e as tarefas rodam numa task própria, sem travar a interface. Telas que dependem do resultado mostram "Conectando..." até a rede responder.
-- **Reconexão rápida:** o canal e o BSSID do último roteador ficam salvos na NVS. Com eles, a conexão leva cerca de 1 a 2 s, em vez de 3 a 5 s com busca completa.
-- **Sincronização do relógio (NTP):**
-  - No boot, em segundo plano e sem bloquear a tela de boot, só se a hora for inválida ou se a última sincronização tiver mais de **24 horas**.
-  - Depois, uma vez a cada 24 horas enquanto o aparelho estiver acordado.
-  - Com o DS3231 instalado, isso basta para manter a hora correta.
-- **Deep sleep:** o comportamento é o mesmo no boot frio e ao acordar do deep sleep. O rádio é sempre desligado antes de dormir.
-- **Jogos Lua:** como o rádio já fica desligado fora das tarefas de rede, a liberação de memória antes dos jogos passa a ser automática.
-- **Indicador na barra superior:**
-  - ícone de Wi-Fi sem barras quando a rede está permitida e ociosa;
-  - barras de sinal (`wifi_1` a `wifi_3`) só durante uma conexão ativa;
-  - nenhum ícone com o Wi-Fi em `OFF`.
-- **Tarefas que usam o serviço:**
-  - sincronização NTP (automática e em Relógio > Configurar);
-  - busca, conexão e status em Ajustes > Wi-Fi;
-  - atualização pelo GitHub;
-  - combate e trocas online, no futuro.
-- **Custo:** cada tarefa de rede leva de 1 a 5 segundos a mais para começar, por causa da conexão.
-- **Parâmetros:** o tempo ocioso (30 s) e o intervalo do NTP (24 h) são constantes do firmware.
+- **`lib/`:** C11 puro, sem includes do ESP-IDF, compilado para o aparelho e para os testes:
+	- `crc32`;
+	- `gfx`: framebuffer no formato de páginas do SH1106, primitivas, texto UTF-8, modos de desenho e decodificador de BMP;
+	- `core`: tipos, leitor do storage (VROM e catálogo), formato e anel de saves, ciclo de vida do Guará (`guara.c`), combate (`combat.c`) e os números de balanceamento (`rules.h`);
+	- `midi`: leitor de arquivos MIDI (SMF) reduzido a uma voz;
+	- `ini`: leitor de arquivos `.ini`;
+	- `lua`: Lua 5.4.7.
+- **`src/`:** componente principal do ESP-IDF, só com código de hardware e de interface:
+	- `hal/`: drivers. `display` (SH1106; uma task envia só as páginas alteradas), `buttons` (fila de eventos com *debounce* e repetição), `audio` (task do LEDC com efeitos e música de fundo), `battery`, `sdcard`, `rtc_clock` (DS3231, NTP e fuso), `power` (modo Ocioso, deep sleep e ULP), `wifi`, `i2c` e `pins.h`;
+	- `system/`: serviços. `app` (boot, laço principal, ciclo de vida por minuto, modo Ocioso, inatividade, bateria crítica), `persistence` (storage, anel de saves, espelho na RTC RAM), `config` (NVS), `network` (Wi-Fi sob demanda), `alarms`, `ota` e `debug_console`;
+	- `ui/`: pilha de telas (`ui.h`), componentes padrão (`widgets.h`), modais e teclado virtual (`modal.h`);
+	- `screens/`: um arquivo por tela; `screens.h` lista todas, `submenu.h` monta sub-menus padrão e `sprite.h` compõe o Guará. A API Lua fica em `games.c` (VM e módulos básicos) e `game_api.c` (desenho da VROM, `catalog`, `ui` e `guara.draw`).
 
-### UI
+**Telas:** cada tela é um `screen_t` com os callbacks `on_open`, `on_resume`, `on_close`, `on_key` e `on_draw`, empilhado por `ui_open` e removido por `ui_back`. Telas reutilizáveis que podem se empilhar (modais, sub-menus) guardam estado por camada, indexado por `ui_current_layer()`. O resultado de um modal chega por um callback *depois* que o modal sai da pilha, então o callback pode abrir outras telas. Quem altera o Guará chama `app_mark_changed()`, que espelha na RTC RAM e marca o *dirty flag*.
 
-#### Padões do sistema:
+**Laço principal (`app_run`):** lê as teclas, desenha a tela do topo na taxa dela (20 FPS por padrão, 30 FPS em jogos, combate e cronômetro, no máximo 5 FPS no modo Ocioso), confere a cada segundo bateria, despertadores, temporizador, inatividade e modo Ocioso, e roda o ciclo de vida do Guará a cada minuto.
 
- - **Referência de lados** - Em todo este documento, "direita" e "esquerda" são do ponto de vista do aparelho: a direita do aparelho é a esquerda do usuário olhando para a tela. Coordenadas de pixel (X, Y) são de tela, com X=0 na borda esquerda do usuário e Y=0 no topo. **Exceção:** nos botões direcionais, Direita e Esquerda indicam a direção do movimento na tela, do ponto de vista do usuário (o botão Direita move o cursor para a direita de quem olha).
+**Regras de compilação:** o ESP-IDF compila com `-Werror`; `-Wno-format-truncation` é intencional (os `snprintf` truncam de propósito em buffers fixos) e `-Wshadow` fica ligado como aviso.
 
- - **Barra de título** - As barras de títulos devem ser brancas com letras pretas, com **11px de altura (Y=0..10)** e o texto a partir de Y=2, texto centralizado no máximo 20 caractere, quando maior, deve ser usado o efeito marquee, nem toda tela terá barra de título.
-- **Abas** - As telas com abas devem ser preta com contorno branco e texto branco e um espaço, linha divisória  e espaço, os cantos superiores do contorno de cada divisão deve ser arredondado. A barra de abas tem a mesma altura da barra de título (11px, Y=0..10), com o texto em Y=2 e 1px de folga até o contorno e até a linha de base. Quando não seleciona o texto deve ser truncado com 4 caracteres, quando selecionado preenchimento branco e texto preto, mostrado com no maximo 10 caracteres, se maior que isso deve ser usado o efeito marquee, empurrando as outra abas para os lados, se o tamanho das abas forem maior que a tela a extremidade que sai da tela  deve apresentar uma pequena ceta toda preenchida ocultando o conteúdo atras: Exemplo: `| ABA1 | ABA2 |___________`  e  `< A1 | ABA2 | ABA SELECIONA | ABA >`
-- **Barra de rolagem** - Deve medir um pixel, na ultima linha vertical da tela (X=127, contando a partir de X=0), abaixo da barra de titulo ou Barra de abas, preta, com um traço branco representando a parte da tela senexibida, as telas que possuírem barra de rolagem, o conteúdo da tela nunca deve sobrepor a barra de rolagem, deve sempre haver pelo menos 1 pixel entre o conteúdo da pagina e a barra de rolagem. 
-- **Sub-Menu** - Todos os sub-menus do sistema utilizam rigorosamente a mesma interface padrão: Barra de título ou Abas no topo (Y=0..10), 1px livre (Y=11) e lista vertical de 3 linhas visíveis a partir de Y=12, cada uma com caixa de 16px de altura e 2px de espaço entre os itens (uma linha a cada 18px, preenchendo Y=12..63), dispostas como: 2 pixels + ícone 16x16 + 2 pixels + texto + 4 pixels + informação pertinente à direita + 2 pixels + barra de rolagem de 1px em X=127. Quando o texto for maior que o espaço disponível, deve ser truncado quando inativo e rolar suavemente (*marquee*) quando selecionado até o fim, pausar e recomeçar. As informações à direita têm sempre no máximo 4 caracteres (ex: 100%, ON, OFF, OK, DIR). A seleção é destacada por um **retângulo com cantos arredondados sem preenchimento** (moldura vazada branca de 1px com raio de 2px, 124px de largura e 16px de altura, terminando a 1px da barra de rolagem), mantendo o ícone 16x16 e todos os textos desenhados em branco. Em sub-menus sem rodapé, as 3 linhas visíveis cabem perfeitamente na tela de 64px (11 + 1 + 3 × 16 + 2 × 2 = 64).
-- **Teclado Virtual (On-Screen Keyboard)** - Interface matricial para entrada de texto em tela, com alternância dinâmica entre caracteres alfabéticos (maiúsculos/minúsculos), numéricos e símbolos especiais. Navegação através dos botões direcionais, botão A para inserção de caracteres, teclas virtuais de atalho (Espaço, Backspace, Concluir/Enter) e botão B para cancelar. Utilizado para digitação de senhas de redes Wi-Fi e renomeação de arquivos.
-- **Roda-pé** - O roda-pé **não está presente em todas as telas**, sendo ativado apenas nas telas ou fluxos que o solicitarem expressamente. Quando presente, possui **fundo preto** na faixa inferior (Y=54..63) e se sobrepõe ao conteúdo da tela, separado por uma linha divisória horizontal branca de 1px em Y=53, com textos em branco. O conteúdo rolável passa por trás do rodapé e sua visualização é indicada pela barra de rolagem vertical em X=127. Segue rigorosamente a disposição física dos botões do console (padrão B-A). A representação visual dos botões é feita através dos sprites monocromáticos dedicados de 10x10 pixels (![botão a](./bitmaps/ui/button_b.bmp) e ![botão b](./bitmaps/ui/button_a.bmp)), exibidos com suas cores normais (branco sobre fundo preto) integrados à VROM:
-  - **No roda-pé de tela cheia:** os sprites são desenhados de forma fixa nas extremidades (botão **B** em X=2, Y=54 e botão **A** em X=116, Y=54).
-  - **No roda-pé de modal:** os sprites são desenhados de forma fixa nos cantos internos do modal (botão **B** em X=11, Y=47 e botão **A** em X=107, Y=47).
-  - **Legendas e rolagem:** As legendas dos botões são separadas por um respiro de 3px dos respectivos sprites. Não há barra vertical divisória no centro, preservando máxima área útil de leitura (~47px para cada lado na tela cheia e ~38px no modal). Os sprites dos botões permanecem absolutamente estáticos nas extremidades; apenas os textos das legendas se movem suavemente (*marquee*) caso excedam a largura útil da respectiva metade, devendo-se priorizar termos curtos e objetivos (ex: "VOLTAR", "SAIR", "NAO" para B; "OK", "SIM", "SALVAR", "INICIAR" para A).
-- **Modal** - O modal sobrepõe-se à tela de onde foi chamado (renderizado diretamente sobre o framebuffer atual), medindo 112 x 52 pixels (Y=6..57) com linhas de contorno brancas de 1px e uma sombra preta contínua de **2px ao redor**. A barra de título é igual à das telas: branca com letras pretas e 11px de altura (com rolagem suave *marquee* se o título for longo); o corpo começa 1px abaixo dela. O modal pode conter ícone 16x16 e texto de mensagem centralizado, com até 3 linhas; o modal de detalhes, sem rodapé, mostra 4 linhas e rola o restante. Em modais de lista de escolha (`ui_modal_choice`), o rodapé **não deve ser exibido**, e as opções utilizam altura compacta (10 a 11px por opção) para acomodar de forma limpa até 3 opções verticais com destaque de retângulo arredondado vazado e barra de rolagem vertical. Em modais de confirmação e alerta, o rodapé é **preto** (exclusivo do modal) com linha divisória branca superior, utilizando os sprites dos botões **B** e **A** de 10x10 fixos nos cantos, legendas com marquee suave e sem barra divisória central.
-- **Comportamento Padrão** - Ao navegar pelo menu principal, sub-menus e telas de funcionalidade, ao terminar ou apertar B/Votar/Cancelar/Fechar, deve voltar para o menu anterior, fazendo o caminho inverso, exemplo: ao usar um item ou alimentar o guará é exibido a animação e depois retorna para o sub-menu de inventário, na mesma posição com o mesmo elemento selecionado. 
-#### Tela de boot
+### Versionamento
 
-Ao ligar é exibido a tela de boot, no cento dela é exibido o bitmap: ![bitart logo](./bitmaps/bitart/bitart_logo.bmp), e em baixo uma barra de progresso mostrando o carregamento do sistema, é verificaso se existe configuração de wifi , se sim a hora deve ser atualizada em segundo plano, sem prender a tela de boot (ver *Conectividade: Wi-Fi sob Demanda*), após concluido a tela de boot deve permanecer exibida por 1 segundo.
+Versão no formato `v#.#.#` (lançamento.funcionalidade.correção), definida em `-DGUARA_VERSION` no `platformio.ini`, com o histórico em [CHANGELOG.md](CHANGELOG.md):
 
-#### Tela principal
+- **Correção (`#.#.+1`):** ajustes e correções no firmware ou no storage.
+- **Funcionalidade (`#.+1.0`):** novas funcionalidades, mecânicas ou itens no catálogo.
+- **Lançamento (`+1.0.0`):** versões oficiais.
+- A versão só muda com alterações no firmware ou no storage (VROM, catálogo, formato do save). Mudanças só na documentação geram apenas um commit.
+- **Versões `0.x.x`:** o Guará tem todo o catálogo liberado, com todos os itens com 255 unidades e todos os equipamentos e habilidades possuídos. A liberação acontece no nascimento e a cada boot, para facilitar os testes (`guara_is_development_version` e `guara_unlock_catalog`). A regra deixa de valer a partir da `1.0.0`.
 
-A tela principal, é a onde é exibido o guará e suas animações, e a barra superio.
+### Wi-Fi sob demanda
 
-![exemplo da tela inicial](bitmaps/exemple/main_screen.bmp)
+Implementação: `src/system/network.c`. O rádio só liga quando alguma tarefa precisa de rede; para o usuário, o Wi-Fi continua simplesmente "ligado".
 
-##### Barra superior
+- **`ON` e `OFF` (Ajustes > Wi-Fi):** `ON` quer dizer **rede permitida**, não rádio ligado. Fora das tarefas de rede, o rádio fica desligado e o driver descarregado, o que economiza bateria e libera cerca de 60 KB de RAM. `OFF` proíbe qualquer uso de rede.
+- **Contador de uso:** quem precisa de rede pede acesso (`network_use()`), espera a conexão (`network_wait()`) e devolve ao terminar (`network_release()`).
+	- No primeiro pedido, o serviço liga o rádio e conecta à última rede salva disponível.
+	- Quando o contador volta a zero, o rádio desliga após **30 s** ocioso, para tarefas próximas aproveitarem a mesma conexão.
+	- Tarefas em segundo plano usam `network_run()`. As telas nunca chamam o driver `wifi_*` direto.
+- **Reconexão rápida:** o canal e o BSSID do último roteador ficam na NVS, e a conexão leva de 1 a 2 s em vez de 3 a 5 s com busca completa.
+- **Relógio (NTP):** no boot, em segundo plano, se a hora for inválida ou a última sincronização tiver mais de **24 h**; depois, a cada 24 h com o aparelho acordado. O fuso horário fica fixo em UTC−3 (`<-03>3`), sem menu para trocar por enquanto.
+- **Deep sleep:** o rádio é sempre desligado antes de dormir, e o comportamento é o mesmo no boot frio e ao acordar.
+- **Jogos e tarefas pesadas:** `network_suspend()` descarrega o Wi-Fi enquanto um jogo Lua roda, para liberar memória.
+- **Indicador na barra superior:** ícone de Wi-Fi apagado (xadrez) quando a rede está permitida e ociosa; barras subindo durante a conexão; barras de sinal (`wifi_1` a `wifi_3`) conectado; nenhum ícone com o Wi-Fi em `OFF`.
+- **Quem usa a rede:** sincronização NTP (automática e em Relógio > Configurar) e busca, conexão e status em Ajustes > Wi-Fi. Atualização pelo GitHub e combate online estão previstos.
 
-A barra superior tem no canto superior direito, o relogio no formato `HH:MM`, se a hora não estiver configurada deme exibir `--:--`,  e no canto superior esquerdo tem os indicadore de: Mudo ![Mudo](./bitmaps/ui/status_mute.bmp) Temporizador ![Temporizador](./bitmaps/ui/status_timer.bmp), Despertador ![Despertador](./bitmaps/ui/status_alarm.bmp), Bluetooth ![Bluetooth](./bitmaps/ui/status_bluetooth.bmp), Wifi ![Wifi_1](./bitmaps/ui/wifi_1.bmp) ![Wifi_2](./bitmaps/ui/wifi_2.bmp) ![Wifi_3](./bitmaps/ui/wifi_3.bmp), Bateria![Bateria_0](./bitmaps/ui/battery_0.bmp) ![Bateria_1](./bitmaps/ui/battery_1.bmp) ![Bateria_2](./bitmaps/ui/battery_2.bmp) ![Bateria_3](./bitmaps/ui/battery_3.bmp). 
+___
 
-##### Area do Guará
+## Interface
 
-Na área do guará é onde é exibido o sprite do guará, escalonado em 2x, no centro horizontal da tela e a 2 pixel limita inferior do seu limite inferior.
+### Padrões do sistema
 
-O sprite do guará e composto de acordo vo ceu DNA, Estado ou Emoção.
+As capturas desta seção estão em `bitmaps/exemple/`, ampliadas 4x (512x256).
 
-##### Indicador de Estados
+- **Referência de lados:** neste documento, "direita" e "esquerda" são do ponto de vista do **aparelho**: a direita do aparelho é a esquerda de quem olha a tela. As coordenadas de pixel são de tela: X=0 na borda esquerda de quem olha e Y=0 no topo. **Exceção:** os botões direcionais Direita e Esquerda indicam a direção do movimento na tela, do ponto de vista de quem olha (Direita move o cursor para +X). No código, `KEY_LEFT` e `KEY_RIGHT` são direções de tela.
+- **Fonte:** 5x8 px com acentos do português, linhas de 9 px.
+- **Barra de título:** branca com letras pretas, **11 px de altura (Y=0..10)**, texto centralizado a partir de Y=2. Títulos que não cabem rolam com o efeito *marquee*. Nem toda tela tem barra de título.
+- **Abas:** fundo preto, contorno e texto brancos, com os cantos superiores de cada aba arredondados. A barra de abas tem a mesma altura da barra de título (11 px), texto em Y=2 e 1 px de folga até o contorno e até a linha de base. Abas não selecionadas mostram até 4 caracteres; a selecionada fica com fundo branco e texto preto, com até 10 caracteres e *marquee* se for maior. Se as abas não couberem na tela, a ponta que sai da tela mostra uma pequena seta preenchida, cobrindo o conteúdo atrás. ←/→ trocam de aba.
 
-Do lado direito da tela é exibido um balão ![balão](./bitmaps/ui/speech_balloon.bmp) , dentro dele o icone que represana o estado ou emoção, centralizado e com margem superior de 2 px em relaçaão ao balão. para todos os estados e emoções o balão se movimente suave mente como uma respiração 8 px para baixo e depois volta para o luga. 
+	![Abas](./bitmaps/exemple/screen_guara_nature.bmp)
 
-##### Área de Itens 
+- **Barra de rolagem:** 1 px de largura na última coluna (X=127), abaixo da barra de título ou de abas, preta com um traço branco que representa a parte visível. O conteúdo nunca encosta nela: sempre há pelo menos 1 px livre.
+- **Sub-menu:** todos os sub-menus usam a mesma interface. Barra de título ou de abas no topo (Y=0..10), 1 px livre (Y=11) e uma lista de **3 linhas visíveis** a partir de Y=12, cada uma com caixa de 16 px de altura e 2 px entre as caixas (uma linha a cada 18 px). Cada linha tem: 2 px, ícone 16x16, 2 px, texto, 4 px, informação à direita (até 4 caracteres, como `100%`, `ON`, `OFF`, `OK`, `DIR`, `x255`), 2 px e a barra de rolagem. A seleção é um **retângulo de cantos arredondados sem preenchimento** (contorno branco de 1 px, raio de 2 px, 124 px de largura e 16 px de altura, terminando a 1 px da barra de rolagem). Textos que não cabem são truncados e, na linha selecionada, rolam com *marquee* até o fim, pausam e recomeçam. ↑/↓ movem a seleção (com repetição ao segurar), A abre o item e B volta.
 
-A área dos itens fia a esquerda da área do guará, aou ser usado um  item a tela inicial é exibida e o icone do item é mostrado seguido de uma animação, ao fim da animação a tela retorna para onde estava.
+	![Sub-menu](./bitmaps/exemple/screen_settings.bmp)
 
-- **Comidas**: Para comidas é exibida a animação de mordidas (![mordida 1](./bitmaps/animations/bite_1.bmp), ![mordida 2](./bitmaps/animations/bite_2.bmp), ![mordida 3](./bitmaps/animations/bite_3.bmp), ![mordida 4](./bitmaps/animations/bite_4.bmp), ![mordida 5](./bitmaps/animations/bite_5.bmp)), a animação da mordida se sobrepõe ao icone da comida sendo qua a parte preta cobre a comida e  parate branca é transpareste exibindo o icone da comida atrás, cada frame da animação é seguido por um som simulando mordida no buzzer.
+- **Rodapé:** só aparece nas telas que o pedem. Ocupa a faixa Y=54..63 com fundo preto, separado por uma linha branca em Y=53, e fica por cima do conteúdo que rola. Segue a disposição física dos botões (B à esquerda de quem olha, A à direita), com os sprites de 10x10 ![botão B](./bitmaps/ui/button_b.bmp) e ![botão A](./bitmaps/ui/button_a.bmp):
+	- **Tela cheia:** B em X=2, Y=54 e A em X=116, Y=54.
+	- **Modal:** B em X=11, Y=47 e A em X=107, Y=47.
+	- As legendas ficam a 3 px dos sprites, sem divisória central (cerca de 47 px para cada lado na tela cheia e 38 px no modal). Os sprites são fixos; só as legendas longas rolam com *marquee*. Use termos curtos: "VOLTAR", "SAIR", "NAO" para B; "OK", "SIM", "SALVAR", "INICIAR" para A.
 
-- Para os demais itens o icone dele aparece na áre de itens e ele começa piscar acelerando até desaparecer. 
+	![Rodapé](./bitmaps/exemple/screen_stopwatch.bmp)
 
-#### Menu principal
+- **Modal:** desenhado por cima da tela que o chamou, com 112 x 52 px (X=8..119, Y=6..57), contorno branco de 1 px e sombra preta de **2 px** ao redor. A barra de título é igual à das telas (branca, 11 px, *marquee*); o corpo começa 1 px abaixo dela.
+	- **Alerta e confirmação:** ícone 16x16 opcional e mensagem centralizada de até 3 linhas, com rodapé de modal (linha divisória em Y=45). Na confirmação, B responde "não" e A "sim".
+	- **Escolha:** sem rodapé, linhas de 11 px com até 3 opções visíveis, seleção em retângulo arredondado vazado e barra de rolagem; até 16 opções.
+	- **Detalhes:** sem rodapé, 4 linhas visíveis de texto com rolagem por ↑/↓.
+	- **Quantidade:** escolhe um número entre um mínimo e um máximo. ↑ ou → somam 1 e ↓ ou ← tiram 1, dando a volta nos limites; segurando, o passo vira 5 e para no limite.
 
-O me nu principal é exibito como um carroceu, no centro da tela fica o icone do item selecionado escalonado em 2x, do lado direito o item anterior e uma ceta apontando para a direita, do outro lado o próximo item e u ceta aponado para a esquerda, logo abai do icone selecinoado o nome do item e mais abaixo um indicador com um ponto para cada menu, sendo que o nemu selecinoa deve estar destacado, a se movimentar exbir animação suave do carrocel se movendo enquanto o icone atual dimini para 1x e o icone seguinte aumenta para 2x.
+	![Modal de escolha](./bitmaps/exemple/screen_inventory_actions.bmp) ![Modal de detalhes](./bitmaps/exemple/screen_item_details.bmp) ![Modal de confirmação](./bitmaps/exemple/screen_rebirth_confirm.bmp)
 
-![exemplo do menu principal](./bitmaps/exemple/main_menu.bmp)
+- **Teclado virtual:** grade com três páginas, `ABC` (maiúsculas), `abc` (minúsculas) e `123` (números e símbolos), e a linha de atalhos página, `ESPACO`, `APAGAR` e `OK`. Os direcionais movem o cursor, A digita a tecla ou aciona o atalho e B cancela. É usado no nome do Guará, nas senhas de Wi-Fi e para renomear arquivos.
 
-##### Guará ![icone do menu guará](./bitmaps/icons/guara.bmp)
+	![Teclado virtual](./bitmaps/exemple/screen_keyboard.bmp)
 
-A tela do guará não é um sub-menu padrão, ela a barra de abas padão, com 4 abas: GUARA, ESTADO, NIVEL e NATUREZA.
+- **Comportamento padrão:** B, "voltar" ou o fim de uma ação sempre retornam à tela anterior pelo caminho inverso, com a mesma posição e o mesmo item selecionado. Exemplo: depois de comer um item, a animação aparece na tela principal e o inventário volta com o item ainda selecionado.
 
-- **GUARA**: Nessa possui duas colunas, a primera, com 20px é exibida o sprite do gurá animado na esca 1x, a segurnda coluna mostra uma lista com o icone ![identidade](./bitmaps/icons/id.bmp) e em seu lado o nome do guará, e em baixo o seu UID ("ID: A1B2C3D4") , o próximop item da lsta  é o icone ![nível](./bitmaps/icons/level.bmp) segui do seu nível e sua experiancia ("NV: 88 | XP: 888") e em baixo uma barra de progresso mostrando quanto de XP falta para avançar para o proximo nível, e o último é o icone ![Idade](./bitmaps/icons/calendar.bmp) seguidos do dias de vida ("Dias: 365") e em baixo as horas ("Horas:  08:20")
-- **ESTADO**:  Essa tela possui duas colunas de largura igual, na primeira linha: HP icone ![HP](/bitmaps/icons/hp.bmp) seguido do valor numerico e em baixo uma barra de progresso mostrando o HP em relação ao HP Máximo e MP icone ![mp](./bitmaps/icons/mp.bmp) e o valor do MP com a barra de progresso em baixo, Energia icone ![energia](./bitmaps/icons/energy.bmp) seguido do valor da energia em % e em baixo uma barra de progresso e Humor icone ![humor](./bitmaps/icons/humor.bmp) seguido do valor em % e em baixo uma barra de progresso, Alimentação icone ![alimentação](./bitmaps/icons/hamburger.bmp) seguido do valor da alimentação em % e em baixo a barra de progresso e Saúde icone ![saúde](./bitmaps/icons/health.bmp) seguido do valor em % e uma barra de progresso.
-- **NIVEL**: Na aba de nível possui 2 colunas e 3 linas, cada item com icone seguido da sigla e em baixo o valor, sendo eles: ATK ![ATK](./bitmaps/icons/attack.bmp), DEF ![DEF](./bitmaps/icons/defense.bmp), FOR ![FOR](./bitmaps/icons/strength.bmp), AGI ![AGI](./bitmaps/icons/agility.bmp), INT ![INT](./bitmaps/icons/intelligence.bmp), SOR ![SOR ](./bitmaps/icons/luck.bmp).
-- **NATUREZA**: Esta aba tem 3 linhas, sendo a primeira inteira e aos outra duas dividas em 2 colunas, na primeira tem o icone da natureza do guará segida no nome, os demais itens são as outras 3 natureza primárias e a natureza neltra, com icone seguido do valor da afinidade em % e em baixo uma barra de progresso. Se um gurá já é de uma natureza secundária, o sistema de afinidade é desabilitado e é exibida apena a primeira linha e em bai os Icones da naturea de nascimento um sinal de mais (+) e a Naturera da afinidade primároia que gerao a nova natureza secundária. 
+### Boot
 
-##### Inventário ![inmventário](./bitmaps/icons/inventory.bmp)
+Ao ligar, aparece no centro o logo ![logo](./bitmaps/bitart/bitart_logo.bmp) com uma barra de progresso embaixo. O boot carrega as configurações, o storage, o relógio, os botões, a bateria, o cartão SD e o save, e permanece 1 s na tela depois de concluído. Se houver Wi-Fi configurado, a hora é atualizada em segundo plano, sem prender o boot. Ao acordar do deep sleep, a tela de boot não aparece.
 
-O inventário lista os itens possuido pelo usúario, ele usa o padrão de sub-menu com abas, possui 4 abas, sendo elas: TUDOS onde é listado todos os itens em ordem alfabética, COMIDAS onde é listado apena itens do tipo comida, BEBIDAS onde é listado apenas itens do tipo bebida e POCOES onde é listado as poções e remédios. 
+Se o storage estiver ausente ou corrompido, o boot mostra o erro por 3 s e segue sem gráficos nem catálogo.
 
-Ao clicar em um item, é exibido um modal padrão, com as opções Come/Beber/Usar, dependendo do tipo do item. Detalhes, onde apareca outro modal padrãi com as informações do item. Descartar, onde aparece um modal pada por a quantidade a ser descartada, e ao clicra em descartar aparece um modal de confirmação. Compartilhar
+### Nascimento
 
-> TODO: Elaborar a opção de Compartilhar.
+No primeiro boot, ou depois de Ajustes > Reiniciar, o teclado virtual pede o nome do Guará (até 10 letras). O sistema sorteia uma natureza primária (Fogo, Terra, Água ou Ar), uma cor (preta ou branca) e uma das 9 cabeças, e um alerta anuncia "*Nome* nasceu! Natureza: *natureza*". O Guará começa no nível 1, com 0 XP.
 
-Para conferir os itens do catálogo possívei de se possuir no inventário, conferiri [[CATALOG]].
+### Tela principal
 
-**Catálogo x Inventário** - O itens no cátálogo soão os itens disponíveis no sistema, o inventário é a indicação da quantidate possida, o catálogo é armazenado na memória interna e imutável durante o usos, o inventário, qu consiste na referencia ao item do catálogo e a quantidade possuida (itens não possúido, quantidade = 0, não devem ser referenciados no inventário), esse é armazenado na RAM e persistido na memória não volátil atravez do **save state** no fluxo dos três pilares.
-##### Equipamentos ![Equipamentos](./bitmaps/icons/equipment.bmp)
+Mostra o Guará e suas animações, a barra superior e o balão de estados. A abre o menu principal.
 
-![Exemplo do menu de equipamentos](./bitmaps/exemple/menu_equip.bmp)
+![Tela principal](./bitmaps/exemple/screen_home.bmp)
 
-O menu Equipamentos leva para a tela de equipamentos, ela não tem nem barra de titulo e nem roda pé, apena um retangulo não preenchodo com cantos aredondaos, o bitmap do manequim (![Manequin](./bitmaps/ui/mannequin.bmp))do lado direito da tela e do lado esquerdo um lista com 7 slotts selecionaveis, Cabeça, Corpo, Mão ATK, Mão DEF, Calçados, Asseçõrio 1 e Asseçorio 2, quando seleciona o compo correspondente de haver uma celeção retangular n o manequim local do equipamento ele deve piscar 2 veses por segundo. Ao apertar A se tiver algo equipado, deve aprentar um modal, com as opções equipar ou remover, ao clicar qem equipar deve abrir um sub-menu padrão com a lista de equipamentos disponiveis, a lista deve filtra apena os equipamentos da parte selecionada, ao clicar deve equipa o item, se o slote estiver vazio abre o sub-menu direto.
-Os texto não podem se sobre pora ao tamanho da tela, nesse caso deve aver a marge de um espaçõ e usar o efeito marquee.
+- **Barra superior:** no canto superior direito do aparelho (esquerda de quem olha, X=1, Y=1), o relógio `HH:MM`, ou `--:--` se a hora não estiver configurada. No canto oposto, da borda para o centro, os indicadores de 8x8 px:
+	- **Bateria:** ![bateria 0](./bitmaps/ui/battery_0.bmp) ![bateria 1](./bitmaps/ui/battery_1.bmp) ![bateria 2](./bitmaps/ui/battery_2.bmp) ![bateria 3](./bitmaps/ui/battery_3.bmp), um nível a cada 25%. Carregando, os níveis se alternam a cada 0,5 s; sem bateria detectada, ![sem bateria](./bitmaps/ui/status_bateria_ausente_8x8.bmp).
+	- **Wi-Fi:** ![wifi 1](./bitmaps/ui/wifi_1.bmp) ![wifi 2](./bitmaps/ui/wifi_2.bmp) ![wifi 3](./bitmaps/ui/wifi_3.bmp), conforme *Wi-Fi sob demanda*.
+	- **Bluetooth** ![bluetooth](./bitmaps/ui/status_bluetooth.bmp) (ligado), **Despertador** ![despertador](./bitmaps/ui/status_alarm.bmp) (algum despertador salvo), **Temporizador** ![temporizador](./bitmaps/ui/status_timer.bmp) (contando) e **Mudo** ![mudo](./bitmaps/ui/status_mute.bmp).
+- **Área do Guará:** o sprite composto (ver *Sprites*) ampliado 2x, centralizado em X=64, com a base em Y=61 (2 px acima da borda inferior).
+- **Balão de estados:** do lado direito do aparelho (esquerda de quem olha, X=18, Y=14), o balão ![balão](./bitmaps/ui/speech_balloon.bmp) com o ícone do estado ou da emoção dentro, 2 px abaixo do topo do balão. O balão "respira": desce 8 px e volta suavemente num ciclo de 3 s. Estados físicos aparecem sempre; as emoções seguem as regras de exibição de [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
+- **Área de itens:** do lado esquerdo do aparelho (direita de quem olha, X=100, Y=34). Ao usar um item, a tela principal aparece com a animação e depois volta para onde estava; a animação não pode ser interrompida.
+	- **Comida:** o ícone aparece e, a cada 450 ms, é coberto por uma das mordidas ![mordida 1](./bitmaps/animations/bite_1.bmp) ![mordida 2](./bitmaps/animations/bite_2.bmp) ![mordida 3](./bitmaps/animations/bite_3.bmp) ![mordida 4](./bitmaps/animations/bite_4.bmp) ![mordida 5](./bitmaps/animations/bite_5.bmp) em modo máscara: o preto da mordida apaga a comida e o branco é transparente. Cada mordida toca um som no buzzer e deixa o Guará com o olhar feliz por meio quadro.
+	- **Bebidas, poções e remédios:** o ícone pisca cada vez mais rápido por 1,6 s até sumir.
+	- Depois do uso, o Guará dá uma piscadela por 1,5 s.
 
-##### Habilidades ![Habilidade](./bitmaps/icons/mp.bmp)
+### Menu principal
 
-Esse menu é um sub-menu padrão, onde é exibida as habilidads possuidas pelo guará, ao apertar deve ser apresentado um modal padrão sem roda pé com os dados da habilidade.
-##### Arena ![Arena](./bitmaps/icons/arena.bmp)
+Um carrossel com os 12 menus. No centro fica o ícone do menu selecionado ampliado 2x; dos lados, os ícones vizinhos em 1x, a 40 px de distância, e setas apontando para fora nas bordas. Embaixo, o nome do menu numa caixa branca (Y=44) e uma linha de pontos, um por menu, com o selecionado destacado (Y=58). ←/→ giram o carrossel com uma animação de 160 ms, em que o ícone que sai do centro diminui para 1x e o que chega aumenta para 2x. A abre o menu e B volta à tela principal.
 
-Ao brir o menu arena, um sub-menu padrão com duas opções:
-- Treino (![Treino](./bitmaps/icons/training.bmp)): Ao escolher treino é gerada uma combate com um outro guará gerado randomicamente e Status e Atributo semelhantes aos do gurá do usuário. 
-- Combate (![Combate](./bitmaps/icons/fight.bmp)): Deve buscar outros gurás na via rede ou bluetooth e inciar um combate.
-> TODO: o combate com outro guará será impementado no futuro.
+![Menu principal](./bitmaps/exemple/screen_main_menu.bmp)
 
-###### Combate
+A ordem é: Guará, Inventário, Equipamentos, Habilidades, Arena, Biblioteca, Jogos, Músicas, Imagens, Relógio, Cartão SD e Ajustes. Ao voltar de um menu com alterações pendentes, o save é gravado na Flash.
 
-A tela de combate consiste no sprite, em esla 1x, dos gurás combatentes, um de cada lado da tela o do lado esquerdo da tela  espelhado no eixo vertical, para dar a impreção que eles estão se olhando, a animação do sprite continua a 3 FPS e eles fica com o olhar de raiva, no topo de cada lado uma barra dupla de 56 x 8 px por lutador: o HP preenche a parte de cima (2 px de altura) e o MP é uma linha de 1 px embaixo, dentro da mesma moldura, com o nome do lutador logo abaixo; no oponente, espelhado, o preenchimento e o nome partem da borda direita. No início do combate os nomes são apresentados no formato "Fulano  VS  Siclano".
-O mecanismo de batalha é baseado em um contador por lutador, representado por uma barra de progresso vertical de 6 x 16 px no canto inferior do lado de cada um, que enche de baixo para cima, mais rápido ou mais devagar dependendo do estado e da AGI, e pisca quando cheia. O jogador pode escolher a ação a qualquer momento com o Botão A, mesmo com a barra incompleta, e a escolha não pode mais ser mudada até o próximo ciclo; a ação só é executada quando a barra enche, e em seguida o contador zera. Para escolher a ação, surge um modal padrão com as opções:
-- Atacar: Executa um ataque físico direto.
-- Habilidade: Abre sub-menu padrão com a lista de habilidades ativas para conjuração.
-- Itens: Abre sub-menu padrão contendo exclusivamente itens de cura e suporte.
-- Desistir: Exibe modal de confirmação; se confirmado, encerra a batalha com animação de derrota.
+___
 
-Quando um golpe causa dano, a animação de impacto (`bitmaps/animations/hit`, 7 quadros 16x16 a 30 FPS) é reproduzida na borda do sprite do alvo voltada para o atacante, à meia altura: o preto é transparente e, onde a animação cruza o sprite, os pixels têm a cor invertida (XOR). No ataque duplo, o atacante dá o pulo para a frente duas vezes e a animação é reproduzida duas vezes, a segunda 8 px mais para dentro do sprite do alvo.
+## Menus
 
-O dano sobe a partir do alvo como `-10`; no crítico ganha um `!` no final (`-10!`) e no ataque duplo o prefixo `2x` (`2x-20`). As reações acertadas não exibem texto.
+### Guará ![Guará](./bitmaps/icons/guara.bmp)
 
-Durante um golpe (ataque físico ou habilidade contra o oponente) há uma janela curta, no fim do preparo do golpe. Nada na tela indica a janela: o atacante recua para tomar impulso e, quando começa a avançar de volta, a janela está aberta até o impacto. Se quem ataca apertar A dentro da janela, aumenta a chance de crítico e pode sair um ataque duplo; se quem está sendo atacado apertar A na mesma janela, ele se defende, diminuindo o dano e aumentando a chance de erro do atacante. Só vale uma tentativa por golpe: apertar antes da janela perde a reação.
+Tela com quatro abas, GUARA, ESTADO, NIVEL e NATUREZA, trocadas com ←/→. B volta.
 
-####### Fórmulas do Sistema de Combate
+![Aba GUARA](./bitmaps/exemple/screen_guara_guara.bmp) ![Aba ESTADO](./bitmaps/exemple/screen_guara_status.bmp)
 
-1. **Tempo de Recarga da Barra ATB:**
-   $$\text{Tempo (segundos)} = \max\left(1.5, \; 6.0 - (\text{AGI} \times 0.05)\right)$$
-   *Com AGI no nível 1 (~5 pontos), a recarga dura ~5.75s; com AGI alta (~90 pontos), a recarga atinge o limite ágil de 1.5s.*
+- **GUARA:** à esquerda, o Guará animado em 1x; à direita, três linhas:
+	- ![identidade](./bitmaps/icons/id.bmp) nome e, embaixo, o UID (`ID: A1B2C3D4`);
+	- ![nível](./bitmaps/icons/level.bmp) nível e XP (`NV: 8 | XP: 120`) e uma barra com o progresso até o próximo nível;
+	- ![idade](./bitmaps/icons/calendar.bmp) dias de vida (`Dias: 3`) e, embaixo, as horas (`Horas: 08:20`).
+- **ESTADO:** duas colunas iguais com ícone, valor e barra de progresso: HP ![HP](./bitmaps/icons/hp.bmp) e MP ![MP](./bitmaps/icons/mp.bmp) (pontos), Energia ![energia](./bitmaps/icons/energy.bmp) e Humor ![humor](./bitmaps/icons/humor.bmp), Alimentação ![alimentação](./bitmaps/icons/hamburger.bmp) e Saúde ![saúde](./bitmaps/icons/health.bmp) (em %).
+- **NIVEL:** duas colunas e três linhas com os atributos já somados aos equipamentos, cada um com ícone, sigla e valor embaixo: ATK ![ATK](./bitmaps/icons/attack.bmp), DEF ![DEF](./bitmaps/icons/defense.bmp), FOR ![FOR](./bitmaps/icons/strength.bmp), AGI ![AGI](./bitmaps/icons/agility.bmp), INT ![INT](./bitmaps/icons/intelligence.bmp) e SOR ![SOR](./bitmaps/icons/luck.bmp).
+- **NATUREZA:** na primeira linha, o ícone e o nome da natureza atual. Embaixo, em duas colunas, as afinidades das outras três naturezas primárias e da Neutra, com ícone, % e barra. Se o Guará já tem uma natureza secundária, o sistema de afinidades está desligado e a aba mostra a natureza de nascimento, um sinal de mais e a afinidade que gerou a natureza atual.
 
-2. **Dano Físico Básico:**
-   $$\text{Dano Base} = \max\left(1, \; \lfloor(\text{ATK} \times 1.2 + \text{FOR} \times 0.8) - (\text{DEF} \times 0.7)\rfloor\right)$$
+![Aba NIVEL](./bitmaps/exemple/screen_guara_level.bmp) ![Aba NATUREZA](./bitmaps/exemple/screen_guara_nature.bmp)
 
-3. **Multiplicadores Elementais:**
-   - **Vantagem Elemental:** $+25\%$ no dano final causado.
-   - **Desvantagem Elemental:** $-25\%$ no dano final causado.
-   - **Imunidade / Neutralização Composta:** Elementos secundários (ex: Vapor anulando fraqueza contra Água) recebem multiplicador neutro ($1.0\times$).
+### Inventário ![Inventário](./bitmaps/icons/inventory.bmp)
 
-4. **Acerto Crítico e Esquiva:**
-   $$\text{Taxa de Crítico (\%)} = \min\left(50\%, \; 5\% + (\text{SOR} \times 0.4\%)\right) \implies \text{Dano Crítico} = \lfloor\text{Dano Base} \times 1.5\rfloor$$
-   $$\text{Taxa de Esquiva (\%)} = \min\left(35\%, \; (\text{AGI}_{\text{defensor}} - \text{AGI}_{\text{atacante}}) \times 0.3\%\right) \quad (\text{se } \text{AGI}_{\text{def}} > \text{AGI}_{\text{atk}})$$
+Sub-menu com as abas TODOS, COMIDAS, BEBIDAS e POCOES. Cada aba lista em ordem alfabética os itens possuídos do tipo (TODOS lista todos), com a quantidade à direita (`x12`). Itens com quantidade zero não aparecem; sem itens, a tela mostra "Nenhum item".
 
-A animação de ataque: o atacante dá um pequeno salto na direção do atacado e retorna ao lugar; o atacado muda para o olhar de atordoado e dá um recuo para trás com o sprite piscando por um momento.
+![Inventário](./bitmaps/exemple/screen_inventory.bmp)
 
-Ao fim do combate o vencedor fica com olhar feliz e toca uma melodia de vitória no buzzer; o derrotado fica com olhar desmaiado e a animação para no frame 1.
+A abre um modal de escolha com:
 
-Ao usar um item ou habilidade, surge seu ícone 16x16 no centro da tela piscando com frequência acelerada até desaparecer. Se for cura, o alvo exibe o olhar feliz e pisca brevemente.
+- **Comer / Beber / Usar** (conforme o tipo): aplica o item e mostra a animação na tela principal. Se o Guará estiver desmaiado ou amaldiçoado, um alerta explica por que não dá para usar.
+- **Detalhes:** descrição, efeitos (ex.: `Alimentação +15%`), curas e afinidade.
+- **Descartar:** modal de quantidade e, depois, confirmação ("Descartar 3 Maçã?").
+- **Compartilhar:** ainda não implementado (troca de itens entre Guarás, depende do Bluetooth); mostra um aviso.
 
-No término do combate, para o vencedor é exibida uma ficha com seu nome, XP obtido e item dropado (caso haja); para o derrotado, apenas retorna ao menu anterior.
+O conteúdo do catálogo está em [CATALOG.md](CATALOG.md).
 
-##### Biblioteca ![Biblioteca](./bitmaps/icons/library.bmp)
+### Equipamentos ![Equipamentos](./bitmaps/icons/equipment.bmp)
 
-A biblioteca exibe os arquivos na pasta `library` do cartão SD. Podem ser arquivos txt simples (![](./bitmaps/icons/txt.bmp)) ou formato de livro estruturado (![](./bitmaps/icons/book.bmp)), que consiste em uma pasta contendo um arquivo `book.ini` com metadados (título, autor, ícone personalizado), um `book.txt` com o texto da obra e imagens monocromáticas `.bmp` de 1-bit referenciadas no corpo como `{{imagem1.bmp}}` (com resolução máxima de 16x16, renderizadas centralizadas no leitor).
+Tela sem barra de título nem rodapé, com uma moldura de cantos arredondados em volta da tela inteira e uma divisória vertical. Do lado direito do aparelho (esquerda de quem olha) fica o manequim ![manequim](./bitmaps/ui/mannequin.bmp); do outro lado, a lista dos 7 slots: Cabeça, Corpo, Mão ATK, Mão DEF, Calçados, Acessório 1 e Acessório 2. Cada linha mostra o nome do equipamento no slot ou "- Vazio -", centralizado, com *marquee* se não couber; a linha selecionada fica com fundo branco. A região do slot selecionado pisca no manequim duas vezes por segundo.
 
-O leitor apresenta no máximo 20 caracteres por linha e o rodapé padrão quando solicitado; a barra de título é ocultada suavemente ao rolar o texto para baixo.
+![Equipamentos](./bitmaps/exemple/screen_equipment.bmp)
 
-##### Jogos ![Jogos](./bitmaps/icons/games.bmp)
+↑/↓ escolhem o slot. A, com o slot vazio, abre direto o sub-menu com os equipamentos possuídos daquele tipo; com o slot ocupado, abre um modal com Equipar e Remover. No sub-menu, os equipamentos já vestidos aparecem com `EQP`, e A equipa o item escolhido. Os dois slots de acessório aceitam qualquer acessório.
 
-Este menu é um sub-menu padrão onde são exibidos os jogos (![jogos sem icone definido](./bitmaps/icons/game_item.bmp)) na pasta `games` do cartão SD. O formato é uma pasta com um arquivo `game.ini` contendo metadados (ícone personalizado, tela de splash 32x32, autor, gênero, efeitos no Guará e tabela de drops), o arquivo `main.lua` com a lógica do jogo, além de spritesheets em `.bmp` 1-bit e trilhas sonoras `.mid`.
+### Habilidades ![Habilidades](./bitmaps/icons/mp.bmp)
 
-O lançador de Jogos (*Games Launcher*) é o ambiente de execução do console virtual:
-- **Organização no Cartão SD:** Varre e gerencia o diretório `/sdcard/games/`:
-	- Diretórios completos de jogos (`/sdcard/games/<slug>/`), contendo `main.lua`, `game.ini`, ícone `icon.bmp`, tela de carregamento `load.bmp`/`splash.bmp`, spritesheet `sprites.bmp` e trilhas sonoras MIDI.
-	- Scripts avulsos `.lua` (`/sdcard/games/*.lua`) para testes e desenvolvimento rápido.
-- **Catálogo Alfabético e Índice Binário:** Os jogos são organizados em ordem alfabética estrita e catalogados no arquivo binário `games.idx` (magic `PETG`, versão 2), possibilitando carregamento instantâneo sem leitura redundante de metadados no cartão SD.
-- **Tela de Apresentação (*Splash Screen*):** Ao iniciar, o launcher apresenta a tela de abertura dedicada (`load.bmp`) ou realiza um upscale 2x linear em tempo real a partir do ícone 16x16 para gerar uma tela de 32x32 pixels.
-- **Execução na Máquina Virtual Lua (30 FPS):**
-	- Antes do boot do jogo, o driver Wi-Fi é automaticamente descarregado (`wifi_ntp_deinit`), liberando ~60 KB de memória DRAM contígua.
-	- A VM Lua executa o ciclo clássico de games: `init()`, `update(dt)` e `draw()`.
-	- Possui Garbage Collector incremental agressivo configurado para sistemas embarcados (`LUA_GCSETPAUSE = 100`, `LUA_GCSETSTEPMUL = 250`), prevenindo exaustão de heap e fragmentação de memória durante partidas prolongadas.
-	- **Integração com o Ciclo de Vida do Guará ([GUARA_EFFECTS]):** O arquivo `game.ini` ou os métodos Lua `guara.*` aplicam efeitos contínuos nas necessidades e RPG do Guará:
-		- Consumo por minuto: Energia e Alimentação.
-		- Ganhos por minuto: Humor, Experiência (EXP) e foco de treino de atributos (ATK, DEF, FOR, INT, AGI, SOR).
-		- Afinidade elemental periódica.
-		- Drops periódicos de itens do catálogo diretamente para o inventário.
+Sub-menu com as habilidades possuídas. As até 4 habilidades ativas, usadas no combate, aparecem com `ATV`. A mostra os detalhes da habilidade num modal (tipo, alvo, poder, custo de MP, natureza, efeitos e descrição), e ←/→ ativam ou desativam a habilidade selecionada. Com 4 ativas, um alerta avisa que não cabem mais.
 
-O Guará conta com um subsistema de console virtual com máquina virtual Lua 5.4 para execução de jogos leves a 30 FPS diretamente do cartão Micro SD:
+![Habilidades](./bitmaps/exemple/screen_skills.bmp)
 
-###### Estrutura de um Jogo
+### Arena ![Arena](./bitmaps/icons/arena.bmp)
+
+Sub-menu com duas opções:
+
+- **Treino** ![Treino](./bitmaps/icons/training.bmp): luta contra um Guará gerado com o mesmo nível e atributos de ±10%. Não abre se o Guará estiver desmaiado, dormindo ou com HP abaixo de 20%.
+- **Combate** ![Combate](./bitmaps/icons/fight.bmp): combate contra outro Guará pela rede ou pelo Bluetooth. Ainda não implementado; mostra um aviso.
+
+![Arena](./bitmaps/exemple/screen_arena.bmp)
+
+#### Tela de combate
+
+Roda a 30 FPS e não deixa o aparelho entrar no modo Ocioso nem no deep sleep.
+
+![Abertura do combate](./bitmaps/exemple/screen_combat_intro.bmp) ![Combate](./bitmaps/exemple/screen_combat.bmp)
+
+- **Abertura:** os nomes aparecem no formato "Fulano  VS  Siclano" por 1,8 s, ou em três linhas se não couberem; A ou B pulam a abertura.
+- **Lutadores:** os dois Guarás em 1x, com a base em Y=50: o do jogador do lado esquerdo de quem olha (X=30) e o oponente do outro lado (X=98), espelhado, para os dois se olharem. A animação continua a 3 FPS, com o olhar de raiva.
+- **Vitais:** no topo de cada lado, uma barra dupla de 56 x 8 px. O HP preenche a parte de cima (2 px de altura) e o MP é uma linha de 1 px embaixo, na mesma moldura. O nome do lutador fica logo abaixo. No oponente, o preenchimento e o nome partem da borda direita.
+- **Barra de ação (ATB):** uma barra vertical de 6 x 16 px no canto inferior do lado de cada lutador. Enche de baixo para cima, no tempo dado pela AGI, e pisca quando cheia.
+- **Escolha da ação:** A abre o modal de ações a qualquer momento, mesmo com a barra incompleta. Depois da escolha, ela não muda até o próximo ciclo (A não abre o modal), e a ação só é executada quando a barra enche. O tempo para enquanto o modal está aberto. Depois de cada golpe, A só volta a abrir o modal após 600 ms, para um toque atrasado da janela de reação não abrir o menu. As ações são:
+	- **Atacar:** ataque físico.
+	- **Habilidade:** escolha entre as habilidades ativas, com o custo de MP.
+	- **Itens:** escolha entre os itens do tipo poção possuídos.
+	- **Desistir:** confirmação; desistir vale na hora e encerra o combate como derrota.
+	- B também oferece desistir.
+
+	![Ações do combate](./bitmaps/exemple/screen_combat_actions.bmp)
+
+- **Janela de reação:** todo golpe contra o outro lado (ataque físico ou habilidade que não seja de cura) tem 600 ms de preparo. O atacante recua 3 px em 120 ms e segura; nos últimos 250 ms ele avança de volta até a posição original, e essa é a janela. Nada na tela indica a janela: o jogador prevê o tempo pelo movimento. Só vale uma tentativa por golpe, e apertar antes da janela perde a reação.
+	- Se quem ataca apertar A na janela (**golpe certeiro**), a chance de crítico aumenta e o ataque físico pode sair duplo.
+	- Se quem é atacado apertar A na janela (**defesa**), o dano cai e a chance de o atacante errar aumenta.
+	- O oponente também reage, acertando a janela com uma chance fixa. Os valores estão em [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
+- **Animação do ataque:** o atacante dá um pulo de 6 px na direção do alvo e volta; no ataque duplo, pula duas vezes. O alvo atingido muda para o olhar atordoado, recua 2 px (1 px se defendeu) e pisca.
+- **Impacto:** quando um golpe causa dano, os 7 quadros de `bitmaps/animations/hit` (16x16, a 30 FPS) aparecem na borda do sprite do alvo voltada para o atacante, à meia altura, desenhados em XOR: o preto é transparente e, onde a animação cruza o sprite, a cor se inverte. No ataque duplo, a animação se repete 8 px mais para dentro do sprite.
+- **Mensagens:** o dano sobe a partir do alvo (`-10`), com `!` no crítico (`-10!`) e `2x` no ataque duplo (`2x-20`). Também aparecem "Esquivou!", "Errou!", "Falhou!" e as curas (`+30`). Itens e habilidades mostram o ícone no centro da tela, piscando cada vez mais rápido; numa cura, o alvo fica com o olhar feliz.
+- **Fim do combate:** o vencedor fica com o olhar feliz e o perdedor com o olhar desmaiado, parado no quadro 1. Tocam a melodia de vitória ou de derrota, e a tela mostra "VITORIA!" ou "DERROTA". Depois de 2,5 s, A ou B continuam: na vitória aparece uma ficha com o XP ganho, o item obtido (se houver) e o novo nível; na derrota, a tela volta à Arena.
+- **Consequências do treino:** o HP (mínimo de 1), o MP e os estados persistentes do combate voltam para o Guará, e cada luta custa 5% de energia. A vitória dá XP, pode dar um item e cura a maldição; os medidores ocultos também mudam (ver [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md)).
+
+#### Fórmulas do combate
+
+1. **Tempo para encher a barra de ação:**
+   $$\text{Tempo (s)} = \max\left(1{,}5;\ 6{,}0 - \text{AGI} \times 0{,}05\right)$$
+   Com AGI 5, a barra leva 5,75 s; com AGI 90 ou mais, atinge o mínimo de 1,5 s.
+2. **Dano físico:**
+   $$\text{Dano} = \max\left(1;\ \lfloor \text{ATK} \times 1{,}2 + \text{FOR} \times 0{,}8 - \text{DEF} \times 0{,}7 \rfloor\right)$$
+3. **Multiplicador elemental:** vantagem +25% e desvantagem −25% no dano das habilidades. Uma natureza composta neutraliza a fraqueza quando também contém o elemento atacante (ex.: Vapor contra Água recebe 1,0×).
+4. **Crítico e esquiva:**
+   $$\text{Crítico (\%)} = \min\left(50\%;\ 5\% + \text{SOR} \times 0{,}4\%\right),\quad \text{Dano crítico} = \lfloor \text{Dano} \times 1{,}5 \rfloor$$
+   $$\text{Esquiva (\%)} = \min\left(35\%;\ (\text{AGI}_{\text{defensor}} - \text{AGI}_{\text{atacante}}) \times 0{,}3\%\right)\ \text{se}\ \text{AGI}_{\text{defensor}} > \text{AGI}_{\text{atacante}}$$
+
+O dano de habilidade, o custo de MP, a cura, a ordem dos multiplicadores, os efeitos dos estados em combate, a IA do oponente e os valores da janela de reação estão em [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
+
+### Biblioteca ![Biblioteca](./bitmaps/icons/library.bmp)
+
+Sub-menu com as obras da pasta `/sdcard/library`, montando o cartão se for preciso. Sem obras, mostra "Nada em /library".
+
+![Biblioteca](./bitmaps/exemple/screen_library.bmp)
+
+- **Texto simples** ![texto](./bitmaps/icons/txt.bmp): arquivos `.txt`, com o nome do arquivo tratado como título (sem extensão e com `_` virando espaço).
+- **Livro** ![livro](./bitmaps/icons/book.bmp): uma pasta com `book.ini`, `book.txt` e imagens. O título vem de `title=` na seção `[BOOK]` do `book.ini`, ou do nome da pasta. O texto pode citar imagens 1-bit de até 16x16 como `{{imagem.bmp}}`, que aparecem centralizadas numa linha própria.
+
+O leitor quebra o texto em linhas de até 20 caracteres, preferindo os espaços, e aceita arquivos de até 64 KB. ↑/↓ rolam uma linha e ←/→ uma página; a barra de título some suavemente ao rolar para baixo. B fecha o leitor. Arquivos `.txt` abertos pelo Cartão SD usam o mesmo leitor.
+
+### Jogos ![Jogos](./bitmaps/icons/games.bmp)
+
+Sub-menu com os jogos do cartão, em ordem alfabética do nome da pasta, com o título do `game.ini` e o ícone de cada jogo, ou ![jogo](./bitmaps/icons/game_item.bmp) sem ícone. A lista é lida da pasta a cada abertura.
+
+![Jogos](./bitmaps/exemple/screen_games.bmp)
+
+O console virtual executa jogos em Lua 5.4 a 30 FPS. Cada jogo é uma pasta em `/sdcard/games/<slug>/`; scripts `.lua` soltos em `/sdcard/games/` também aparecem, para testes rápidos.
 
 ```text
 /sdcard/games/meu_jogo/
-├── game.ini       # Arquivo de metadados, configurações de áudio e efeitos no Guará
-├── main.lua       # Script principal de lógica do jogo (init, update, draw)
-├── icon.bmp       # Ícone 16x16 monocromático para o launcher
-├── load.bmp       # (Opcional) Tela de abertura 32x32 ou 128x64
-├── sprites.bmp    # (Opcional) Banco de sprites monocromáticos
-└── bgm.mid        # (Opcional) Trilha sonora de fundo em MIDI
+├── game.ini       # metadados e efeitos no Guará
+├── main.lua       # lógica do jogo: init(), update(dt), draw()
+├── icon.bmp       # ícone 16x16 da lista
+├── load.bmp       # (opcional) tela de abertura
+├── sprites.bmp    # (opcional) spritesheet
+└── bgm.mid        # (opcional) música
 ```
 
-###### O Arquivo `game.ini`
+**Ao abrir um jogo:**
+
+1. O Wi-Fi é descarregado (`network_suspend`) para liberar memória.
+2. A tela de abertura aparece por 1,5 s: o arquivo do campo `splash` (padrão `load.bmp`), centralizado; sem ele, o ícone ampliado 2x.
+3. A VM Lua é criada em *sandbox*, com limite de 120 KB de memória e coletor de lixo incremental agressivo (pausa 100, multiplicador 250). Não há acesso a `io`, `os`, `require`, `dofile` nem `loadfile`.
+4. O jogo roda o ciclo `init()` uma vez e, a cada quadro, `update(dt)` (com `dt` em segundos) e `draw()`.
+5. O jogo termina ao chamar `exit()` ou ao segurar **B** por 2 s.
+
+**O arquivo `game.ini`:**
 
 ```ini
 [GAME]
-title=Boitata
-author=Guará Studios
-version=1.0.0
-description=Cobra mística que recolhe labaredas pela floresta
+title=Boitatá
 icon=icon.bmp
 splash=load.bmp
-midi_bgm=boitata.mid
 
 [GUARA_EFFECTS]
 cost_energy_per_min=3
@@ -456,322 +543,347 @@ drop_item_id=14
 drop_item_interval_min=2
 ```
 
-###### Ciclo de Execução e APIs da VM Lua
+- `[GAME]`: o firmware lê `title` (título na lista), `icon` e `splash`. Outros campos, como `author`, `version` e `description`, são só informativos.
+- `[GUARA_EFFECTS]`: aplicado a cada minuto jogado. Gasta energia e alimentação (`cost_*`); dá humor, XP e pontos no atributo de `gain_stat_focus` (`ATK`, `DEF`, `STR`, `AGI`, `INT` ou `LUK`); soma afinidade no elemento de `affinity_elem` (`FIRE`, `EARTH`, `WATER`, `AIR`, `NEUTRAL`); e entrega o item `drop_item_id` a cada `drop_item_interval_min` minutos.
 
-A máquina virtual Lua roda a 30 FPS gerenciada pelo FreeRTOS e expõe as seguintes APIs nativas em C:
-- **Ciclo do Script:**
-	- `init()`: Inicialização de variáveis, pontuação e recursos do jogo.
-	- `update(dt)`: Lógica física e regras do jogo a cada quadro com delta de tempo.
-	- `draw()`: Comandos de renderização gráfica no display OLED.
-- **Módulo `oled`:** Funções para limpar a tela (`oled.clear()`), desenhar pixels, linhas, retângulos contornados e preenchidos, círculos, textos e bitmaps monocromáticos.
-- **Módulo `btn`:** Verificação de botões pressionados (`btn.up()`, `btn.down()`, `btn.left()`, `btn.right()`, `btn.a()`, `btn.b()`).
-- **Módulo `audio`:** Funções para bips sonoros (`audio.beep(freq, ms)`), notas musicais e reprodução de arquivos MIDI (`audio.play_midi(path)`).
-- **Módulo `guara` (ou `pet`):** Comunicação bidirecional com o Guará ativo:
-	- `guara.get_status()`: Retorna tabela com os dados vitais, atributos e nível (campos `name`, `nature`, `level`, `xp`, `hp`, `hp_max`, `mp`, `mp_max`, `energy`, `mood`, `satiety`, `health`, `atk`, `def`, `str`, `agi`, `int`, `luk`).
-	- `guara.give_item(id, quantidade)`: Adiciona ao inventário (mochila) unidades de um item do catálogo, pelo ID numérico ou pelo identificador textual (ex.: `"maca"`).
-	- `guara.add_stat(nome, valor)`: Modifica status vitais ou atributos de combate (`hp`, `mp`, `energy`, `mood`, `satiety`, `health`, `atk`, `def`, `str`, `agi`, `int`, `luk`).
-	- `guara.add_exp(pontos)`: Concede experiência ao Guará com cálculo de *Level Up*.
-	- `guara.add_affinity(elemento, pontos)`: Incrementa a afinidade com uma natureza elemental (`fire`, `earth`, `water`, `air`, `neutral`), seguindo as regras de *Afinidades*; `light`/`shadow` movem o medidor Dia × Noite e `mind` soma pontos de INT.
-	- `guara.report_result(vitoria)`: Registra o resultado de um minijogo ou batalha (`true` = vitória) no medidor Vitórias × Derrotas.
-- **Módulo `storage`:** Funções de gravação e leitura de arquivos de save isolados dentro da pasta do jogo (`GAME_DIR`), impedindo que jogos sobrescrevam dados uns dos outros: `storage.save(chave, texto)` e `storage.load(chave)` (chave com letras, números e `_`).
+#### API Lua
 
-Referência completa da API implementada (cores: `1` = branco, `0` = preto, `2` = inverter; coordenadas podem ser fracionárias):
+Cores: `1` = branco, `0` = preto, `2` = inverter. As coordenadas podem ser fracionárias.
 
 | Módulo | Funções |
 |---|---|
 | `oled` | `clear()`, `pixel(x,y[,c])`, `line(x0,y0,x1,y1[,c])`, `rect(x,y,l,a[,c])`, `fill(x,y,l,a[,c])`, `circle(x,y,r[,c])`, `fillcircle(x,y,r[,c])`, `text(x,y,s[,c])` → largura, `textwidth(s)`, `icon(nome,x,y[,opções])` (bitmap da VROM; opções = `espelhar` ou `{mode, scale, mirror}`), `icon_size(nome)` → largura, altura, `load(arquivo.bmp)` → id, `sprite(id,sx,sy,l,a,x,y[,espelhar])` (recorte de spritesheet) |
 | `btn` | `up()`, `down()`, `left()`, `right()`, `a()`, `b()` (segurando), `pressed(nome)` (só no quadro em que desceu) |
-| `audio` | `beep(freq,ms)`, `note(nota_midi,ms)`, `play_midi(arquivo)`, `stop()` |
-| `guara` / `pet` | `get_status()`, `give_item(id\|slug,qtd)`, `add_stat(nome,valor)`, `add_exp(pontos)`, `add_affinity(elemento,pontos)`, `report_result(vitoria)`, `draw(x,y[,{eye, scale, mirror, frame}])` → altura (desenha o Guará do jogador com a base em `y` e centralizado em `x`) |
+| `audio` | `beep(freq,ms)`, `note(nota_midi,ms)`, `play_midi(arquivo)` (da pasta do jogo), `stop()` |
+| `guara` / `pet` | `get_status()`, `give_item(id\|slug,qtd)`, `add_stat(nome,valor)`, `add_exp(pontos)`, `add_affinity(elemento,pontos)`, `report_result(vitoria)`, `draw(x,y[,{eye, scale, mirror, frame}])` → altura (desenha o Guará do jogador com a base em `y`, centralizado em `x`) |
 | `catalog` | `item(id\|slug)`, `equipment(id\|slug)`, `skill(id\|slug)` → `{id, slug, name, icon, type, description}` (itens também têm `owned`), `count("items"\|"equipment"\|"skills")` |
 | `ui` (desenho) | `title(texto)`, `tabs({nomes}, sel)`, `list({itens}, sel[,{id, y, rows}])` (itens = texto ou `{text, icon, info}`), `footer(texto_b, texto_a)`, `progress(x,y,l,a,valor,max)`, `scrollbar(y,a,total,visiveis,topo)`, `marquee(x,y,l,texto[,{id, color}])`, `paragraph(x,y,l,max_linhas,texto[,centralizar])`, `text_center(x,l,y,texto[,c])` |
-| `ui` (interativos) | `alert(titulo,msg[,icone[,ao_fechar]])`, `confirm(titulo,msg,ao_responder(sim)[,texto_nao,texto_sim])`, `choice(titulo,{opcoes},ao_escolher(i))`, `quantity(titulo,min,max,inicial,ao_escolher(n))`, `details(titulo,texto)`, `keyboard(titulo,inicial,max,ao_concluir(texto))` |
-| `storage` | `save(chave,texto)`, `load(chave)` |
-| globais | `exit()`, `millis()`, `WIDTH`, `HEIGHT` |
+| `ui` (interativos) | `alert(titulo,msg[,icone[,ao_fechar]])`, `confirm(titulo,msg,ao_responder(sim)[,texto_nao,texto_sim])`, `choice(titulo,{opcoes},ao_escolher(i))` (até 16 opções), `quantity(titulo,min,max,inicial,ao_escolher(n))`, `details(titulo,texto)`, `keyboard(titulo,inicial,max,ao_concluir(texto))` |
+| `storage` | `save(chave,texto)`, `load(chave)`: arquivos isolados na pasta do jogo, com chave de letras, números e `_` |
+| globais | `exit()`, `millis()`, `WIDTH` (128), `HEIGHT` (64) |
 
-Detalhes da API:
-
+- **`guara.get_status()`:** devolve `name`, `nature`, `level`, `xp`, `hp`, `hp_max`, `mp`, `mp_max`, `energy`, `mood`, `satiety`, `health`, `atk`, `def`, `str`, `agi`, `int`, `luk` e a aparência: `color` (`black`/`white`), `head` (1..9) e `stage` (0..4).
+- **`guara.add_stat(nome, valor)`:** aceita os mesmos nomes de vitais e atributos.
+- **`guara.add_affinity(elemento, pontos)`:** `fire`, `earth`, `water`, `air` e `neutral` seguem as regras de *Afinidades*; `light` e `shadow` movem o medidor Dia × Noite; `mind` soma pontos de INT.
+- **`guara.report_result(vitoria)`:** registra o resultado (`true` = vitória) no medidor Vitórias × Derrotas.
 - **Índices:** `sel`, `topo` e as respostas de `ui.choice` começam em 1, como é comum no Lua.
-- **Modos de desenho** (`mode`):
-  - `or` (padrão): só os pixels brancos aparecem;
-  - `copy`: opaco;
-  - `mask`: o preto apaga e o branco é transparente;
-  - `xor`: inverte o fundo;
-  - `invert`: opaco com as cores trocadas.
-  
-  `scale = 2` amplia 2x.
-- **Olhos do `guara.draw`:** `standard`, `happy`, `anger`, `bored`, `closed`, `dazed`, `fainted`, `scared`, `wink`.
-- **`guara.get_status()`:** também informa a aparência: `color` (`black`/`white`), `head` (1..9) e `stage` (0..4).
-- **Componentes de desenho:** só desenham, então o jogo guarda a seleção e chama o componente no `draw()` a cada quadro. Listas e letreiros têm até 4 estados independentes, escolhidos pelo `id` (1..4).
-- **Componentes interativos:** abrem a tela do sistema por cima do jogo, que fica em pausa (o `update()` não é chamado e o `draw()` continua desenhando o último estado). A resposta chega na função de retorno, e B sempre cancela: `nil` na escolha, na quantidade e no teclado, `false` na confirmação. A tecla que fecha o modal não é repassada ao jogo.
+- **Modos de desenho (`mode`):** `or` (padrão: só os pixels brancos aparecem), `copy` (opaco), `mask` (o preto apaga e o branco é transparente), `xor` (inverte o fundo) e `invert` (opaco com as cores trocadas). `scale = 2` amplia 2x.
+- **Olhos do `guara.draw`:** `standard`, `happy`, `anger`, `bored`, `closed`, `dazed`, `fainted`, `scared` e `wink`.
+- **Componentes de desenho:** só desenham. O jogo guarda a seleção e chama o componente no `draw()` a cada quadro. Listas e letreiros têm até 4 estados independentes, escolhidos pelo `id` (1..4).
+- **Componentes interativos:** abrem a tela do sistema por cima do jogo, que fica em pausa (o `update()` não roda e o `draw()` continua desenhando o último estado). A resposta chega pela função de retorno, e B sempre cancela: `nil` na escolha, na quantidade e no teclado, `false` na confirmação. A tecla que fecha o modal não é repassada ao jogo.
 
-O jogo termina ao chamar `exit()` ou segurando **B** por 2 segundos. Há exemplos completos em `examples/sdcard/games/` (copie a pasta do jogo para `/games` no cartão):
+Há exemplos completos em `examples/sdcard/games/`; copie a pasta do jogo para `/games` no cartão:
 
-- `apple_catch/` — Pega-Maçã: exemplo curto e comentado da API.
-- `boitata/` — Boitatá: jogo da serpente de fogo, com menu, configurações, slots de save e ranking. É o jogo de referência do projeto e vai evoluir junto com o console.
+- `apple_catch/`: Pega-Maçã, exemplo curto e comentado da API.
+- `boitata/`: Boitatá, jogo da serpente de fogo com menu, configurações, slots de save e ranking. É o jogo de referência do projeto e evolui junto com o console.
 
+### Músicas ![Músicas](./bitmaps/icons/music.bmp)
 
-##### Músicas ![Musicas](./bitmaps/icons/music.bmp)
+Sub-menu com os arquivos `.mid` e `.midi` de `/sdcard/music`, com o nome tratado (sem extensão e com `_` virando espaço). A abre o tocador.
 
-Reprodutor de áudio dedicado para trilhas sonoras e composições musicais em formato MIDI:
-- **Sintetizador Piezoelétrico:** Baseado em geração de ondas quadradas via PWM (periférico LEDC canal 0, timer 0 no pino GPIO 25), reproduzindo notas musicais polifônicas/monofônicas com fidelidade tonal em background através de tasks FreeRTOS.
-- **Interface Gráfica com 2 Modos:**
-	1. **Lista de Músicas:** Varre a pasta `/sdcard/music/` por arquivos `.mid` e `.midi`, tratando os nomes de arquivo (removendo extensões e underscores), exibindo ícone 16x16, indicador de reprodução ativa e barra de rolagem de 1px.
-	2. **Tela do Tocador (*Player*):**
-		- Barra superior com o nome da faixa deslizando continuamente (*marquee*).
-		- Visualização gráfica com barra de progresso horizontal e contador de tempo formatado em minutos e segundos (`tempo atual / tempo total`).
-		- Ícones gráficos de reprodução (*Play* ▶ e *Pause* ⏸).
-		- Controles de reprodução: Botão **A** alterna entre tocar e pausar, Botão **B** retorna à lista sem interromper o áudio, e direcionais **Cima/Baixo** permitem trocar de faixa ou ajustar o volume.
+![Músicas](./bitmaps/exemple/screen_music.bmp)
 
-##### Imagens ![Imagens](./bitmaps/icons/images.bmp)
+- **Som:** o MIDI é reduzido a uma voz (vale a nota mais aguda ativa) e tocado em onda quadrada pelo LEDC, numa task de áudio em segundo plano. Os efeitos sonoros interrompem a música enquanto tocam.
+- **Tocador:** título com o nome da faixa (com *marquee*), ícone de tocar ou pausar, barra de progresso, tempo atual e total em `mm:ss` e o nível de volume.
+- **Controles:** A toca e pausa, ↑/↓ trocam de faixa, ←/→ ajustam o volume (1 a 3) e B volta à lista sem parar a música.
+- Tocar uma música cura a maldição do Guará.
 
-Um sub-menu padrão que lista os arquivos .bmp na pasta `image` do cartão SD, ao escolher uma aparece o modal padrão com as opções abrir, detalhe e excluir, para excluir deve ser apresentado um modal padrão de confirmação.
+### Imagens ![Imagens](./bitmaps/icons/images.bmp)
 
-> TODO: Elabora uma funcionalidade de criar imagens de 64x64, 32x32 ou 16x16.
-##### Relógio ![Relógio](./bitmaps/icons/clock.bmp)
+Sub-menu com os `.bmp` de `/sdcard/image` e o tamanho de cada arquivo. A abre um modal com **Abrir**, **Detalhes** e **Excluir** (com confirmação). O visualizador mostra a imagem 1-bit; se ela for maior que a tela, os direcionais a deslocam de 8 em 8 px, e A ou B fecham.
 
-O menu é onde é exibida as funcionalidades referente ao relógio, sendo elas:
+![Imagens](./bitmaps/exemple/screen_images.bmp)
 
-- Despertatdor (![](./bitmaps/icons/alarm.bmp)): Onde é configurado um despertador que funciona em segundo plano mesmo quando o menu esta fechado, é xibida uma lista com a primeira opção, Criar (![](./bitmaps/icons/add.bmp)), onde pode ser criado um novo dispertador, esse dispertador é armazenado no cartão sd, a tela de criação e edição, tem a barra de titulo padrã mais abaixo centralizado com uma fonte maior que o padrão no formato --:--, a posição do curso é controlado pelos botões esquerda e direita e o numero é alterado com as teclas baixo e cima, o cursor é um retangulo com cantos arredondados, preenchido, invertentendo a cor da finete em quanto pisca em cima do digito selecionado, nas horas vão ser apena 0, 1 e 2 no primeiro digito e 0 a 9 no segundo. Nos minutos o primeiro digito vai de 0 até 5 e o segundo de 0 a 9, em baixo apena mostrando CANCELAR e SALVAR, no botão A Salva e no B cancela, se for uma edição ao cancelar o despertador é apagado, é exibido um modal de confirmação sim/não. Os outros item da lista são Despertadores salvos, com icone (![](./bitmaps/icons/alarm.bmp)) e hora e minuto, podendo ser editados, ao termino toca uma sequencia de bipes e exibe um modal informando o despertador, ao confirmar os bipes param, se não confirmar eles param altomaticamente em 1 minuto.
-- Cronometro (![](./bitmaps/icons/stopwatch.bmp)), é só exibido a barra de titulo padrão o relogio com fonte maior  e em baixo: Iniciar/Parar (A) e sair (B). (Iniciar quando parado, Parar quando correndo)
-- Temporizador (![](./bitmaps/icons/timer.bmp)): Nos mesmo moude da tela de edição é configurado um tempo, em baixo  Iniciar/Parar (A) e Sair (B), quado parado o temporizador pode ser editad, o temporizador também roda em segundo plano, armazenado apena la ram e excluido ao concluir, ao termino toca uma sequencia de bipes e exibe um modal informando que a contagem terminol, ao confirmar os bipes param, se não confirmar eles param altomaticamente em 1 minuto. (Sem barra de progresso). 
-- Hora de Dormir (![](./bitmaps/icons/moon_face.bmp)): Aqui é configurado a hora de dormir e de acordar do guará, padrão de 20:00 a 08:00.( deve ser implementado no ciclo de vida a hora de dormir).
-- Configurar (![](./bitmaps/icons/gear.bmp)), Aqui abre outro su-menu com as opções: 
-	- Ajuste manual (![](./bitmaps/icons/wristwatch.bmp)), onde a hora pode ser ajustada manualmente, com atela de edição de hora padronizada acima.
-	- Sincronizar NTP (![](./bitmaps/icons/satellite.bmp)), Onde a hora é sincronizada pela internete.
+> TODO: criar imagens de 64x64, 32x32 ou 16x16 no aparelho.
 
-##### Cartão SD ![Cartão SD](./bitmaps/icons/sd_card.bmp)
+### Relógio ![Relógio](./bitmaps/icons/clock.bmp)
 
-O gerenciador de arquivos do Micro SD substitui o antigo menu Arquivos e adota estritamente o padrão oficial de sub-menu de 3 linhas visíveis (16px cada) com a seleção padrão do sistema (retângulo com cantos arredondados sem preenchimento), marquee em títulos longos, exibição de tamanho formatado à direita e barra de rolagem de 1px em X=127. Navega diretamente pela árvore de diretórios do cartão montado em `/sdcard/`:
+Sub-menu com Despertador, Cronômetro, Temporizador, Hora de dormir e Configurar.
 
-- **Ícones Padrão de Identificação (16x16 - Integrados na VROM):**
-	- Subir Diretório (![](./bitmaps/icons/up.bmp) `..`)
-	- Diretórios / Pastas: (![](folder.bmp))
-	- Imagens Monocromáticas `.bmp` (![](images.bmp)): 
-	- Músicas MIDI `.mid`, `.midi` (![[tape.bmp]])): 
-	- Arquivo LUA: (![[moon_face.bmp]])
-	- Arquivos de Save e Dados `.sav`, `.dat`, `.idx` (![[save.bmp]]): 
-	- Textos `.txt` (![[txt.bmp]]): 
-	- Arquivos de Configuração `.ini`, `.cfg` (![[gear.bmp]]): 
-	- Outros Arquivos (Padrão/Fallback) (![[file.bmp]])
-	- *Todos esses ícones residem na VROM *
+![Relógio](./bitmaps/exemple/screen_clock.bmp)
 
-- **Ações Contextuais de Arquivos:** Ao pressionar o botão **A** sobre qualquer arquivo, abre-se o modal de comandos do sistema:
-	- **Abrir / Visualizar:**
-		- Imagens monocromáticas `.bmp` são renderizadas diretamente no display OLED de 128x64.
-		- Arquivos de texto `.txt` abrem diretamente no leitor da Biblioteca.
-		- Scripts de jogos `.lua` iniciam na máquina virtual do Virtual Console.
-	- **Copiar / Mover:** Gerencia arquivos na árvore de diretórios do cartão Micro SD.
-	- **Renomear:** Abre o teclado virtual na tela para edição do nome do arquivo.
-	- **Excluir:** Exclusão definitiva de arquivos ou diretórios com confirmação dupla.
-	- **Detalhes:** Exibe nome completo, tipo e tamanho exato em bytes.
+- **Editor de hora:** tela padrão usada pelos despertadores, pelo temporizador, pela hora de dormir e pelo ajuste manual. Mostra `HH:MM` centralizado numa fonte maior e o rodapé CANCELAR (B) / SALVAR (A). ←/→ movem o cursor e ↑/↓ mudam o dígito. O cursor é um retângulo de cantos arredondados preenchido, que pisca invertendo a cor do dígito. Nas horas, o primeiro dígito vai de 0 a 2 e o segundo de 0 a 9 (até 23); nos minutos, o primeiro vai de 0 a 5 e o segundo de 0 a 9.
 
-#####  Ajustes ![Ajustes](./bitmaps/icons/adjustments.bmp)
+	![Editor de hora](./bitmaps/exemple/screen_alarm_editor.bmp)
 
-O menu de Ajustes centraliza a calibração de hardware, preferências do jogador, conectividade e manutenção do sistema. Adota o padrão de sub-menu de 3 linhas com ícone 16x16, letreiro em rotação (*marquee*) para títulos longos, valor de estado à direita e barra de rolagem de 1px:
+- **Despertador** ![despertador](./bitmaps/icons/alarm.bmp): lista com **Criar** ![criar](./bitmaps/icons/add.bmp) e os despertadores salvos (até 8), gravados em `/sdcard/guara/alarms.txt`. Criar abre o editor; num despertador salvo, o editor edita a hora, e cancelar pergunta se o despertador deve ser apagado. Os despertadores tocam em segundo plano, mesmo com o aparelho em deep sleep: uma sequência de bipes e um alerta com a hora. Confirmar o alerta para os bipes; sem confirmação, eles param sozinhos em 1 minuto.
 
-1. **WiFi** (![[wifi.bmp]]) (Status: `ON` / `OFF`) - Controle do rádio Wi-Fi 802.11 b/g/n, busca ativa de pontos de acesso (redes) com indicador de potência de sinal RSSI, conexão com senha através do teclado virtual e sincronização automática do relógio via Network Time Protocol (NTP) com compensação de fuso horário. Com `ON`, o rádio só é ligado quando uma tarefa precisa de rede (ver *Conectividade: Wi-Fi sob Demanda*).
-	1. Liga/Desliga (![[on_off.bmp]]) (Status: `ON` / `OFF`).
-	2. Status (![[info.bmp]])
-	3. Buscar (![[search.bmp]]).
-	4. Resdes salvas (![[save.bmp]]).
-2. **Bluetooth** (![[bitmaps/icons/bluetooth.bmp]]) (Status: `ON` / `OFF`) - Ativação e desativação do rádio Bluetooth do ESP32 para troca de itens e comunicação local.
-	1. Liga/Desliga (![[on_off.bmp]]) (Status: `ON` / `OFF`).
-	2. Buscar (![[search.bmp]]).
-	3. Dispositivos pareados (![[save.bmp]]).
-3. **Energia** (![[battery.bmp]]) (Status: `###%` / `USB`) - Telemetria da bateria LiPo com leitura de tensão analógica e cálculo de porcentagem via ADC1_CH6 (GPIO 34), detecção de alimentação via barramento USB e configuração do temporizador de inatividade para entrada em modo de economia (*Deep Sleep*: 1 min, 2 min, 5 min, 10 min ou Desativado).
-	1. Status (![[info.bmp]])
-	2. Economia (![[plant.bmp]])
-4. **Armazenamento** (![[box.bmp]]) (Status: `OK` / `--`) - Diagnóstico de montagem do barramento SPI do cartão Micro SD, exibindo capacidade total e espaço livre disponível em MB/GB e dados e espaço livre da memoria interna.
-	1. Memoria interna (![[chip.bmp]])
-	2. Micro SD (![[sd_card.bmp]])
-5. **Controle** (![[joystick.bmp]])  - Tela interativa de teste de botões (D-Pad, A e B).
-6. **Som** (![[sound.bmp]]) (Status: `MUDO` / Vazio) - Ativação ou desativação do modo silencioso geral do sistema e teste acústico do buzzer piezoelétrico através de reprodução de escalas e notas musicais.
-	1. Mudo (![[bitmaps/icons/mute.bmp]]) (Status: `MUDO` / Vazio)
-	2. Teste de som(![[boom_box.bmp]])
-7. **Sistema** (![[info.bmp]]) - Ficha técnica completa do sistema com exibição da versão semântica do firmware, data e hora da compilação, versão do framework ESP-IDF, telemetria de memória DRAM e Heap livre, e módulo de atualização sem fio (Dual OTA via Wi-Fi) ou via arquivo binário no cartão SD.
-	1. Status (![[info.bmp]]).
-	2. Atualizar (![[satellite.bmp]])
-		1. GitHub (![[github.bmp]]) 
-		2. Micro SD (![[sd_card.bmp]])
-> TODO: falta implementa a atualização pelo github.
-8. **Reiniciar** (![[kill.bmp]]) - Procedimento de renascimento do Guará (*Factory Rebirth*). Apresenta um modal de dupla confirmação com alerta crítico de perda irreversível de dados. Ao confirmar, os setores de save da Flash interna são limpos e o sistema gera proceduralmente um novo Guará bebê com nova combinação genética aleatória de cor, cabeça e natureza elemental, restaurando o kit inicial de itens.
+	![Despertadores](./bitmaps/exemple/screen_alarms.bmp)
+
+- **Cronômetro** ![cronômetro](./bitmaps/icons/stopwatch.bmp): o tempo `MM:SS.d` em fonte maior e o rodapé SAIR (B) / INICIAR ou PARAR (A).
+- **Temporizador** ![temporizador](./bitmaps/icons/timer.bmp): o tempo em fonte maior e o rodapé SAIR (B) / INICIAR ou PARAR (A). Parado, o tempo pode ser editado. Ele conta em segundo plano e sobrevive ao deep sleep (fica na RTC RAM, e o aparelho acorda no fim). No fim, toca e mostra o alerta "A contagem terminou!", com as mesmas regras do despertador.
+
+	![Temporizador](./bitmaps/exemple/screen_timer.bmp)
+
+- **Hora de dormir** ![hora de dormir](./bitmaps/icons/moon_face.bmp): sub-menu com **Dormir** e **Acordar**, mostrando os horários à direita (padrão 20:00 e 08:00). O Guará dorme no minuto da hora de dormir e acorda na hora de acordar, se a energia passar de 50% (ver *Ciclo de vida*).
+
+	![Hora de dormir](./bitmaps/exemple/screen_bedtime.bmp)
+
+- **Configurar** ![configurar](./bitmaps/icons/gear.bmp): **Ajuste manual** ![ajuste manual](./bitmaps/icons/wristwatch.bmp), com o editor de hora, e **Sincronizar NTP** ![NTP](./bitmaps/icons/satellite.bmp), que acerta a hora pela internet.
+
+### Cartão SD ![Cartão SD](./bitmaps/icons/sd_card.bmp)
+
+Gerenciador de arquivos do cartão no padrão de sub-menu, começando em `/sdcard`. A barra de título mostra a pasta atual e a informação à direita é o tamanho (`574B`, `12K`, `3M`) ou `DIR`. A abre a pasta ou o modal de comandos do arquivo; ←/→ abrem os comandos também para pastas; B sobe um nível e, na raiz, volta ao menu.
+
+![Cartão SD](./bitmaps/exemple/screen_sd_card.bmp) ![Comandos do Cartão SD](./bitmaps/exemple/screen_sd_actions.bmp)
+
+- **Ícones:**
+	- pasta ![pasta](./bitmaps/icons/folder.bmp);
+	- imagem `.bmp` ![imagem](./bitmaps/icons/images.bmp);
+	- música `.mid` / `.midi` ![música](./bitmaps/icons/tape.bmp);
+	- script `.lua` ![lua](./bitmaps/icons/moon_face.bmp);
+	- dados `.sav`, `.dat`, `.idx` ![dados](./bitmaps/icons/save.bmp);
+	- texto `.txt` ![texto](./bitmaps/icons/txt.bmp);
+	- configuração `.ini`, `.cfg` ![configuração](./bitmaps/icons/gear.bmp);
+	- outros ![arquivo](./bitmaps/icons/file.bmp).
+- **Comandos:**
+	- **Abrir:** imagens `.bmp` aparecem na tela, `.txt` abre no leitor da Biblioteca e `.lua` roda no console virtual; outros tipos mostram "Tipo de arquivo não suportado".
+	- **Copiar / Mover:** marca o arquivo; navegando até outra pasta, a primeira linha da lista vira "Colar aqui" ou "Mover aqui".
+	- **Renomear:** abre o teclado virtual com o nome atual.
+	- **Excluir:** pede duas confirmações; pastas são apagadas com o conteúdo.
+	- **Detalhes:** nome completo, tipo e tamanho em bytes.
+
+### Ajustes ![Ajustes](./bitmaps/icons/adjustments.bmp)
+
+Sub-menu com o estado de cada opção à direita.
+
+![Ajustes](./bitmaps/exemple/screen_settings.bmp)
+
+1. **Wi-Fi** ![Wi-Fi](./bitmaps/icons/wifi.bmp) (`ON` / `OFF`): rede permitida ou proibida (ver *Wi-Fi sob demanda*).
+	1. **Liga/Desliga** ![liga/desliga](./bitmaps/icons/on_off.bmp) (`ON` / `OFF`).
+	2. **Status** ![status](./bitmaps/icons/info.bmp): estado da rede, roteador, IP, sinal em dBm e a última sincronização NTP.
+	3. **Buscar** ![buscar](./bitmaps/icons/search.bmp): lista as redes com o sinal; escolher uma pede a senha no teclado virtual e conecta.
+	4. **Redes salvas** ![redes salvas](./bitmaps/icons/save.bmp): conectar ou esquecer cada rede.
+
+	![Wi-Fi](./bitmaps/exemple/screen_settings_wifi.bmp)
+
+2. **Bluetooth** ![Bluetooth](./bitmaps/icons/bluetooth.bmp) (`ON` / `OFF`): Liga/Desliga, Buscar e Dispositivos pareados. Ainda não implementado; as opções mostram um aviso.
+3. **Energia** ![Energia](./bitmaps/icons/battery.bmp) (`###%` / `USB`):
+	1. **Status** ![status](./bitmaps/icons/info.bmp): porcentagem, tensão e se está carregando.
+	2. **Economia** ![economia](./bitmaps/icons/plant.bmp): tempo sem uso até o deep sleep: 1, 2, 5 ou 10 minutos, ou Desativado (`OFF`).
+
+	![Energia](./bitmaps/exemple/screen_settings_energy.bmp) ![Economia](./bitmaps/exemple/screen_power_save.bmp)
+
+4. **Armazenamento** ![Armazenamento](./bitmaps/icons/box.bmp) (`OK` / `--`):
+	1. **Memória interna** ![memória interna](./bitmaps/icons/chip.bmp): bitmaps da VROM, registros do catálogo, saves gravados e memória livre.
+	2. **Micro SD** ![micro SD](./bitmaps/icons/sd_card.bmp): capacidade e espaço livre do cartão.
+5. **Controle** ![Controle](./bitmaps/icons/joystick.bmp): teste dos botões, que acendem na tela enquanto pressionados. Segure B por 1 s para sair.
+6. **Som** ![Som](./bitmaps/icons/sound.bmp) (`MUDO` / vazio):
+	1. **Mudo** ![mudo](./bitmaps/icons/mute.bmp): liga ou desliga o som. Os alarmes tocam mesmo no mudo.
+	2. **Teste de som** ![teste de som](./bitmaps/icons/boom_box.bmp): toca uma escala no buzzer.
+7. **Sistema** ![Sistema](./bitmaps/icons/info.bmp):
+	1. **Status** ![status](./bitmaps/icons/info.bmp): versão do firmware, data da compilação, versão do ESP-IDF, memória livre e maior bloco livre.
+	2. **Atualizar** ![atualizar](./bitmaps/icons/satellite.bmp):
+		1. **GitHub** ![GitHub](./bitmaps/icons/github.bmp): ainda não implementado; mostra um aviso.
+		2. **Micro SD** ![micro SD](./bitmaps/icons/sd_card.bmp): com confirmação, grava `/sdcard/update/firmware.bin` na partição OTA livre e/ou `/sdcard/update/storage.bin` na partição `storage`, e reinicia.
+8. **Reiniciar** ![Reiniciar](./bitmaps/icons/kill.bmp): apaga o Guará e começa de novo (*Factory Rebirth*). Pede duas confirmações ("Apagar o Guará e começar de novo?" e "Perda irreversível! Tem certeza?"). Ao confirmar, o anel de saves é apagado e começa o nascimento de um novo Guará.
+
+___
+
+## Regras do jogo
+
+Os valores numéricos das regras abaixo estão em `lib/core/src/rules.h` e documentados em [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md). O ciclo de vida avança um passo por minuto real (`guara_tick_minute`).
 
 ### Pontos
 
 #### Nível
 
-Os pontos de nível são respnsaveis pela fluxo de evolução do guará, são eles:
-- Nível (NV): O nivel geral do guará, de 1 a 99, definem o ciclo de evolução.
-- Esperiencia (XP): São os pontos que definem a subida de nível, são obtido através de combates na arena ou mini games.
-- Idade (IDA): É o tempo de vida do guará, medidos em dias e horas, a idade influencia no ganho de esperiencia,.
+- **Nível (NV):** de 1 a 99; define o estágio de evolução.
+- **Experiência (XP):** obtida em combates na arena e em minijogos. Ao atingir o XP do próximo nível, o Guará sobe de nível e ganha atributos.
+- **Idade:** tempo de vida em dias e horas. Guarás mais novos ganham XP mais rápido.
 
-#### Satus
- 
- Os status do guará são:
- - HP: Pontos de vida, ao chegar em zero o guará desmaia.
- - MP: Pontos de habilidades, é gasto ao usar uma habilidade.
- - Energia: Pontos de estamina, de 0 a 100%.
- - Humor: Pontos de estado emocional, de 0 a 100%.
- - Alimentação: Pontos de alimentação, de 0 a 100%, ao alcançar 10% ou menos o gurá entra em estado de fome.
- - Saúde: Pontos de saúde influenciam o ritimo do decaimento e efeito dos ataques.
+#### Vitais
+
+- **HP:** pontos de vida. Em zero, o Guará desmaia.
+- **MP:** pontos de magia, gastos pelas habilidades.
+- **Energia:** de 0 a 100%; recupera dormindo.
+- **Humor:** de 0 a 100%; quando baixo, define a emoção.
+- **Alimentação:** de 0 a 100%; com 10% ou menos, o Guará fica faminto.
+- **Saúde:** de 0 a 100%; ajusta o ritmo de todo o desgaste (saúde alta desgasta mais devagar).
 
 #### Atributos
 
-Os pontos de atributos tem influencia direta em combate, são eles:
-- Ataque (ATK): Os ponos de ataque almentam o dano.
-- Defeza (DEF): Os pontos de defesa diminuem o dano.
-- Força (FOR): Os pontos de força almentam o dano.
-- Agilidade (AGI): Os ponto de agilidade influenciam na frequencia de ataques.
-- Inteligencia (INT): Os pontos de inteligencia diminuem o consumo MP em habilidades, também determinam a evolução da natureza para pciquico.
-- Sorte (SOR): Os pontos de sorte aumentam a probabilidade de dano crítico e ganhar itens.
+- **Ataque (ATK)** e **Força (FOR):** aumentam o dano.
+- **Defesa (DEF):** diminui o dano recebido.
+- **Agilidade (AGI):** acelera a barra de ação e dá chance de esquiva.
+- **Inteligência (INT):** aumenta o dano e a cura das habilidades, diminui o custo de MP e pode levar à natureza Psíquica.
+- **Sorte (SOR):** aumenta a chance de crítico e de ganhar itens.
 
 #### Afinidades
 
-As afinidades são pontos que definem a evolução da natureza do guará, são medidos em %, são obtidos por comidas, combates, minigames e livros, são as afinidades, fogo, terra,  água, ar e neutra. 
-Ao adiquirir a pontos de afinidade em um elemento o elemento oposto diminui na mesma proporção, sendo: fogo x agua e terra x ar.
-A elemento neutro ganha pontos, de forma direta, descrito no item, livro ou jogo ou de forma iindireta, pantos para a natureza de nascencia do guará vam para o neutro.
-A pontuação de afinidade determina a evolução da natureza.
+As afinidades definem a evolução da natureza. São medidas em % para Fogo, Terra, Água, Ar e Neutra e vêm de comidas, bebidas, combates, minijogos e livros.
 
-#### Pontuação oculta
+- Ganhar afinidade num elemento tira a mesma quantidade do elemento oposto: Fogo × Água e Terra × Ar.
+- O elemento Neutro ganha pontos de forma direta (item, livro ou jogo) ou indireta: os pontos da natureza de nascimento do Guará vão para o Neutro.
+- O sistema de afinidades desliga quando o Guará adquire uma natureza secundária.
 
-| Medidor                   | O que move o medidor                                                                                                                                                                                                            | Efeito                                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Vitórias × Derrotas**   | Resultados de combates e minijogos.                                                                                                                                                                                             | Tende para um dos lados conforme os resultados.                                                                                |
-| **Cuidado × Negligência** | Tempo em que o Guará permanece em estado de cuidado ou de negligência.                                                                                                                                                          | Influencia a velocidade da degeneração (ver *Degeneração*).                                                                    |
-| **Tristeza × Raiva**      | O descaso move para **Raiva**; as derrotas movem para **Tristeza**.                                                                                                                                                             | Quando o Humor está baixo, define a emoção: equilibrado → **chateado**; tendendo a um lado → **triste** ou **com raiva**.      |
-| **Dia × Noite**           | Horário das atividades: da hora configurada para acordar até **+2 h** → tende para **Dia**; de **2 h antes** da hora configurada para dormir até ela → tende para **Noite**; nos demais horários → tende para o **equilíbrio**. | Um desequilíbrio alto funciona como as afinidades **Luz** e **Sombra**, influenciando a probabilidade da natureza da evolução. |
+#### Medidores ocultos
+
+| Medidor | O que move o medidor | Efeito |
+|---|---|---|
+| **Vitórias × Derrotas** | Resultados de combates e minijogos. | Tende para um dos lados conforme os resultados. |
+| **Cuidado × Negligência** | Tempo em que o Guará fica bem cuidado ou abandonado; desmaios e refeições. | Registra o histórico de cuidado. |
+| **Tristeza × Raiva** | O descaso move para **Raiva**; as derrotas movem para **Tristeza**. | Com o Humor baixo, define a emoção: equilibrado → **Entediado**; tendendo a um lado → **Triste** ou **Zangado**. |
+| **Dia × Noite** | Interações nas 2 h depois da hora de acordar tendem para **Dia**; nas 2 h antes da hora de dormir, para **Noite**; nos outros horários o medidor volta ao equilíbrio. | Um desequilíbrio alto funciona como as afinidades **Luz** e **Sombra** na evolução. |
 
 ### Naturezas
 
-As natureza determina vantagens e desvantagens, habilidades e equipamentos, são elas:
+As naturezas definem vantagens e desvantagens, habilidades e equipamentos:
 
-- Fogo ![](./bitmaps/icons/fire.bmp)
-- Terra ![](./bitmaps/icons/earth.bmp)
-- Água ![](./bitmaps/icons/water.bmp)
-- Ar ![](./bitmaps/icons/air.bmp)
-- Eletricidade ![](./bitmaps/icons/electricity.bmp)
-- Planta ![](./bitmaps/icons/plant.bmp)
-- Gelo ![](./bitmaps/icons/ice.bmp)
-- Vapor  ![](./bitmaps/icons/steam.bmp)
-- Cristal ![](./bitmaps/icons/crystal.bmp)
-- Sombra ![](./bitmaps/icons/shadow.bmp)
-- Luz ![](./bitmaps/icons/light.bmp)
-- Psíquica ![](./bitmaps/icons/psychic.bmp)
-- Lava ![[lava.bmp]]
-- Neutra ![](./bitmaps/icons/neutral.bmp)
+| Natureza | Ícone | Composição |
+|---|---|---|
+| Fogo | ![Fogo](./bitmaps/icons/fire.bmp) | primária |
+| Terra | ![Terra](./bitmaps/icons/earth.bmp) | primária |
+| Água | ![Água](./bitmaps/icons/water.bmp) | primária |
+| Ar | ![Ar](./bitmaps/icons/air.bmp) | primária |
+| Neutra | ![Neutra](./bitmaps/icons/neutral.bmp) | — |
+| Eletricidade | ![Eletricidade](./bitmaps/icons/electricity.bmp) | Fogo + Ar |
+| Planta | ![Planta](./bitmaps/icons/plant.bmp) | Terra + Água |
+| Gelo | ![Gelo](./bitmaps/icons/ice.bmp) | Ar + Água |
+| Vapor | ![Vapor](./bitmaps/icons/steam.bmp) | Fogo + Água |
+| Cristal | ![Cristal](./bitmaps/icons/crystal.bmp) | Terra + Ar |
+| Lava | ![Lava](./bitmaps/icons/lava.bmp) | Fogo + Terra |
+| Sombra | ![Sombra](./bitmaps/icons/shadow.bmp) | especial |
+| Luz | ![Luz](./bitmaps/icons/light.bmp) | especial |
+| Psíquica | ![Psíquica](./bitmaps/icons/psychic.bmp) | especial |
 
-A vantagen e desvantagens são baseadas em seu elementos primários e herdadas pelas suas evoluções: Fogo < Água < Terra < Ar < Fogo. Essa vanntagens almentam e diminuem a força do ataque e habilidade e o dano em combate.
+As vantagens seguem o ciclo dos elementos primários, Fogo < Água < Terra < Ar < Fogo (cada um perde para o seguinte), e são herdadas pelas naturezas compostas. Uma natureza composta neutraliza a fraqueza que teria contra um elemento que ela também contém. Exemplo: um Guará de Vapor (Fogo + Água) teria fraqueza contra Água pelo lado Fogo, mas como também é Água, a fraqueza some. Luz e Sombra têm vantagem uma contra a outra; Neutra e Psíquica são neutras contra tudo.
 
 ### Evolução
 
-O guará tem 5 estágios de evolução, podendo evoluir também a sua natureza.
+O Guará passa por 5 estágios: bebê, jovem A, jovem B, jovem C e adulto, nos níveis definidos em [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md). Ao entrar nos estágios jovem B, jovem C e adulto, a natureza pode evoluir.
 
-#### Evolução da natureza
+O Guará nasce com uma natureza primária. Conforme as afinidades, os medidores e os atributos, pode adquirir uma natureza secundária:
 
-Inicialmente o Guará nasce com uma natureza primária: Fogo, Água, Terra ou Ar. Dependendo do acúmulo de afinidades, medidores e atributos, podem ser adquiridas outras naturezas secundárias:
-- **Fusões Primárias Diretas:**
-  - Fogo + Terra = **Lava**
-  - Fogo + Ar = **Eletricidade**
-  - Fogo + Água = **Vapor**
-  - Terra + Ar = **Cristal**
-  - Terra + Água = **Planta**
-  - Ar + Água = **Gelo**
-- **Evoluções Especiais:**
-  - **Luz:** Ocorre se a maior afinidade for Neutra e existir um grande desequilíbrio no medidor **Dia × Noite** com forte tendência a **Dia**.
-  - **Sombra:** Ocorre se a maior afinidade for Neutra e existir um grande desequilíbrio no medidor **Dia × Noite** com forte tendência a **Noite**.
-  - **Psíquica:** Ocorre se todas as afinidades permanecerem neutras e equilibradas, porém o atributo **INT** se destacar substancialmente de todos os outros atributos.
-  - **Neutra Pura:** Se na hora da evolução o elemento neutro for dominante sem desequilíbrios nos medidores ou atributos, o Guará preserva sua natureza pura.
+- **Fusão:** se a maior afinidade for um elemento diferente do de nascimento, a natureza vira a fusão dos dois:
+	- Fogo + Terra = **Lava**;
+	- Fogo + Ar = **Eletricidade**;
+	- Fogo + Água = **Vapor**;
+	- Terra + Ar = **Cristal**;
+	- Terra + Água = **Planta**;
+	- Ar + Água = **Gelo**.
+- **Maior afinidade Neutra:**
+	- **Luz:** grande desequilíbrio do medidor Dia × Noite para **Dia**;
+	- **Sombra:** grande desequilíbrio para **Noite**;
+	- **Psíquica:** INT muito acima de todos os outros atributos;
+	- **Neutra:** nenhum dos casos acima, já no estágio adulto.
 
-As naturezas não se acumulam: ao adquirir uma natureza secundária, a natureza torna-se definitiva e o sistema de afinidade é desabilitado. Se continuar com a natureza primária original, o sistema de afinidades permanece ativo para tentar evoluir no próximo estágio.
-
-As vantagens e fraquezas são herdadas. Por exemplo: um Guará de Vapor (Fogo + Água) normalmente teria fraqueza contra Água pelo lado Fogo, mas como sua composição também é de Água, essa fraqueza elemental é totalmente neutralizada.
+As naturezas não se acumulam: a natureza secundária é definitiva e desliga o sistema de afinidades. Enquanto o Guará mantém a natureza primária, as afinidades continuam ativas para tentar evoluir no próximo estágio.
 
 ### Ciclo de vida
 
-#### Nascimento
-
-No primeiro boot, é solicitado para o usuário escolher um nome com no maxximo 10 letras e é escolido de forma randomidca uma natureza primária, uma cor,  preta ou branca e uma das 9 alternativas de cabeça.
-O Guará começa no nível 1 com 0 XP.
-
 #### Desgaste
 
-O guará sofre um desgate ao longo do tempo, onde os pontos de enrgia e os pontos de alimento vam diminuido ap passar do tempo, quando um dos dois chega a 50%, os pontos de humor começam a se desgastar, aos 20% a saude começa a se desgastar, quando os pontos de energia ou de alimento chegam a 10%, o gurá entra em estado de fome e o HP começa a se desgastar, o HP chegando a 0% o guará entra no estado desmaiado. 
-Os pontos de saude começam asubir quando os pontos de alimentação, energia e humor voltam a m ais de 50%.
-Quando os pontos de alimentação, saúde e energia estão acima de 50%, o HP começa a se recuperar queimando energia, e continua se recuperando até a energia chegar a 10%; a energia só é gasta enquanto o HP não estiver cheio, e a recuperação fica em pausa enquanto o Guará dorme. o Humo volta asubir, quando os pontos de energia e alimento volta a mais de 40%, o humor também melhora se a energia e o alimento estiverem mais de 25% e o usuário jogar algum mini game, os pontos de humo também decaiem se o gurár passa muito tempo sem nenhum atividade.
-Se a penas os pontos de enrgia cam abaixo de 20% o gurá entra em estado de sono, quando chega a 0% e ele não esta em estado de fome, ele entra em estado dormindo, e dormindo sem fome a energia volta a subi e ele só pode ser acordado quando a energia vola a mais de 50%, ou para se alimentar mas se a energia ainda não estiver acime de 50% ele volta a dormir depois de comer.
-Com o deaimento constante e sem cuidado almenta os pontos de Negligência e quanto mais tempo ele passa em estado normal ou feliz almenta os pontos de Cuidado.
+A cada minuto, energia e alimentação diminuem (a alimentação cai pela metade dormindo, e a energia recupera dormindo). A partir delas:
+
+- Com energia ou alimentação **abaixo de 50%**, o humor começa a cair.
+- Com energia ou alimentação **abaixo de 20%**, a saúde começa a cair.
+- Com alimentação **em 10% ou menos**, o Guará fica **Faminto** e perde HP. Com HP 0, ele desmaia.
+- A **saúde sobe** quando alimentação, energia e humor estão acima de 50%.
+- O **humor sobe** quando energia e alimentação estão acima de 40%. Os minijogos também dão humor, e muito tempo sem interação faz o humor cair.
+- **Recuperação de HP:** quando alimentação, saúde e energia passam de 50%, o HP começa a subir queimando energia, e continua até a energia chegar a 10%. A energia só é gasta enquanto o HP não está cheio, e a recuperação fica em pausa enquanto o Guará dorme.
+- **Sono:** com energia abaixo de 20% (acordado), o Guará fica **Cansado**. Com energia 0 e sem fome, ou no minuto da hora de dormir, ele **dorme**. Dormindo, a energia volta a subir. Ele acorda com a energia cheia, na hora de acordar (se a energia passar de 50%) ou se ficar com fome. Comer acorda o Guará, mas ele volta a dormir se a energia não passar de 50%.
+- O descaso aumenta a **Negligência**; o tempo com tudo acima de 50% aumenta o **Cuidado**.
 
 #### Estados
 
-Os estados são divididos em dois tipo, estados físicos e estados emocionais, o estados podem atribuir desvantagens e restrições, são eles:
+Os estados são físicos ou emocionais e podem trazer desvantagens e restrições. Os ícones aparecem no balão da tela principal.
 
-##### Estados Físicos
+**Estados físicos**, causados pelo desgaste ou pelo combate:
 
-São estados causados por desgaste ou combate:
-- Normal (Sem Incone): O estado padrão, não é exibido no balão na tela principal no indicador de estados.
-- Dormindo (![[sleeping.bmp]]): Restaura a energia, se dormir em combate, perde altomaticamente.
-- Desmaiado (![[fainted.bmp]]): Ao entra nesse estado o gurá fica inativo por 10 minutos, nesse tempo todas as atividades ficam bloqueadas, depoi desse tempo pode se usar itens de cura.
-- Envenenado (![[poisoned.bmp]]): Ocorre o decaimento da saúde e do HP 2% por segundo, encerra ao desmaiar
-- Paralisado (![[paralyzed.bmp]]): Não pode atacar em batalha.
-- Queimado (![[burning.bmp]]): Ocorre o decaimento da saúde e do HP 2% por segundo, encerra ao desmaiar.
-- Congelado (![[frozen.bmp]]): Ocorre o decaimento da saúde e do HP 2% por segundo e não pode atacar em combate, encerra ao desmaiar.
-- Confuso (![[confused.bmp]]): Almenta a probabilidade de errar o ataque em 50%, e tem chance de 50% de ataca a si próprio.
-- Amaldiçoado (![[cursed.bmp]]): Não pode usar itens e enem habilidades, só se cura com a vitória, desmaiando ou escutando música. 
-- Cançado (![[tired.bmp]]): Os atributos (ATK, DEF, FOR, AGI, INT e SOR), diminuem 30%.
-- Faminto (![[hungry.bmp]]): Ocorre o decaimento da saúde e do HP 2% por segundo, encerra ao desmaiar.
+| Estado | Ícone | Efeito |
+|---|---|---|
+| Normal | — | Estado padrão; o balão não aparece. |
+| Dormindo | ![Dormindo](./bitmaps/icons/sleeping.bmp) | Recupera energia. |
+| Desmaiado | ![Desmaiado](./bitmaps/icons/fainted.bmp) | Com HP 0. Bloqueia tudo por 10 min; depois aceita itens que curam HP. Desmaiar cura veneno, queimadura, gelo, paralisia, confusão e maldição. |
+| Envenenado | ![Envenenado](./bitmaps/icons/poisoned.bmp) | Perde 2% do HP máximo e 1% de saúde por minuto (5% do HP por turno em combate). |
+| Paralisado | ![Paralisado](./bitmaps/icons/paralyzed.bmp) | Perde a vez no combate. |
+| Queimado | ![Queimado](./bitmaps/icons/burning.bmp) | Como o veneno. |
+| Congelado | ![Congelado](./bitmaps/icons/frozen.bmp) | Como o veneno, e perde a vez no combate. |
+| Confuso | ![Confuso](./bitmaps/icons/confused.bmp) | 50% de chance de errar o golpe; ao errar, 50% de atingir a si mesmo. |
+| Amaldiçoado | ![Amaldiçoado](./bitmaps/icons/cursed.bmp) | Não usa itens nem habilidades. Cura com a vitória, ao desmaiar ou ao ouvir uma música. |
+| Cansado | ![Cansado](./bitmaps/icons/tired.bmp) | Atributos 30% menores. |
+| Faminto | ![Faminto](./bitmaps/icons/hungry.bmp) | Perde 1% do HP máximo por minuto. |
 
-##### Estados Emocionais
+**Estados emocionais**, influenciados pelo cuidado e pelas atividades. Só um vale por vez:
 
-Os estados emocionais, são influenciados pelo cuidado e atividades realizado pelo usuário, os estados emocionais, são exibido no indicado de estado na tela principal apena de 5 a 30 segundo a cada 20 e 30 minutos, mas com exceção do estado feliz que o olha só aparec junto com o indicador de estados da tela principal, o olha é contante enquanto durar o estado:
-- Feliz (![[happy.bmp]]): A saúde se restaura 20% mais rápido.
-- Triste (![[sad.bmp]]): A saúde decai 20% mais rápido.
-- Zangado (![[angry.bmp]]): O ataque almenta em 50% e dafeza diminui em 50%.
-- Entediado (![[bored.bmp]]): O decaimento geral almenta em 5%.
+| Estado | Ícone | Quando | Efeito |
+|---|---|---|---|
+| Feliz | ![Feliz](./bitmaps/icons/happy.bmp) | Os 4 vitais acima de 80%. | A saúde se recupera 20% mais rápido. |
+| Triste | ![Triste](./bitmaps/icons/sad.bmp) | Humor baixo e medidor tendendo a Tristeza. | O desgaste fica 20% mais rápido. |
+| Zangado | ![Zangado](./bitmaps/icons/angry.bmp) | Humor baixo e medidor tendendo a Raiva. | ATK +50% e DEF −50%. |
+| Entediado | ![Entediado](./bitmaps/icons/bored.bmp) | Humor baixo com o medidor equilibrado, ou 2 h sem interação. | O desgaste fica 5% mais rápido. |
 
-### Sprites
+As emoções negativas aparecem no balão de 5 a 30 s a cada 20 a 30 minutos. O Feliz aparece junto com o olhar feliz, de 5 a 10 s a cada 20 a 30 minutos.
 
-#### Guará
+___
 
-Existem dois conjuntos de sprites na VROM para o Gurá, o Preto e o Branco.
-No nascimento  a cabeça varia entre 9 tipos, ela compõe a parte superior do sprite e ela se mantém em todas as evoluções:
-- ![Preto](./bitmaps/sprites/sprite_head_black_variant_1.bmp) e ![Braco](./bitmaps/sprites/sprite_head_white_variant_1.bmp)
-- ![Preto](./bitmaps/sprites/sprite_head_black_variant_2.bmp) e ![Braco](./bitmaps/sprites/sprite_head_white_variant_2.bmp)
-- ![Preto](./bitmaps/sprites/sprite_head_black_variant_3.bmp) e ![Braco](./bitmaps/sprites/sprite_head_white_variant_3.bmp)
-- ![Preto](./bitmaps/sprites/sprite_head_black_variant_4.bmp) e ![Braco](./bitmaps/sprites/sprite_head_white_variant_4.bmp)
-- ![Preto](./bitmaps/sprites/sprite_head_black_variant_5.bmp) e ![Braco](./bitmaps/sprites/sprite_head_white_variant_5.bmp)
-- ![Preto](./bitmaps/sprites/sprite_head_black_variant_6.bmp) e ![Braco](./bitmaps/sprites/sprite_head_white_variant_6.bmp)
-- ![Preto](./bitmaps/sprites/sprite_head_black_variant_7.bmp) e ![Braco](./bitmaps/sprites/sprite_head_white_variant_7.bmp)
-- ![Preto](./bitmaps/sprites/sprite_head_black_variant_8.bmp) e ![Braco](./bitmaps/sprites/sprite_head_white_variant_8.bmp)
-- ![Preto](./bitmaps/sprites/sprite_head_black_variant_9.bmp) e ![Braco](./bitmaps/sprites/sprite_head_white_variant_9.bmp)
+## Sprites
 
-O corpo sóa varia entre preto e branco, ele possui 3 frame de animação rodando a 3 FPS, usando o 1, 2, 2 para gera os 3 frames, o estágios são:
+O Guará é composto de três partes, desenhadas em modo opaco (`copy`): corpo, cabeça e olhos. Cada parte existe na versão preta e na branca. Os nomes seguem padrões fixos, porque o código monta o nome de cada bitmap:
 
-- ![Preto 1](./bitmaps/sprites/sprite_baby_black_1.bmp), ![Preto 2](./bitmaps/sprites/sprite_baby_black_2.bmp)  e ![Branco1](./bitmaps/sprites/sprite_baby_white_1.bmp),  ![Branco1](./bitmaps/sprites/sprite_baby_white_2.bmp).
-- ![Preto 1](./bitmaps/sprites/sprite_yong_a_black_1.bmp), ![Preto 2](./bitmaps/sprites/sprite_yong_a_black_2.bmp)  e ![Branco1](./bitmaps/sprites/sprite_yong_a_white_1.bmp),  ![Branco1](./bitmaps/sprites/sprite_yong_a_white_2.bmp).
-- ![Preto 1](./bitmaps/sprites/sprite_yong_b_black_1.bmp), ![Preto 2](./bitmaps/sprites/sprite_yong_b_black_2.bmp)  e ![Branco1](./bitmaps/sprites/sprite_yong_b_white_1.bmp),  ![Branco1](./bitmaps/sprites/sprite_yong_b_white_2.bmp).
-- ![Preto 1](./bitmaps/sprites/sprite_yong_c_black_1.bmp), ![Preto 2](./bitmaps/sprites/sprite_yong_c_black_2.bmp)  e ![Branco1](./bitmaps/sprites/sprite_yong_c_white_1.bmp),  ![Branco1](./bitmaps/sprites/sprite_yong_c_white_2.bmp).
-- ![Preto 1](./bitmaps/sprites/sprite_adult_a_black_1.bmp), ![Preto 2](./bitmaps/sprites/sprite_adult_a_black_2.bmp)  e ![Branco1](./bitmaps/sprites/sprite_adult_a_white_1.bmp),  ![Branco1](./bitmaps/sprites/sprite_adult_a_white_2.bmp).
+- `sprite_<estágio>_<cor>_<quadro>` (corpo), com estágio `baby`, `yong_a`, `yong_b`, `yong_c` ou `adult_a`, cor `black` ou `white` e quadro `1` ou `2`;
+- `sprite_head_<cor>_variant_<1..9>` (cabeça);
+- `sprite_eye_<cor>_<olho>` (olhos).
 
-A ultima parte que compõe o sprite, são os olhos, eles se sobrepõe ao sprite do corpo centralizado com margem superior de 1px em relação ao topo do frame 1, nos frames 1 e 2 (como o corpo do frame 2 é 1px mais alto, a margem fica de 2px), e no frame 3 os olhos sobem 1px, e os olhos podem variar de acorco com o estado emocional do gurá, são eles:
-- Normal: ![Preto](./bitmaps/sprites/sprite_eye_black_standard.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_standard.bmp), o gurá fica com esse olhar na maior parte do tempo em que não esta sobre nenhum estado especifico.
-- Raiva: ![Preto](./bitmaps/sprites/sprite_eye_black_anger.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_anger.bmp)
-- Chateado: ![Preto](./bitmaps/sprites/sprite_eye_black_bored.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_bored.bmp)
-- Domindo/Piscando: ![Preto](./bitmaps/sprites/sprite_eye_black_closed.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_closed.bmp), o guará pisca de vez em quando.
-- Atordoado/Fome/Cançado: ![Preto](./bitmaps/sprites/sprite_eye_black_dazed.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_dazed.bmp)
-- Desmaiado: ![Preto](./bitmaps/sprites/sprite_eye_black_fainted.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_fainted.bmp)
-- Feliz: ![Preto](./bitmaps/sprites/sprite_eye_black_happy.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_happy.bmp), o olha feliz não fica constante, apena no combate para comemora vitória, e por 5 a 10 segundos a cada 20 a 30 minutos, se os status estiverem acima de 80%.
-- Asustado: ![Preto](./bitmaps/sprites/sprite_eye_black_scared.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_scared.bmp)
-- Piscadela: ![Preto](./bitmaps/sprites/sprite_eye_black_wink.bmp) e ![Branco](./bitmaps/sprites/sprite_eye_white_wink.bmp), essa piscadela o gurá depois de ser alimentado ou curado.
+**Cabeças:** sorteadas no nascimento entre 9 variantes, ficam na parte de cima do sprite e se mantêm em todas as evoluções.
+
+| Variante | Preta | Branca |
+|---|---|---|
+| 1 | ![preta 1](./bitmaps/sprites/sprite_head_black_variant_1.bmp) | ![branca 1](./bitmaps/sprites/sprite_head_white_variant_1.bmp) |
+| 2 | ![preta 2](./bitmaps/sprites/sprite_head_black_variant_2.bmp) | ![branca 2](./bitmaps/sprites/sprite_head_white_variant_2.bmp) |
+| 3 | ![preta 3](./bitmaps/sprites/sprite_head_black_variant_3.bmp) | ![branca 3](./bitmaps/sprites/sprite_head_white_variant_3.bmp) |
+| 4 | ![preta 4](./bitmaps/sprites/sprite_head_black_variant_4.bmp) | ![branca 4](./bitmaps/sprites/sprite_head_white_variant_4.bmp) |
+| 5 | ![preta 5](./bitmaps/sprites/sprite_head_black_variant_5.bmp) | ![branca 5](./bitmaps/sprites/sprite_head_white_variant_5.bmp) |
+| 6 | ![preta 6](./bitmaps/sprites/sprite_head_black_variant_6.bmp) | ![branca 6](./bitmaps/sprites/sprite_head_white_variant_6.bmp) |
+| 7 | ![preta 7](./bitmaps/sprites/sprite_head_black_variant_7.bmp) | ![branca 7](./bitmaps/sprites/sprite_head_white_variant_7.bmp) |
+| 8 | ![preta 8](./bitmaps/sprites/sprite_head_black_variant_8.bmp) | ![branca 8](./bitmaps/sprites/sprite_head_white_variant_8.bmp) |
+| 9 | ![preta 9](./bitmaps/sprites/sprite_head_black_variant_9.bmp) | ![branca 9](./bitmaps/sprites/sprite_head_white_variant_9.bmp) |
+
+**Corpos:** variam só com a cor e o estágio. A animação tem 3 quadros a 3 FPS, na sequência dos bitmaps 1, 2, 2. O corpo do quadro 2 é 1 px mais alto.
+
+| Estágio | Preto | Branco |
+|---|---|---|
+| Bebê (`baby`) | ![bebê preto 1](./bitmaps/sprites/sprite_baby_black_1.bmp) ![bebê preto 2](./bitmaps/sprites/sprite_baby_black_2.bmp) | ![bebê branco 1](./bitmaps/sprites/sprite_baby_white_1.bmp) ![bebê branco 2](./bitmaps/sprites/sprite_baby_white_2.bmp) |
+| Jovem A (`yong_a`) | ![jovem A preto 1](./bitmaps/sprites/sprite_yong_a_black_1.bmp) ![jovem A preto 2](./bitmaps/sprites/sprite_yong_a_black_2.bmp) | ![jovem A branco 1](./bitmaps/sprites/sprite_yong_a_white_1.bmp) ![jovem A branco 2](./bitmaps/sprites/sprite_yong_a_white_2.bmp) |
+| Jovem B (`yong_b`) | ![jovem B preto 1](./bitmaps/sprites/sprite_yong_b_black_1.bmp) ![jovem B preto 2](./bitmaps/sprites/sprite_yong_b_black_2.bmp) | ![jovem B branco 1](./bitmaps/sprites/sprite_yong_b_white_1.bmp) ![jovem B branco 2](./bitmaps/sprites/sprite_yong_b_white_2.bmp) |
+| Jovem C (`yong_c`) | ![jovem C preto 1](./bitmaps/sprites/sprite_yong_c_black_1.bmp) ![jovem C preto 2](./bitmaps/sprites/sprite_yong_c_black_2.bmp) | ![jovem C branco 1](./bitmaps/sprites/sprite_yong_c_white_1.bmp) ![jovem C branco 2](./bitmaps/sprites/sprite_yong_c_white_2.bmp) |
+| Adulto (`adult_a`) | ![adulto preto 1](./bitmaps/sprites/sprite_adult_a_black_1.bmp) ![adulto preto 2](./bitmaps/sprites/sprite_adult_a_black_2.bmp) | ![adulto branco 1](./bitmaps/sprites/sprite_adult_a_white_1.bmp) ![adulto branco 2](./bitmaps/sprites/sprite_adult_a_white_2.bmp) |
+
+**Composição:** o corpo e a cabeça ficam centralizados no X indicado, com a base do corpo no Y indicado e a cabeça encaixada em cima. Os olhos ficam centralizados sobre o corpo, 1 px abaixo do topo do corpo do quadro 1, nos quadros 1 e 2, e sobem 1 px no quadro 3. Com ampliação 2x, todas as partes são ampliadas mantendo o encaixe.
+
+**Olhos:** mudam conforme o estado e a emoção, na prioridade definida em [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
+
+| Olho | Preto | Branco | Uso |
+|---|---|---|---|
+| Normal (`standard`) | ![](./bitmaps/sprites/sprite_eye_black_standard.bmp) | ![](./bitmaps/sprites/sprite_eye_white_standard.bmp) | Sem nenhum estado específico. |
+| Raiva (`anger`) | ![](./bitmaps/sprites/sprite_eye_black_anger.bmp) | ![](./bitmaps/sprites/sprite_eye_white_anger.bmp) | Zangado e durante o combate. |
+| Entediado (`bored`) | ![](./bitmaps/sprites/sprite_eye_black_bored.bmp) | ![](./bitmaps/sprites/sprite_eye_white_bored.bmp) | Triste ou entediado. |
+| Fechado (`closed`) | ![](./bitmaps/sprites/sprite_eye_black_closed.bmp) | ![](./bitmaps/sprites/sprite_eye_white_closed.bmp) | Dormindo; piscada a cada 3 a 6 s. |
+| Atordoado (`dazed`) | ![](./bitmaps/sprites/sprite_eye_black_dazed.bmp) | ![](./bitmaps/sprites/sprite_eye_white_dazed.bmp) | Fome, cansaço, confusão, paralisia e golpe recebido. |
+| Desmaiado (`fainted`) | ![](./bitmaps/sprites/sprite_eye_black_fainted.bmp) | ![](./bitmaps/sprites/sprite_eye_white_fainted.bmp) | Desmaiado e derrota. |
+| Feliz (`happy`) | ![](./bitmaps/sprites/sprite_eye_black_happy.bmp) | ![](./bitmaps/sprites/sprite_eye_white_happy.bmp) | Vitória, cura, cada mordida e 5 a 10 s a cada 20 a 30 min com o estado Feliz. |
+| Assustado (`scared`) | ![](./bitmaps/sprites/sprite_eye_black_scared.bmp) | ![](./bitmaps/sprites/sprite_eye_white_scared.bmp) | Veneno, queimadura ou gelo. |
+| Piscadela (`wink`) | ![](./bitmaps/sprites/sprite_eye_black_wink.bmp) | ![](./bitmaps/sprites/sprite_eye_white_wink.bmp) | Logo depois de comer ou usar um item. |
+
+**Outras animações:** `bite_1` a `bite_5` (mordidas da comida) e `hit_1` a `hit_7` (impacto no combate), em `bitmaps/animations/`.
+
+___
 
 ## Implementação
 
-### Vercionameto
+### Versionamento
 
-O verciomento deve ser feito no formato v#.#.#, onde é release.feature.pach, a versão só deve ser alterada em uma mudança no firmware e/ou storage, em caso de documentação deve ser feito apenas o commite.
+A versão segue o formato `v#.#.#` (lançamento.funcionalidade.correção) e só muda com alterações no firmware ou no storage. Mudanças só na documentação geram apenas um commit.
 
-A cada execução de um escopo deve ser feito um commite a adição no changelog.
+Cada escopo executado gera um commit e uma entrada no [CHANGELOG.md](CHANGELOG.md).
 
 ### Código
 
-Por se tratar de um projeto para fins de aprendizado e aperfeiçoamento, deve-se abusar de comentários descritivos em portugês, o padrão de nomenclatura de variaáveis, funções arquivos, de ser descritivo e em inglês. Sempre seguinda as boas práticas de arquitetuda e desenvolvimento do mercado. 
+Por ser um projeto de aprendizado, o código segue estas regras:
+
+- Identificadores, funções, arquivos e pastas são descritivos e em **inglês**.
+- Os comentários são em **português** e abundantes: um comentário de cabeçalho em cada arquivo e um antes de cada função.
+- Os textos mostrados no aparelho são em português.
+- O código segue as boas práticas de arquitetura e desenvolvimento do mercado.
+- O catálogo contém só o que o autor definiu em [CATALOG.md](CATALOG.md); campos ausentes ficam com o valor neutro e são apontados ao autor.

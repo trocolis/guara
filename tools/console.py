@@ -76,6 +76,34 @@ def save_png(framebuffer, path, scale):
         output.write(png)
 
 
+def rgb565(rgb):
+    """Cor RGB de 8 bits por canal em RGB565."""
+    r, g, b = rgb
+    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
+
+
+def save_bmp(framebuffer, path, scale):
+    """Salva o framebuffer ampliado como BMP RGB565 (formato dos exemplos em bitmaps/exemple)."""
+    width, height = 128 * scale, 64 * scale
+    lit, dark = struct.pack("<H", rgb565(LIT_RGB)), struct.pack("<H", rgb565(DARK_RGB))
+    stride = (width * 2 + 3) // 4 * 4
+    rows = []
+    for y in range(63, -1, -1):  # BMP guarda as linhas de baixo para cima
+        row = bytearray()
+        for x in range(128):
+            on = (framebuffer[(y // 8) * 128 + x] >> (y % 8)) & 1
+            row += (lit if on else dark) * scale
+        row += b"\x00" * (stride - len(row))
+        rows += [bytes(row)] * scale
+    pixels = b"".join(rows)
+    masks = struct.pack("<III", 0xF800, 0x07E0, 0x001F)
+    offset = 14 + 40 + len(masks)
+    header = struct.pack("<2sIHHI", b"BM", offset + len(pixels), 0, 0, offset)
+    info = struct.pack("<IiiHHIIiiII", 40, width, height, 1, 16, 3, len(pixels), 2835, 2835, 0, 0)
+    with open(path, "wb") as output:
+        output.write(header + info + masks + pixels)
+
+
 def wake(port):
     """Acorda o ESP32 do light sleep (modo Ocioso): os bytes do despertar se perdem."""
     port.write(b"\0\0\0\0")
@@ -84,7 +112,7 @@ def wake(port):
 
 
 def capture_screen(port, path, scale):
-    """Pede o framebuffer ('P') e salva como PNG. Retorna False se não houve resposta."""
+    """Pede o framebuffer ('P') e salva como PNG (ou BMP RGB565 se o nome terminar em .bmp)."""
     time.sleep(0.3)
     port.reset_input_buffer()
     wake(port)
@@ -92,7 +120,10 @@ def capture_screen(port, path, scale):
     hex_frame = read_line_with_prefix(port, b"FB:")
     if not hex_frame or len(hex_frame) != 2048:
         return False
-    save_png(bytes.fromhex(hex_frame), path, scale)
+    if str(path).lower().endswith(".bmp"):
+        save_bmp(bytes.fromhex(hex_frame), path, scale)
+    else:
+        save_png(bytes.fromhex(hex_frame), path, scale)
     return True
 
 

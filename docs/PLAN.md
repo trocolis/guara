@@ -260,7 +260,7 @@ Ordem sugerida, das telas mais simples para as mais dependentes:
 - [x] **I17** Saúde sem efeito em itens e fórmulas → Saúde ajusta o ritmo de desgaste
 - [x] **I18** "Pés" (CATALOG) × "Calçados" (README) → a tela mostra "Calçados"; o tipo no catálogo é PES
 - [ ] **I19** Preset `sprite` 32x32 × sprites reais de 16–18px compostos
-- [ ] **I20** ~~`[[CHANGELOG]]` inexistente~~ (CHANGELOG.md criado); referências `![[x.bmp]]` ainda não renderizam no GitHub
+- [x] **I20** ~~`[[CHANGELOG]]` inexistente~~ (CHANGELOG.md criado); referências `![[x.bmp]]` → README com imagens no Markdown padrão (`![nome](./bitmaps/...)`)
 
 ### Lacunas
 - [x] **L-progressão** Curva de XP, crescimento de atributos e HP/MP, níveis dos 5 estágios (yong_a/b/c: estágio ou ramo?), limiares de evolução especial, taxas de desgaste, hora de dormir, desmaios repetidos → valores provisórios em docs/GAME_DESIGN.md (revisar)
@@ -277,5 +277,5 @@ Ordem sugerida, das telas mais simples para as mais dependentes:
 - [x] **A1** Basenames duplicados entre `ui/` e `icons/`: alarm, bluetooth, mute, timer → renomeados para status_*
 - [x] **A2** Em 16 bpp: `bitart_logo.bmp`, `icons/equipment.bmp`, `icons/github.bmp`, `icons/mute.bmp` → convertidos para 1 bpp
 - [x] **A3** `bitmaps/exemple/` (mockups) dentro da árvore da VROM → o packer ignora bitmaps/exemple/
-- [ ] **A5** Mockup `main_menu.bmp` mostra 10 pontos no indicador, mas o README tem 12 menus
+- [x] **A5** Mockup `main_menu.bmp` mostra 10 pontos no indicador, mas o README tem 12 menus → o README usa as capturas reais (`bitmaps/exemple/screen_*.bmp`)
 - [ ] **A4** Ícones faltando: Wi-Fi desligado, bateria carregando/USB; `status_*_8x8` sem uso documentado

@@ -41,7 +41,8 @@ python3 tools/bmp-builder/bmp_builder.py in.png -o bitmaps/icons/x.bmp --preset 
 `bmp_builder.py` converts PNG/JPG/SVG/… to the canonical 1-bit BMP. Its presets are icon 16x16, sprite 32x32, mannequin 32x56, boss 64x64 and screen 128x64; `-p` prints a preview. A C++ port builds with `make` in `tools/bmp-builder`.
 
 **Serial debug console** (`tools/console.py`, run with `~/.platformio/penv/bin/python`): opening the port **resets the board** on this adapter, so run one `script` session per test, for example `console.py script "wait 4" "keys jsk" "screen out.png" "state"`. With Wi-Fi on, boot finishes in about 2 s; the network connects later in the background.
-- Keys: `w s a d` = d-pad (screen directions), `j` = A, `k` = B.
+- Keys: `w s a d` = d-pad (screen directions), `j` = A, `k` = B. `sleep` sends `Z` (deep sleep now).
+- `screen x.bmp` saves a 4x RGB565 BMP like the README screenshots in `bitmaps/exemple/screen_*.bmp`; `screen x.png` saves a PNG.
 - `P` dumps the framebuffer; `S` prints the pet state.
 - Never open the port with DTR asserted: GPIO0 goes low and the board enters download mode.
 - The user may be pressing physical buttons at the same time.
