@@ -359,7 +359,7 @@ O mecanismo de batalha é baseado em um contador representado por uma barra de p
 - Itens: Abre sub-menu padrão contendo exclusivamente itens de cura e suporte.
 - Desistir: Exibe modal de confirmação; se confirmado, encerra a batalha com animação de derrota.
 
-Quando um golpe causa dano, a animação de impacto (`bitmaps/animations/hit`, 7 quadros 16x16 a 30 FPS) é reproduzida na borda do sprite do alvo voltada para o atacante, à meia altura: o preto é transparente e, onde a animação cruza o sprite, os pixels têm a cor invertida (XOR). No ataque duplo, ela é reproduzida duas vezes.
+Quando um golpe causa dano, a animação de impacto (`bitmaps/animations/hit`, 7 quadros 16x16 a 30 FPS) é reproduzida na borda do sprite do alvo voltada para o atacante, à meia altura: o preto é transparente e, onde a animação cruza o sprite, os pixels têm a cor invertida (XOR). No ataque duplo, o atacante dá o pulo para a frente duas vezes e a animação é reproduzida duas vezes, a segunda 4 px mais para dentro do sprite do alvo.
 
 Durante um golpe (ataque físico ou habilidade contra o oponente) há uma janela curta, no fim do preparo do golpe, em que o ícone do Botão A aparece entre os lutadores. Se quem ataca apertar A dentro da janela, aumenta a chance de crítico e pode sair um ataque duplo; se quem está sendo atacado apertar A na mesma janela, ele se defende, diminuindo o dano e aumentando a chance de erro do atacante. Só vale uma tentativa por golpe: apertar antes da janela perde a reação.
 

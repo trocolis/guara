@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.9.1 — 2026-10-08
+
+### Combate
+- Ataque duplo: o atacante dá o pulo para a frente duas vezes e o segundo impacto aparece 4 px mais para dentro do sprite do alvo.
+
 ## v0.9.0 — 2026-10-08
 
 ### Combate
