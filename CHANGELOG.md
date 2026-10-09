@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.9.0 — 2026-10-08
+
+### Combate
+- Animação de impacto quando um golpe causa dano: 7 quadros (`hit_1` a `hit_7`, convertidos de `bitmaps/animations/hit/*.png`) a 30 FPS, na borda do alvo voltada para o atacante, desenhados em XOR (preto transparente, cor invertida onde cruza o sprite). Repete no ataque duplo.
+
 ## v0.8.0 — 2026-10-08
 
 ### Catálogo

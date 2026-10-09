@@ -22,6 +22,10 @@
 #define BASE_Y 50
 #define ANIM_MS 900
 #define INTRO_MS 1800 /* abertura "Fulano  VS  Siclano" */
+#define HIT_FRAMES 7
+#define HIT_FRAME_MS 33   /* 30 FPS */
+#define HIT_START_MS 150  /* começa no impacto, junto com o recuo */
+#define HIT_SECOND_MS 450 /* segundo impacto do ataque duplo */
 #define MENU_GRACE_MS 600 /* depois de um golpe, A não abre o menu (toques atrasados da janela) */
 
 static combat_t combat;
@@ -377,6 +381,9 @@ static const char *eye_fighter(int side, uint32_t now)
     return EYE_ANGER;
 }
 
+/* Altura desenhada de cada lutador (o sprite é aproximadamente tão largo quanto alto). */
+static int fighter_height[2] = {16, 16};
+
 /* Desenha o lutador: recua no preparo, pula no golpe e pisca ao ser atingido. */
 static void draw_fighter(gfx_t *g, int side, uint32_t now)
 {
@@ -399,9 +406,38 @@ static void draw_fighter(gfx_t *g, int side, uint32_t now)
     bool defeated = combat.finished && combat.winner != side && !animating;
     int frame = defeated ? 1 : sprite_frame(now);
     if (visible) {
-        sprite_guara(g, l->color, l->head, l->stage, eye_fighter(side, now), x, BASE_Y, frame,
-                     side == 1 ? GFX_MIRROR : 0);
+        fighter_height[side] = sprite_guara(g, l->color, l->head, l->stage, eye_fighter(side, now), x, BASE_Y,
+                                            frame, side == 1 ? GFX_MIRROR : 0);
     }
+}
+
+/*
+ * Animação do golpe (bitmaps/animations/hit) no lado do alvo voltado para o
+ * atacante, em XOR: o preto é transparente e, onde cruza o sprite, inverte.
+ */
+static void draw_hit(gfx_t *g, uint32_t now)
+{
+    if (!animating || last.damage <= 0) {
+        return;
+    }
+    uint32_t t = now - anim_start;
+    int frame = -1;
+    if (t >= HIT_START_MS && t < HIT_START_MS + HIT_FRAMES * HIT_FRAME_MS) {
+        frame = (int)(t - HIT_START_MS) / HIT_FRAME_MS;
+    } else if (last.hits == 2 && t >= HIT_SECOND_MS && t < HIT_SECOND_MS + HIT_FRAMES * HIT_FRAME_MS) {
+        frame = (int)(t - HIT_SECOND_MS) / HIT_FRAME_MS;
+    }
+    if (frame < 0) {
+        return;
+    }
+    /* Centro do efeito na borda do sprite voltada para o atacante, à meia altura.
+       Jogador à esquerda do usuário: o golpe vem da direita da tela (e vice-versa). */
+    int half = fighter_height[last.target] / 2;
+    int cx = last.target == 0 ? X_PLAYER + half : X_OPPONENT - half;
+    int cy = BASE_Y - half;
+    char name[8];
+    snprintf(name, sizeof(name), "hit_%d", frame + 1);
+    ui_icon_mode(g, name, cx - 8, cy - 8, GFX_XOR, 0);
 }
 
 /* Abertura: "Fulano  VS  Siclano" numa linha, ou em três se não couber. */
@@ -437,6 +473,7 @@ static void on_draw(gfx_t *g, uint32_t now)
 
     draw_fighter(g, 0, now);
     draw_fighter(g, 1, now);
+    draw_hit(g, now);
 
     /* Ícone do botão A (10x10): pisca até a ação ser escolhida; depois, a barra ATB de 32 px */
     if (!combat.finished && (pending || (now / 300) % 2)) {
