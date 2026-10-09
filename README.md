@@ -16,6 +16,7 @@ Este documento é a especificação do projeto. Ele descreve o hardware, os form
 6. [Regras do jogo](#regras-do-jogo)
 7. [Sprites](#sprites)
 8. [Implementação](#implementação)
+9. [Licença](#licença)
 
 ___
 
@@ -887,3 +888,11 @@ Por ser um projeto de aprendizado, o código segue estas regras:
 - Os textos mostrados no aparelho são em português.
 - O código segue as boas práticas de arquitetura e desenvolvimento do mercado.
 - O catálogo contém só o que o autor definiu em [CATALOG.md](CATALOG.md); campos ausentes ficam com o valor neutro e são apontados ao autor.
+
+___
+
+## Licença
+
+- **Código:** o firmware, as bibliotecas em `lib/` (menos `lib/lua`), as ferramentas em `tools/`, os jogos de exemplo e a documentação estão sob a licença do arquivo [LICENSE](LICENSE).
+- **Lua:** `lib/lua` é o Lua 5.4.7 original, sob a licença MIT da PUC-Rio, com o aviso de copyright no próprio código (`lua.h`).
+- **Artes (`bitmaps/`):** só as artes de autoria do projeto estão cobertas pela licença do repositório. Parte das artes atuais tem **origem desconhecida** e **não** está licenciada; elas são usadas provisoriamente durante o desenvolvimento e serão substituídas antes da versão 1.0.0. A origem de cada bitmap está em [bitmaps/ASSETS.md](bitmaps/ASSETS.md). Se você é o autor de alguma dessas artes e quer crédito ou a remoção, abra uma *issue*.

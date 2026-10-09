@@ -3,6 +3,12 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## Sem versão — 2026-10-09 (licença)
+
+### Documentação
+- `bitmaps/ASSETS.md`: inventário dos 299 bitmaps com tamanho, uso no código e uma coluna de origem para preencher.
+- README: seção *Licença* separando o código (arquivo `LICENSE`), o Lua (MIT da PUC-Rio) e as artes, das quais só as de autoria do projeto estão licenciadas.
+
 ## v0.9.6 — 2026-10-09
 
 ### Correções
