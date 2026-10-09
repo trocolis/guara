@@ -3,6 +3,13 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.13.0 — 2026-10-09
+
+### Conectividade
+- NTP a cada 6 h em vez de 24 h.
+- Verificação automática de nova release no GitHub a cada 24 h, em segundo plano (após uma falha, nova tentativa em 1 h). Achando uma versão mais nova, o aparelho apita e pergunta na tela principal "Nova versão vX. Atualizar?".
+- A pilha da task da rede passou de 4 KB para 8 KB, para o TLS.
+
 ## v0.12.0 — 2026-10-09
 
 ### Atualização pelo GitHub

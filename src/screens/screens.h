@@ -36,5 +36,6 @@ void screens_play_music(const char *path);
 bool screens_play_background_music(const char *path);
 void screens_trigger_alarm(const char *title);
 bool screens_alarm_ringing(void);
+void screens_offer_update(const char *tag); /* confirma a release achada no GitHub */
 
 #endif

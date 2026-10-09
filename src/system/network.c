@@ -1,6 +1,7 @@
 /*
  * Wi-Fi sob demanda (README > Conectividade): o rádio só liga enquanto alguém
- * usa a rede, desliga após 30 s ocioso, e o NTP roda em segundo plano.
+ * usa a rede, desliga após 30 s ocioso, e o NTP e a verificação de nova
+ * release no GitHub rodam em segundo plano.
  */
 #include "network.h"
 
@@ -9,12 +10,14 @@
 #include <time.h>
 
 #include "config.h"
+#include "esp_attr.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "ota.h"
 #include "rtc_clock.h"
 
 static const char *TAG = "rede";
@@ -23,6 +26,7 @@ static const char *TAG = "rede";
 #define CONNECTION_FULL_MS 8000
 #define NTP_WAIT_MS 5000
 #define NTP_NEW_ATTEMPT_MS (30 * 60 * 1000) /* após falha */
+#define UPDATE_NEW_ATTEMPT_MS (60 * 60 * 1000) /* após falha */
 
 typedef struct {
     network_job_fn fn;
@@ -37,6 +41,12 @@ static volatile bool connecting, suspended;
 static volatile int bars;
 static uint32_t ntp_tried_ms;
 static bool ntp_tried;
+static uint32_t update_tried_ms;
+static bool update_tried;
+/* Sobrevivem ao deep sleep: epoch da última verificação e a release achada */
+static RTC_DATA_ATTR uint32_t update_checked_at;
+static RTC_DATA_ATTR char update_tag[24];
+static volatile bool update_found;
 
 /* Milissegundos desde o boot. */
 static uint32_t now_ms(void)
@@ -238,7 +248,7 @@ static void job_ntp(bool connected, void *ctx)
     }
 }
 
-/* Verdadeiro se a hora é inválida ou a última sincronização tem mais de 24 h. */
+/* Verdadeiro se a hora é inválida ou a última sincronização passou de NETWORK_NTP_INTERVAL_S. */
 static bool ntp_due(void)
 {
     if (!clock_is_valid() || clock_last_ntp() == 0) {
@@ -247,7 +257,41 @@ static bool ntp_due(void)
     return clock_now() - clock_last_ntp() >= NETWORK_NTP_INTERVAL_S;
 }
 
-/* Desliga o rádio ocioso, atualiza o cache de sinal e agenda o NTP. */
+/* Tarefa em segundo plano: procura no GitHub uma release mais nova que o firmware. */
+static void job_update(bool connected, void *ctx)
+{
+    (void)ctx;
+    char tag[sizeof(update_tag)], error[48];
+    if (!connected || !ota_github_latest(tag, sizeof(tag), error, sizeof(error))) {
+        return; /* tenta de novo após UPDATE_NEW_ATTEMPT_MS */
+    }
+    update_checked_at = clock_now();
+    if (ota_is_newer(tag)) {
+        ESP_LOGI(TAG, "Nova release disponível: %s", tag);
+        snprintf(update_tag, sizeof(update_tag), "%s", tag);
+        update_found = true;
+    }
+}
+
+/* Verdadeiro se a hora é válida e a última verificação de release tem mais de 24 h. */
+static bool update_due(void)
+{
+    return clock_is_valid() && (update_checked_at == 0 || clock_now() - update_checked_at >= NETWORK_UPDATE_INTERVAL_S);
+}
+
+/* Release mais nova achada pela verificação automática (NULL = nenhuma). */
+const char *network_new_release(void)
+{
+    return update_found ? update_tag : NULL;
+}
+
+/* Descarta o aviso da release achada. */
+void network_forget_release(void)
+{
+    update_found = false;
+}
+
+/* Desliga o rádio ocioso, atualiza o cache de sinal e agenda o NTP e a verificação de release. */
 static void maintenance(void)
 {
     uint32_t now = now_ms();
@@ -257,16 +301,28 @@ static void maintenance(void)
         wifi_turn_off();
     }
     bars = wifi_connected() ? wifi_bars() : 0;
+    /* A release só é procurada com a hora certa, para contar o intervalo pelo relógio */
+    bool schedule = ntp_due() && (!ntp_tried || now - ntp_tried_ms >= NTP_NEW_ATTEMPT_MS);
+    bool check_update =
+        !schedule && update_due() && (!update_tried || now - update_tried_ms >= UPDATE_NEW_ATTEMPT_MS);
     static saved_network_t saved_networks[CONFIG_MAX_NETWORKS];
-    bool schedule = network_allowed() && ntp_due() &&
-                   (!ntp_tried || now - ntp_tried_ms >= NTP_NEW_ATTEMPT_MS) && config_networks(saved_networks) > 0;
+    if ((schedule || check_update) && (!network_allowed() || config_networks(saved_networks) == 0)) {
+        schedule = check_update = false;
+    }
     if (schedule) {
         ntp_tried = true;
         ntp_tried_ms = now;
     }
+    if (check_update) {
+        update_tried = true;
+        update_tried_ms = now;
+    }
     xSemaphoreGive(lock);
     if (schedule) {
         network_run(job_ntp, NULL);
+    }
+    if (check_update) {
+        network_run(job_update, NULL);
     }
 }
 
@@ -289,11 +345,11 @@ static void job_network(void *arg)
     }
 }
 
-/* Cria a trava, a fila e a task da rede. */
+/* Cria a trava, a fila e a task da rede (pilha maior para o TLS do GitHub). */
 void network_init(void)
 {
     lock = xSemaphoreCreateMutex();
     queue = xQueueCreate(8, sizeof(network_job_t));
     last_use_ms = now_ms();
-    xTaskCreatePinnedToCore(job_network, "rede", 4096, NULL, 4, NULL, 0);
+    xTaskCreatePinnedToCore(job_network, "rede", 8192, NULL, 4, NULL, 0);
 }

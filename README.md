@@ -307,11 +307,11 @@ Implementação: `src/system/network.c`. O rádio só liga quando alguma tarefa 
 	- Quando o contador volta a zero, o rádio desliga após **30 s** ocioso, para tarefas próximas aproveitarem a mesma conexão.
 	- Tarefas em segundo plano usam `network_run()`. As telas nunca chamam o driver `wifi_*` direto.
 - **Reconexão rápida:** o canal e o BSSID do último roteador ficam na NVS, e a conexão leva de 1 a 2 s em vez de 3 a 5 s com busca completa.
-- **Relógio (NTP):** no boot, em segundo plano, se a hora for inválida ou a última sincronização tiver mais de **24 h**; depois, a cada 24 h com o aparelho acordado. O fuso horário fica fixo em UTC−3 (`<-03>3`), sem menu para trocar por enquanto.
+- **Relógio (NTP):** no boot, em segundo plano, se a hora for inválida ou a última sincronização tiver mais de **6 h**; depois, a cada 6 h com o aparelho acordado (`NETWORK_NTP_INTERVAL_S`). O fuso horário fica fixo em UTC−3 (`<-03>3`), sem menu para trocar por enquanto.
 - **Deep sleep:** o rádio é sempre desligado antes de dormir, e o comportamento é o mesmo no boot frio e ao acordar.
 - **Jogos e tarefas pesadas:** `network_suspend()` descarrega o Wi-Fi enquanto um jogo Lua roda, para liberar memória.
 - **Indicador na barra superior:** ícone de Wi-Fi apagado (xadrez) quando a rede está permitida e ociosa; barras subindo durante a conexão; barras de sinal (`wifi_1` a `wifi_3`) conectado; nenhum ícone com o Wi-Fi em `OFF`.
-- **Quem usa a rede:** sincronização NTP (automática e em Relógio > Configurar), busca, conexão e status em Ajustes > Wi-Fi e a atualização pelo GitHub. O combate online está previsto.
+- **Quem usa a rede:** sincronização NTP (automática e em Relógio > Configurar), busca, conexão e status em Ajustes > Wi-Fi e a atualização pelo GitHub (automática e no menu). O combate online está previsto.
 
 ___
 
@@ -679,7 +679,7 @@ Sub-menu com o estado de cada opção à direita.
 7. **Sistema** ![Sistema](./bitmaps/icons/info.bmp):
 	1. **Status** ![status](./bitmaps/icons/info.bmp): versão do firmware, data da compilação, versão do ESP-IDF, memória livre e maior bloco livre.
 	2. **Atualizar** ![atualizar](./bitmaps/icons/satellite.bmp):
-		1. **GitHub** ![GitHub](./bitmaps/icons/github.bmp): com o Wi-Fi ligado, mostra "Verificando..." e busca a última release do repositório `trocolis/guara` (`OTA_GITHUB_REPO` em `src/system/ota.h`). Se ela for mais nova que o firmware, pede confirmação ("Atualizar de v0.11.4 para v0.12.0?"), grava o save, baixa o `firmware.bin` com a barra de progresso e, se a release tiver um, o `storage.bin`, e reinicia. Se não houver versão mais nova, avisa "Já está na versão mais recente". Ver *Atualização pelo GitHub*.
+		1. **GitHub** ![GitHub](./bitmaps/icons/github.bmp): com o Wi-Fi ligado, mostra "Verificando..." e busca a última release do repositório `trocolis/guara` (`OTA_GITHUB_REPO` em `src/system/ota.h`). Se ela for mais nova que o firmware, pede confirmação ("Atualizar de v0.11.4 para v0.12.0?"), grava o save, baixa o `firmware.bin` com a barra de progresso e, se a release tiver um, o `storage.bin`, e reinicia. Se não houver versão mais nova, avisa "Já está na versão mais recente". A verificação também é automática, a cada 24 h. Ver *Atualização pelo GitHub*.
 		2. **Micro SD** ![micro SD](./bitmaps/icons/sd_card.bmp): com confirmação, grava `/sdcard/update/firmware.bin` na partição OTA livre e/ou `/sdcard/update/storage.bin` na partição `storage`, e reinicia.
 8. **Reiniciar** ![Reiniciar](./bitmaps/icons/kill.bmp): apaga o Guará e começa de novo (*Factory Rebirth*). Pede duas confirmações ("Apagar o Guará e começar de novo?" e "Perda irreversível! Tem certeza?"). Ao confirmar, o anel de saves é apagado e começa o nascimento de um novo Guará.
 
@@ -882,6 +882,7 @@ ___
 Implementação: `src/system/ota.c` (`ota_github_latest`, `ota_is_newer`, `ota_github_install`), por HTTPS com os certificados raiz do ESP-IDF (`esp_crt_bundle`).
 
 - **Última versão:** `https://github.com/trocolis/guara/releases/latest` redireciona para `/releases/tag/<tag>`; o aparelho lê a tag do cabeçalho `Location`, sem usar a API do GitHub (sem limite de requisições nem JSON). A tag `v#.#.#` é comparada com `GUARA_VERSION`; só uma versão maior é oferecida.
+- **Verificação automática:** com o Wi-Fi ligado e a hora válida, a task da rede busca a última release em segundo plano a cada **24 h** (`NETWORK_UPDATE_INTERVAL_S`), logo após o NTP no boot; após uma falha, tenta de novo em 1 h. A hora da última verificação fica na RTC RAM e sobrevive ao deep sleep. Se achar uma versão mais nova, o aparelho apita e, na tela principal e fora do modo Ocioso, pergunta "Nova versão v0.13.0. Atualizar?". SIM segue o mesmo caminho do menu; NAO descarta o aviso até a próxima verificação.
 - **Arquivos:** `/releases/download/<tag>/firmware.bin` e `/releases/download/<tag>/storage.bin`. O GitHub redireciona para outro servidor, e o download segue até 5 redirecionamentos, lendo em blocos de 4 KB.
 - **Ordem segura:** o firmware é gravado na partição OTA livre e validado (o cabeçalho precisa ser de um app com nome de projeto `guara`, e `esp_ota_end` confere a imagem), mas ainda não vira a de boot. Depois vem o storage: o primeiro bloco precisa começar com `GSTR`, e só então a partição é apagada e regravada. Uma release sem `storage.bin` (404) atualiza só o firmware. Só no fim a partição nova é marcada para o boot. Se o novo firmware não confirmar o boot, o *rollback* volta ao anterior.
 - **Publicação:** o workflow `.github/workflows/release.yml` roda a cada tag `v#.#.#` enviada ao GitHub. Ele confere se a tag bate com `GUARA_VERSION`, compila o firmware, empacota o storage e cria a release com `firmware.bin`, `storage.bin` e a seção da versão no CHANGELOG como notas. Para publicar: `git tag v0.12.0 && git push origin v0.12.0`.

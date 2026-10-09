@@ -223,7 +223,7 @@ Ordem sugerida, das telas mais simples para as mais dependentes:
 ## Fase 10 — Conectividade
 
 - Wi-Fi: busca, conexão, redes salvas.
-- Atualização OTA de firmware pelo SD, depois pelo GitHub. Atualização do `storage.bin` pelo SD.
+- Atualização OTA de firmware pelo SD, depois pelo GitHub (no menu e verificada a cada 24 h). Atualização do `storage.bin` pelo SD.
 - Bluetooth: pareamento, troca de itens (Compartilhar), combate PvP. Exige especificar o protocolo antes.
 
 ---

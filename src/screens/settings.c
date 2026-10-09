@@ -562,6 +562,17 @@ static void update_github(void)
     }
 }
 
+/* Oferece a release achada pela verificação automática (chamado na tela principal). */
+void screens_offer_update(const char *tag)
+{
+    snprintf(github_tag, sizeof(github_tag), "%s", tag);
+    network_forget_release();
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Nova versão %s. Atualizar?", github_tag);
+    audio_beep();
+    ui_confirm("GITHUB", "github", msg, "NAO", "SIM", update_github_confirmed, NULL);
+}
+
 static const submenu_item_t ITEMS_UPDATE[] = {
     {"github", "GitHub", NULL, update_github},
     {"sd_card", "Micro SD", NULL, update_sd},

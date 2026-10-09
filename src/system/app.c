@@ -404,6 +404,11 @@ void app_run(void)
             if (timer_check()) {
                 screens_trigger_alarm("Temporizador");
             }
+            /* Release nova achada em segundo plano: oferece só na tela principal, acordado */
+            const char *release = network_new_release();
+            if (release && ui_top() == &SCREEN_HOME && !power_is_idle()) {
+                screens_offer_update(release);
+            }
             if (sleep_requested) {
                 sleep_due_to_inactivity();
             }

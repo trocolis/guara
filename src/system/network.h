@@ -12,7 +12,9 @@
  * alguém usa a rede (contador de uso) e desliga após NETWORK_IDLE_MS sem uso.
  */
 #define NETWORK_IDLE_MS (30 * 1000)
-#define NETWORK_NTP_INTERVAL_S (24 * 60 * 60)
+#define NETWORK_NTP_INTERVAL_S (6 * 60 * 60)
+/* Intervalo da verificação automática de nova release no GitHub. */
+#define NETWORK_UPDATE_INTERVAL_S (24 * 60 * 60)
 
 typedef enum {
     NETWORK_DISABLED, /* Wi-Fi em OFF */
@@ -41,6 +43,11 @@ int network_scan(wifi_network_t *networks, int max);
 bool network_connect_new(const char *ssid, const char *password);
 /* Texto de status para Ajustes > Wi-Fi > Status. */
 void network_status(char *buf, int length);
+
+/* Release mais nova que o firmware achada pela verificação automática (NULL = nenhuma). */
+const char *network_new_release(void);
+/* Descarta o aviso da release achada (já foi oferecida ao usuário). */
+void network_forget_release(void);
 
 /* Desliga o rádio agora (deep sleep, Wi-Fi em OFF). */
 void network_turn_off(void);

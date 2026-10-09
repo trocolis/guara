@@ -64,7 +64,7 @@ python3 tools/bmp-builder/bmp_builder.py in.png -o bitmaps/icons/x.bmp --preset 
     - `config`: NVS;
     - `network`: Wi-Fi on demand. Never call `wifi_*` from screens; use `network_use`/`network_wait`/`network_release`, `network_run` for background jobs, and `network_suspend` around memory-hungry tasks;
     - `alarms`, `debug_console`;
-    - `ota`: updates from the SD card or from the latest GitHub release (`OTA_GITHUB_REPO`). Pushing a `v#.#.#` tag that matches `GUARA_VERSION` runs `.github/workflows/release.yml`, which publishes `firmware.bin` and `storage.bin`.
+    - `ota`: updates from the SD card or from the latest GitHub release (`OTA_GITHUB_REPO`). Pushing a `v#.#.#` tag that matches `GUARA_VERSION` runs `.github/workflows/release.yml`, which publishes `firmware.bin` and `storage.bin`. The `network` task checks for a newer release every 24 h (NTP every 6 h) and the app loop offers it on the home screen.
   - `ui/` — screen stack (`ui.h`), standard widgets (`widgets.h`), modals and virtual keyboard (`modal.h`).
   - `screens/` — one file per menu; `screens.h` lists them. `submenu.h` builds static standard sub-menus; `sprite.h` composes head + body + eyes.
   - Lua API: `games.c` holds the VM runtime and the base modules (`oled`, `btn`, `audio`, `guara`, `storage`); `game_api.c` adds VROM drawing options, `guara.draw`, `catalog` and the `ui` widgets/modals. Keep the README API table in sync when changing either.
