@@ -1,2 +1,65 @@
 id,slug,name,type,icon,affinity,effects,status_effects,description
-0,apple,Maçã,FOOD,apple,NEUTRAL,SATIETY+15;HP+5;ENERGY+10,,"Maca fresca, crocante e rica em fibras."
+0,apple,Maçã,FOOD,apple,NEUTRAL,SATIETY+15;HP+5;ENERGY+10,HUNGRY-25,"Maca fresca, crocante e rica em fibras."
+1,banana,Banana,FOOD,banana,NEUTRAL,SATIETY+22;MOOD+15;ENERGY+25;HP+4,,Banana doce e rica em potassio para energia.
+2,avocado,Abacate,FOOD,avocado,NEUTRAL,SATIETY+32;MOOD+10;ENERGY+18;HP+10,,"Abacate cremoso, nutritivo e com gordura boa."
+3,pineapple,Abacaxi,FOOD,pineapple,NEUTRAL,SATIETY+18;MOOD+20;ENERGY+12;HP+8,,"Abacaxi citrico e doce, melhora a digestao."
+4,grape,Uva,FOOD,grape,NEUTRAL,SATIETY+12;MOOD+18;ENERGY+15;HP+6,,Cacho de uvas suculentas e antioxidantes.
+5,strawberry,Morango,FOOD,strawberry,NEUTRAL,SATIETY+10;MOOD+24;ENERGY+8;HP+6,,Morango vermelho perfumado e rico em vit. C.
+6,orange,Laranja,FOOD,orange,NEUTRAL,SATIETY+14;MOOD+16;ENERGY+12;HP+12,,Laranja suculenta que fortalece a imunidade.
+7,cherry,Cereja,FOOD,cherry,NEUTRAL,SATIETY+10;MOOD+22;ENERGY+8;HP+8,,Cerejas doces que aliviam o estresse do pet.
+8,carrot,Cenoura,FOOD,carrot,NEUTRAL,SATIETY+16;MOOD+8;ENERGY+10;HP+10,,Cenoura crocante e riquissima em vitamina A.
+9,broccoli,Brócolis,FOOD,broccoli,NEUTRAL,SATIETY+20;MOOD+4;ENERGY+12;HP+18,,Brocolis saudavel e repleto de ferro e calcio.
+10,peas,Ervilha,FOOD,peas,NEUTRAL,SATIETY+16;MOOD+6;ENERGY+14;HP+8,,Ervilhas verdes com proteina e fibras leves.
+11,potato,Batata,FOOD,potato,NEUTRAL,SATIETY+30;MOOD+10;ENERGY+28;HP+4,,Batata cozida com amido e energia duradoura.
+12,pumpkin,Jirimum,FOOD,pumpkin,NEUTRAL,SATIETY+22;MOOD+12;ENERGY+12;HP+12,,Jirimum macio que regula o estomago do pet.
+13,onion,Cebola,FOOD,onion,NEUTRAL,SATIETY+10;MOOD-5;ENERGY+15;HP+2,,Cebola ardida e picante que espanta germes.
+14,radish,Rabanete,FOOD,radish,NEUTRAL,SATIETY+12;MOOD+4;ENERGY+6;HP+8,,Rabanete fresco e crocante com acao depurativa.
+15,beans,Feijões,FOOD,beans,NEUTRAL,SATIETY+35;MOOD+8;ENERGY+24;HP+10,,Feijoes fartos em ferro e proteinas vegetais.
+16,milk,Leite,DRINK,milk,NEUTRAL,SATIETY+14;MOOD+12;ENERGY+12;HP+14,,Leite fresco e puro com calcio fortalecedor.
+17,coffee,Café,DRINK,coffee,NEUTRAL,SATIETY+4;MOOD+14;ENERGY+35;HP+2,,Cafe passado quente que da muita energia.
+18,juice,Suco,DRINK,juice,NEUTRAL,SATIETY+10;MOOD+18;ENERGY+16;HP+12,,Suco natural de frutas cheio de vitaminas.
+19,soda,Refrigerante,DRINK,soda,NEUTRAL,SATIETY+8;MOOD+25;ENERGY+20,,Bebida gaseificada doce com explosao de gas.
+20,tea,Chá,DRINK,tea,NEUTRAL,SATIETY+5;MOOD+12;ENERGY+12;HP+16,,Cha de ervas que relaxa e purifica o pet.
+21,drinking_water,Água,DRINK,drinking_water,NEUTRAL,SATIETY+4;MOOD+8;ENERGY+10;HP+15,,Agua pura essencial para a vida e hidratacao.
+22,lemonade,Refresco,DRINK,lemonade,NEUTRAL,SATIETY+8;MOOD+16;ENERGY+14;HP+6,,Refresco gelado citrico que alivia o calor.
+23,banana_smoothie,Vitamina de Banana,DRINK,banana_smoothie,NEUTRAL,SATIETY+26;MOOD+20;ENERGY+28;HP+14,,Batida cremosa de banana e leite energetica.
+24,burger,Hambúrguer,FOOD,burger,NEUTRAL,SATIETY+38;MOOD+32;ENERGY+22;HP+6,,Hamburguer com queijo e carne bem grelhada.
+25,french_fries,Batata Frita,FOOD,french_fries,NEUTRAL,SATIETY+24;MOOD+30;ENERGY+20;HP+2,,Batatas crocantes e douradas com salzinho.
+26,pizza,Pizza,FOOD,pizza,NEUTRAL,SATIETY+40;MOOD+36;ENERGY+24;HP+8,,Fatia com queijo derretido saborosa e famosa.
+27,hot_dog,Hot Dog,FOOD,hot_dog,NEUTRAL,SATIETY+32;MOOD+26;ENERGY+20;HP+4,,Cachorro-quente com molho e salsicha macia.
+28,popcorn,Pipoca,FOOD,popcorn,NEUTRAL,SATIETY+14;MOOD+22;ENERGY+14;HP+6,,Pipoca crocante estourada na manteiga e sal.
+29,taco,Taco,FOOD,taco,NEUTRAL,SATIETY+28;MOOD+25;ENERGY+18;HP+8,,Tortilha crocante recheada com carne e sabor.
+30,bread,Pão,FOOD,bread,NEUTRAL,SATIETY+22;MOOD+14;ENERGY+20;HP+8,,Pao macio de casca dourada assado na hora.
+31,croissant,Croissant,FOOD,croissant,NEUTRAL,SATIETY+24;MOOD+24;ENERGY+18;HP+6,,Massa folhada amanteigada fina e crocante.
+32,shrimp,Camarão,FOOD,shrimp,NEUTRAL,SATIETY+26;MOOD+28;ENERGY+16;HP+14,,Camarao grelhado delicado de sabor nobre.
+33,fish,Peixe,FOOD,fish,NEUTRAL,SATIETY+30;MOOD+22;ENERGY+18;HP+22,,File de peixe grelhado rico em omega 3 vital.
+34,meat,Carne,FOOD,meat,NEUTRAL,SATIETY+40;MOOD+26;ENERGY+22;HP+16,,Carne vermelha suculenta e rica em ferro.
+35,chicken,Frango,FOOD,chicken,NEUTRAL,SATIETY+34;MOOD+22;ENERGY+20;HP+18,,Coxa de frango assada macia e bem dourada.
+36,pork_leg,Pernil,FOOD,pork_leg,NEUTRAL,SATIETY+42;MOOD+24;ENERGY+20;HP+12,,Pernil suino assado com tempero marcante.
+37,steak,Bife,FOOD,steak,NEUTRAL,SATIETY+38;MOOD+25;ENERGY+22;HP+15,,Bife macio grelhado no ponto com suco rico.
+38,skewer,Espetinho,FOOD,skewer,NEUTRAL,SATIETY+30;MOOD+28;ENERGY+18;HP+12,,Espetinho na brasa com aroma de churrasco.
+39,ham,Presunto,FOOD,ham,NEUTRAL,SATIETY+26;MOOD+18;ENERGY+16;HP+8,,Fatias de presunto curado de sabor refinado.
+40,cake,Bolo,FOOD,cake,NEUTRAL,SATIETY+28;MOOD+34;ENERGY+20;HP+4,,Fatia fofa de bolo confeitado bem docinho.
+41,ice_cream,Sorvete,FOOD,ice_cream,NEUTRAL,SATIETY+16;MOOD+32;ENERGY+16;HP+4,,Casquinha de sorvete cremoso e refrescante.
+42,sundae,Sundae,FOOD,sundae,NEUTRAL,SATIETY+24;MOOD+36;ENERGY+22;HP+4,,"Taca de sundae com sorvete, calda e cereja."
+43,popsicle,Picolé,FOOD,popsicle,NEUTRAL,SATIETY+8;MOOD+22;ENERGY+12;HP+6,,Picole no palito geladinho contra o calor.
+44,cupcake,Cupcake,FOOD,cupcake,NEUTRAL,SATIETY+20;MOOD+28;ENERGY+18;HP+4,,Bolinho decorado com cobertura doce colorida.
+45,pie,Torta,FOOD,pie,NEUTRAL,SATIETY+28;MOOD+30;ENERGY+20;HP+6,,Fatia de torta caseira de massa crocante.
+46,cookie,Biscoito,FOOD,cookie,NEUTRAL,SATIETY+14;MOOD+22;ENERGY+16;HP+4,,Biscoito crocante assado no forno.
+47,donut,Donut,FOOD,donut,NEUTRAL,SATIETY+20;MOOD+28;ENERGY+20;HP+2,,Rosquinha frita fofa com cobertura.
+48,potion,Poção,POTION,potion,NEUTRAL,MOOD+4;ENERGY+5;HP+150,,Pocao basica que cicatriza ferimentos leves.
+49,super_potion,Super Poção,POTION,super_potion,NEUTRAL,MOOD+6;ENERGY+10;HP+400,,Solucao concentrada que recupera bastante HP.
+50,mega_potion,Mega Poção,POTION,mega_potion,NEUTRAL,MOOD+8;ENERGY+15;HP+1000,,Frasco magico potente de alta regeneracao.
+51,ultra_potion,Ultra Poção,POTION,ultra_potion,NEUTRAL,MOOD+12;ENERGY+25;HP+2500,,Pocao suprema que restaura quase toda a vida.
+52,tonic,Tônico,POTION,tonic,NEUTRAL,MOOD+4;ENERGY+10;MP+80,,Elixir de ervas que repoe a energia magica.
+53,super_tonic,Super Tônico,POTION,super_tonic,NEUTRAL,MOOD+6;ENERGY+15;MP+200,,Tonico aprimorado com forte carga de mana.
+54,mega_tonic,Mega Tônico,POTION,mega_tonic,NEUTRAL,MOOD+8;ENERGY+20;MP+500,,Essencia arcana pura que restaura muito MP.
+55,ultra_tonic,Ultra Tônico,POTION,ultra_tonic,NEUTRAL,MOOD+12;ENERGY+30;MP+1200,,Infusao suprema que enche as reservas de MP.
+56,antidote,Antídoto,POTION,antidote,NEUTRAL,MOOD+6;ENERGY+10;HP+30,POISONED-100,Soro que purifica toxinas e neutraliza veneno.
+57,anti_paralysis,Anti Paralisia,POTION,anti_paralysis,NEUTRAL,MOOD+6;ENERGY+20;HP+20,PARALYZED-100,Destrava os musculos e devolve a agilidade.
+58,anti_burn,Anti Queimadura,POTION,anti_burn,NEUTRAL,MOOD+8;ENERGY+10;HP+40,BURNED-100,Balsamo refrescante que alivia pele queimada.
+59,antifreeze,Anti Congelante,POTION,antifreeze,NEUTRAL,MOOD+6;ENERGY+25;HP+25,FROZEN-100,Liquido termico que descongela o corpo do pet.
+60,anti_confusion,Anti Confusão,POTION,anti_confusion,NEUTRAL,MOOD+10;ENERGY+10;HP+10;MP+30,CONFUSED-100,Oleo aromatico que clareia a mente e o foco.
+61,awakening,Despertador,POTION,awakening,NEUTRAL,MOOD+6;ENERGY+40;MP+20,SLEEPING-100,Composto estimulante que acorda o pet na hora.
+62,energy_drink,Energético,POTION,energy_drink,NEUTRAL,MOOD+15;ENERGY+60;HP+50;MP+100,,Bebida eletrizante que restaura muita estamina.
+63,elixir,Elixir,POTION,elixir,NEUTRAL,MOOD+30;ENERGY+50;HP+1500;MP+800,ALL-100,Pocao lendaria que sara feridas e todo estado.

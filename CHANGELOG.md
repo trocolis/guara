@@ -3,6 +3,15 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.8.0 — 2026-10-08
+
+### Catálogo
+- 64 itens no catálogo, convertidos do catálogo do Petnator para o `CATALOG.md` e o `catalog/items.csv`: 16 frutas e vegetais, 8 bebidas, 24 lanches, carnes e sobremesas, e 16 poções, tônicos e remédios. A Maçã mantém a entrada escrita no `CATALOG.md`. A afinidade, não definida na origem, ficou Neutra em todos.
+- Ícones dos itens renomeados para o nome do item em inglês (`fruta_banana` → `banana`, `pocao_vida` → `potion`…). Exceções por conflito com ícones do sistema: Hambúrguer usa `burger` (o `hamburger` é o ícone de Alimentação) e Água usa `drinking_water` (o `water` é o da natureza Água).
+- `CATALOG.md`: abreviação HU para humor (a legenda repetia HP), estados BRN (Queimado) e ALL (cura de todos os estados), descrição com até 48 caracteres.
+- Packer: descrição com até 48 caracteres e efeitos entre −9999 e 9999 (as poções maiores restauram até 2500 de HP).
+- Modais de escolha (e `ui.choice` no Lua) com até 16 opções, para todos os itens de cura aparecerem no combate.
+
 ## v0.7.1 — 2026-10-08
 
 ### Correções

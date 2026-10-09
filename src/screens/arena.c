@@ -175,11 +175,11 @@ static void action_chosen(int r, void *ctx)
         }
         ui_choice("HABILIDADE", options, skill_count, skill_chosen, NULL);
     } else if (r == 2) {
-        static char names[8][24];
-        const char *options[8];
+        static char names[16][24];
+        const char *options[16];
         n_items = 0;
         catalog_record_t it;
-        for (int id = 0; id < catalog_record_count(CAT_ITEMS) && n_items < 8; id++) {
+        for (int id = 0; id < catalog_record_count(CAT_ITEMS) && n_items < 16; id++) {
             if (g_guara.inventory[id] && catalog_read(CAT_ITEMS, id, &it) && it.type == ITEM_POTION) {
                 snprintf(names[n_items], sizeof(names[n_items]), "%s x%d", it.name, g_guara.inventory[id]);
                 options[n_items] = names[n_items];

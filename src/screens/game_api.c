@@ -27,7 +27,7 @@
 /* Quantos componentes com estado próprio (listas, letreiros) um jogo pode usar ao mesmo tempo */
 #define MAX_STATEFUL_WIDGETS 4
 /* Limite de opções do ui.choice (o modal mostra 3 por vez, com rolagem) */
-#define MAX_CHOICE_OPTIONS 8
+#define MAX_CHOICE_OPTIONS 16
 /* Limite de itens de uma ui.list */
 #define MAX_LIST_ITEMS 32
 
@@ -524,7 +524,7 @@ static int l_ui_confirm(lua_State *L)
     return 0;
 }
 
-/* ui.choice(título, {opções}, ao_escolher(indice_ou_nil)): lista de até 8 opções. */
+/* ui.choice(título, {opções}, ao_escolher(indice_ou_nil)): lista de até 16 opções. */
 static int l_ui_choice(lua_State *L)
 {
     luaL_checktype(L, 2, LUA_TTABLE);

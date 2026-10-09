@@ -18,7 +18,7 @@
 #define LINE_FOOTER (MY + MH - 13) /* linha do rodapé (Y=45): sprites B/A de 10 px abaixo dela */
 #define TEXT_LINES 3               /* linhas de mensagem em alertas e confirmações */
 #define DETAIL_LINES 4             /* linhas visíveis no modal de detalhes (sem rodapé) */
-#define MAX_OPTIONS 8
+#define MAX_OPTIONS 16
 
 typedef enum { M_ALERT, M_CONFIRM, M_CHOICE, M_COUNT, M_DETAILS } modal_type_t;
 

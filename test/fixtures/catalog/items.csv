@@ -1,3 +1,3 @@
 id,slug,name,type,icon,affinity,effects,status_effects,description
 0,test_food,Comida de teste,FOOD,apple,AIR,SATIETY+15;HP+5;ENERGY+10,,Item usado só nos testes.
-1,test_potion,Poção de teste,POTION,pocao_vida,NEUTRAL,HP+30,,Item usado só nos testes.
+1,test_potion,Poção de teste,POTION,potion,NEUTRAL,HP+30,,Item usado só nos testes.

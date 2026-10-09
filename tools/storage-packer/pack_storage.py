@@ -208,7 +208,7 @@ def read_csv(path: Path, kind: str, bitmaps: dict) -> list:
                 "slug": fixed_text(slug, 16, 15, context),
                 "icon": fixed_text(icon, 32, 31, context),
                 "name": fixed_text(row["name"].strip(), 32, 20, context),
-                "description": fixed_text(row["description"].strip(), 64, 40, context),
+                "description": fixed_text(row["description"].strip(), 64, 48, context),
             }
             if kind == "skill":
                 fields["type"] = parse_enum(row["type"], SKILL_TYPES, context)
@@ -223,7 +223,7 @@ def read_csv(path: Path, kind: str, bitmaps: dict) -> list:
                 fields["type"] = parse_enum(row["type"], types, context)
                 # Itens e equipamentos só têm afinidade com os 5 elementos básicos
                 fields["nature"] = parse_enum(row["affinity"], NATURES[:5], context)
-                fields["effects"] = parse_modifiers(row["effects"], EFFECT_TARGETS, context, 4, (-999, 999))
+                fields["effects"] = parse_modifiers(row["effects"], EFFECT_TARGETS, context, 4, (-9999, 9999))
                 fields["status_effects"] = parse_modifiers(row["status_effects"], STATES, context, 2, (-100, 100))
             records.append(build_record(fields))
     return records
