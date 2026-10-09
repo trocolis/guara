@@ -893,6 +893,6 @@ ___
 
 ## Licença
 
-- **Código:** o firmware, as bibliotecas em `lib/` (menos `lib/lua`), as ferramentas em `tools/`, os jogos de exemplo e a documentação estão sob a licença do arquivo [LICENSE](LICENSE).
+- **Código:** o firmware, as bibliotecas em `lib/` (menos `lib/lua`), as ferramentas em `tools/`, os jogos de exemplo e a documentação estão sob a **GNU General Public License v3.0** ([LICENSE](LICENSE)). Quem distribuir uma versão modificada, inclusive gravada num aparelho, precisa publicar o código-fonte sob a mesma licença.
 - **Lua:** `lib/lua` é o Lua 5.4.7 original, sob a licença MIT da PUC-Rio, com o aviso de copyright no próprio código (`lua.h`).
 - **Artes (`bitmaps/`):** só as artes de autoria do projeto estão cobertas pela licença do repositório. Parte das artes atuais tem **origem desconhecida** e **não** está licenciada; elas são usadas provisoriamente durante o desenvolvimento e serão substituídas antes da versão 1.0.0. A origem de cada bitmap está em [bitmaps/ASSETS.md](bitmaps/ASSETS.md). Se você é o autor de alguma dessas artes e quer crédito ou a remoção, abra uma *issue*.
