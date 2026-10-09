@@ -3,6 +3,14 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.9.2 — 2026-10-08
+
+### Combate
+- A janela de reação não mostra mais o ícone do A: o atacante recua para tomar impulso e avança de volta durante a janela, e o jogador prevê o tempo pelo movimento.
+- Sem os textos "Certeiro!" e "Defesa!".
+- Crítico com `!` no final do dano (`-10!`).
+- O segundo impacto do ataque duplo fica 8 px para dentro do sprite (antes 4 px).
+
 ## v0.9.1 — 2026-10-08
 
 ### Combate

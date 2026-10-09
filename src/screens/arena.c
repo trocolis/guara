@@ -26,7 +26,7 @@
 #define HIT_FRAME_MS 33   /* 30 FPS */
 #define HIT_START_MS 150  /* começa no impacto, junto com o recuo */
 #define HIT_SECOND_MS 450 /* segundo impacto do ataque duplo (segundo pulo começa em 300 ms) */
-#define HIT_SECOND_INSET 4 /* o segundo impacto fica 4 px mais para dentro do sprite */
+#define HIT_SECOND_INSET 8 /* o segundo impacto fica 8 px mais para dentro do sprite */
 #define MENU_GRACE_MS 600 /* depois de um golpe, A não abre o menu (toques atrasados da janela) */
 
 static combat_t combat;
@@ -395,7 +395,11 @@ static void draw_fighter(gfx_t *g, int side, uint32_t now)
     bool visible = true;
     if (winding && windup_side == side) {
         uint32_t tw = now - windup_start;
-        x -= dir * (tw < 300 ? (int)tw / 100 : 3); /* toma impulso */
+        /* Toma impulso (recua 3 px) e, na janela de reação, avança de volta até o
+           impacto: o jogador prevê o tempo pelo movimento, sem indicação na tela */
+        int windup = REACTION_WINDUP_MS - REACTION_WINDOW_MS;
+        x -= dir * (tw < (uint32_t)windup ? (int)tw * 3 / windup
+                                          : 3 - ((int)tw - windup) * 3 / REACTION_WINDOW_MS);
     }
     if (animating && last.actor == side && !last.failed && last.type == ACTION_ATTACK &&
         t < (last.hits == 2 ? 600u : 300u)) {
@@ -485,11 +489,6 @@ static void on_draw(gfx_t *g, uint32_t now)
     }
     ui_progress(g, 14, 57, 32, 3, me->atb_ms, me->atb_total);
 
-    /* Janela de reação: o A aparece entre os lutadores */
-    if (in_window(now) && player_reaction == 0) {
-        ui_icon_mode(g, "button_a", 59, 20, GFX_COPY, 0);
-    }
-
     uint32_t t = now - anim_start;
     if (animating) {
         /* Ícone da habilidade/item no centro, piscando cada vez mais rápido */
@@ -507,7 +506,7 @@ static void on_draw(gfx_t *g, uint32_t now)
         } else if (last.missed && !last.self_hit) {
             snprintf(msg, sizeof(msg), "Errou!");
         } else if (last.damage > 0) {
-            snprintf(msg, sizeof(msg), "%s%s-%d", last.hits == 2 ? "2x" : "", last.critical ? "!" : "", last.damage);
+            snprintf(msg, sizeof(msg), "%s-%d%s", last.hits == 2 ? "2x" : "", last.damage, last.critical ? "!" : "");
         } else if (last.heal > 0) {
             snprintf(msg, sizeof(msg), "+%d", last.heal);
         }
@@ -515,11 +514,6 @@ static void on_draw(gfx_t *g, uint32_t now)
             int xa = last.target == 0 ? X_PLAYER : X_OPPONENT;
             int dy = (int)(t - 150) / 60;
             gfx_text_center(g, xa - 20, 40, 22 - dy, msg, GFX_INVERT);
-        }
-        /* Reação acertada */
-        const char *label = last.timed ? "Certeiro!" : (last.guarded ? "Defesa!" : NULL);
-        if (label && t < 700) {
-            gfx_text_center(g, 0, GFX_WIDTH, 16, label, GFX_WHITE);
         }
     } else if (combat.finished) {
         gfx_text_center(g, 0, GFX_WIDTH, 22, combat.winner == 0 ? "VITORIA!" : "DERROTA", GFX_WHITE);
