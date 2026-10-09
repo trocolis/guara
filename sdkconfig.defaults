@@ -20,3 +20,12 @@ CONFIG_LWIP_SNTP_MAX_SERVERS=1
 
 # Chip de flash Boya detectado no NodeMCU do protótipo
 CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y
+
+# Modo Ocioso: frequência dinâmica e light sleep automático (README > Gerenciamento de Energia)
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+
+# ULP (FSM) confere os botões A e B durante o deep sleep
+CONFIG_ULP_COPROC_ENABLED=y
+CONFIG_ULP_COPROC_TYPE_FSM=y
+CONFIG_ULP_COPROC_RESERVE_MEM=128

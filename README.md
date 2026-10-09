@@ -70,10 +70,20 @@ O sistema possui um subsistema dedicado de gerenciamento de energia para maximiz
 - **Curva de Descarga LiPo:** Mapeamento não-linear calibrado entre 3.27V (0% de carga) e 4.20V (100% de carga completa).
 - **Estados de Operação e Economia:**
 	1. **Modo Ativo (Normal):** Consumo entre 80 mA e 120 mA, tela OLED ativa a 20 FPS (30 FPS em jogos).
-	2. **Light Sleep:** Modulação de clock e suspensão de periféricos para momentos de breve espera.
+	2. **Ocioso (Light Sleep):** Após **30 s** sem nenhum botão, o sistema entra no modo Ocioso:
+		- O brilho do display cai para o mínimo e as telas passam a ser desenhadas a no máximo **5 FPS** (a animação do Guará já roda a 3 FPS).
+		- A CPU passa a variar entre 80 e 160 MHz (frequência dinâmica do ESP-IDF) e entra em *light sleep* automático sempre que não há tarefa para executar; o barramento APB fica em 80 MHz, então UART, LEDC e I2C não mudam de clock.
+		- Os botões passam a ser lidos a cada 20 ms (em vez de 5 ms).
+		- Enquanto o buzzer toca, o *light sleep* fica bloqueado (o LEDC para no *light sleep*); a música continua tocando no modo Ocioso.
+		- Telas que impedem o deep sleep (jogos, combate, cronômetro e alarme tocando) também impedem o modo Ocioso.
+		- O primeiro toque em qualquer botão só restaura o modo Ativo, sem agir na tela; a tecla é ignorada até ser solta.
+		- O modo Ocioso não depende da configuração de Economia e vale também com o USB conectado.
 	3. **Deep Sleep (Hibernação Total):** Desligamento da CPU principal e dos rádios, preservando unicamente o coprocessador RTC e a memória RTC Fast RAM (8 KB) com o estado completo do Guará e da mochila, com o display e o cartão SD em modo de espera.
 	   > ⏳ Pendente (decisão D7 em `docs/PLAN.md`): o consumo real em Deep Sleep ainda precisa ser medido. Com a montagem atual (divisor de bateria ligado direto, conversor USB-serial do NodeMCU, OLED e SD sem corte de energia) ele fica bem acima dos ~10 µA do ESP32 isolado.
-	4. **Despertar (*Wake-up*):** O sistema acorda automaticamente por interrupção externa nos pinos de hardware RTC (Botão Cima GPIO 32 e Botão Baixo GPIO 33) ou por alarme temporizado configurado no RTC (`esp_sleep_enable_timer_wakeup`) para acionamento de despertadores e temporizadores.
+	4. **Despertar (*Wake-up*):** O sistema acorda pelos botões Cima, Baixo, A e B ou por alarme temporizado configurado no RTC (`esp_sleep_enable_timer_wakeup`) para acionamento de despertadores e temporizadores:
+		- Botão Cima (GPIO 32) pelo `ext0` e Botão Baixo (GPIO 33) pelo `ext1`.
+		- Botões A (GPIO 13) e B (GPIO 26) pelo coprocessador **ULP**, que confere os dois pinos a cada 20 ms e acorda o chip quando um deles vai a nível baixo. No ESP32, o `ext1` só acorda com "todos os pinos em nível baixo" ou "algum em nível alto", então não serve para vários botões ligados ao GND.
+		- Os direcionais Esquerda e Direita não acordam o aparelho.
 - **Proteção Crítica contra Queda de Energia (*Emergency Flush*):** Quando a tensão da bateria atinge o limite crítico (< 10% / 3.45V), o sistema dispara um salvamento de emergência forçado para os setores rotativos da Flash (*Pilar 3*) e entra em suspensão profunda indefinida com display e periféricos desenergizados, prevenindo corrupção de dados.
 - **Recuperação Temporal Pós-Sono / Reinício (Cálculo de Desgaste Acumulado):** Ao inicializar ou acordar de um longo período de repouso, o sistema recupera o último Save State válido (da RTC Fast RAM ou do setor rotativo da Flash) e calcula o $\Delta t$ (tempo decorrido em minutos entre o timestamp atual do DS3231 e o timestamp do último save). O motor do ciclo de vida projeta o desgaste acumulado de Necessidades (Alimentação, Energia, Humor e Saúde) de forma gradual e segura, aplicando travas de proteção que evitam que o Guará desmaie imediatamente sem chance de reação do jogador.
 

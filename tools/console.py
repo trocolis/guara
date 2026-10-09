@@ -75,10 +75,18 @@ def save_png(framebuffer, path, scale):
         output.write(png)
 
 
+def wake(port):
+    """Acorda o ESP32 do light sleep (modo Ocioso): os bytes do despertar se perdem."""
+    port.write(b"\0\0\0\0")
+    port.flush()
+    time.sleep(0.05)
+
+
 def capture_screen(port, path, scale):
     """Pede o framebuffer ('P') e salva como PNG. Retorna False se não houve resposta."""
     time.sleep(0.3)
     port.reset_input_buffer()
+    wake(port)
     port.write(b"P")
     hex_frame = read_line_with_prefix(port, b"FB:")
     if not hex_frame or len(hex_frame) != 2048:
@@ -90,6 +98,7 @@ def capture_screen(port, path, scale):
 def send_keys(port, sequence, interval=0.35):
     """Envia teclas uma a uma (w s a d = direcional, j = A, k = B)."""
     for key in sequence:
+        wake(port)
         port.write(key.encode())
         port.flush()
         time.sleep(interval)
@@ -98,6 +107,7 @@ def send_keys(port, sequence, interval=0.35):
 def request_state(port):
     """Pede o estado do Guará ('S') e devolve a linha recebida."""
     port.reset_input_buffer()
+    wake(port)
     port.write(b"S")
     return read_line_with_prefix(port, b"ST:")
 

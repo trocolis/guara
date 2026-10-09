@@ -97,7 +97,7 @@ test/test_native/     # testes Unity do ambiente native
 | bateria | ADC1_CH6 calibrado (`esp_adc_cali`), média móvel, curva LiPo → %, detecção de USB (D6) | % estável no log |
 | sd | VSPI + FATFS montado em `/sdcard`, montagem a quente | Listagem da raiz no log |
 | clock | Abstração de tempo (D1), NTP, fuso | Hora correta após o boot com Wi-Fi |
-| energia | Light sleep, deep sleep com despertar por GPIO32 (ext0) e GPIO33 (ext1), mais timer | Dorme e acorda pelos botões e por timer |
+| energia | Modo Ocioso (light sleep automático, brilho mínimo, 5 FPS), deep sleep com despertar por GPIO32 (ext0), GPIO33 (ext1), A/B pelo ULP e timer | Dorme e acorda pelos botões e por timer |
 
 Backlog: H1, H3, H8.
 

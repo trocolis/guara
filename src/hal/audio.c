@@ -5,6 +5,7 @@
 #include "audio.h"
 
 #include "driver/ledc.h"
+#include "esp_pm.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
@@ -24,9 +25,26 @@ static volatile int volume = 3;
 
 static const uint32_t DUTY_VOLUME[] = {0, 24, 96, 512}; /* de 1024 (10 bits) */
 
+static esp_pm_lock_handle_t lock_sound;
+
+/* Segura a trava de light sleep enquanto há som: o LEDC para no light sleep. */
+static void hold_awake(bool sounding)
+{
+    static bool holding;
+    if (lock_sound && sounding != holding) {
+        holding = sounding;
+        if (sounding) {
+            esp_pm_lock_acquire(lock_sound);
+        } else {
+            esp_pm_lock_release(lock_sound);
+        }
+    }
+}
+
 /* Liga o PWM na frequência pedida (ou silencia). `force` ignora o mudo (alarmes). */
 static void sound(uint16_t freq, bool force)
 {
+    hold_awake(freq != 0 && (!mute || force));
     if (freq == 0 || (mute && !force)) {
         ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
     } else {
@@ -100,6 +118,9 @@ void audio_init(void)
         .clk_cfg = LEDC_AUTO_CLK,
     };
     ledc_timer_config(&timer);
+    if (esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "audio", &lock_sound) != ESP_OK) {
+        lock_sound = NULL;
+    }
     ledc_channel_config_t channel = {
         .gpio_num = PIN_BUZZER,
         .speed_mode = LEDC_LOW_SPEED_MODE,

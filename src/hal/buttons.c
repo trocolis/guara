@@ -13,6 +13,8 @@
 
 #define PERIOD_MS 5
 #define SAMPLES_STABLE 4
+#define PERIOD_IDLE_MS 20  /* modo Ocioso: menos despertares para o light sleep */
+#define SAMPLES_STABLE_IDLE 2
 #define REPEAT_AFTER_MS 400
 #define REPEAT_EVERY_MS 110
 
@@ -23,6 +25,7 @@ static const gpio_num_t pins[COUNT_KEYS] = {
 static QueueHandle_t queue;
 static volatile bool state[COUNT_KEYS];
 static volatile uint32_t last_use;
+static volatile bool slow; /* modo Ocioso */
 
 /* Milissegundos desde o boot. */
 static uint32_t now_ms(void)
@@ -37,7 +40,7 @@ static void publish(input_key_t t, key_event_type_t type)
     xQueueSend(queue, &ev, 0);
 }
 
-/* Task de leitura: a cada 5 ms, 4 leituras iguais confirmam a mudança. */
+/* Task de leitura: a cada 5 ms, 4 leituras iguais confirmam a mudança (Ocioso: 20 ms e 2 leituras). */
 static void job_buttons(void *arg)
 {
     (void)arg;
@@ -48,7 +51,7 @@ static void job_buttons(void *arg)
         for (int i = 0; i < COUNT_KEYS; i++) {
             bool bytes_read = gpio_get_level(pins[i]) == 0;
             if (bytes_read != state[i]) {
-                if (++debounce_count[i] >= SAMPLES_STABLE) {
+                if (++debounce_count[i] >= (slow ? SAMPLES_STABLE_IDLE : SAMPLES_STABLE)) {
                     state[i] = bytes_read;
                     debounce_count[i] = 0;
                     if (bytes_read) {
@@ -69,7 +72,7 @@ static void job_buttons(void *arg)
                 }
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(PERIOD_MS));
+        vTaskDelay(pdMS_TO_TICKS(slow ? PERIOD_IDLE_MS : PERIOD_MS));
     }
 }
 
@@ -132,4 +135,10 @@ void buttons_inject(input_key_t t)
     last_use = now_ms();
     publish(t, KEY_PRESSED);
     publish(t, KEY_RELEASED);
+}
+
+/* Modo Ocioso: lê os botões com menos frequência para o chip dormir mais. */
+void buttons_set_idle(bool idle)
+{
+    slow = idle;
 }

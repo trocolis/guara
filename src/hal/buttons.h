@@ -33,6 +33,8 @@ bool buttons_is_held(input_key_t t);
 /* Momento (ms desde o boot) da última tecla pressionada. */
 uint32_t buttons_last_use_ms(void);
 void buttons_flush(void);
+/* Modo Ocioso: leitura a cada 20 ms em vez de 5 ms. */
+void buttons_set_idle(bool idle);
 /* Simula pressionar e soltar uma tecla (console de depuração). */
 void buttons_inject(input_key_t t);
 

@@ -13,10 +13,16 @@ typedef enum {
     WOKE_TIMER,
 } wake_reason_t;
 
+/* Configura a frequência dinâmica e o light sleep automático (começa no modo Ativo). */
+void power_init(void);
+/* Modo Ocioso: brilho mínimo, CPU entre 80 e 160 MHz e light sleep automático. */
+void power_set_idle(bool enabled);
+bool power_is_idle(void);
+
 wake_reason_t power_wake_reason(void);
 /*
- * Entra em deep sleep. Acorda pelos botões Cima/Baixo (GPIO32/33) e, se
- * `segundos` > 0, pelo timer. Não retorna.
+ * Entra em deep sleep. Acorda por qualquer um dos quatro botões (Cima/Baixo
+ * pelo RTC, A/B pelo ULP) e, se `seconds` > 0, pelo timer. Não retorna.
  */
 void power_deep_sleep(uint32_t seconds);
 

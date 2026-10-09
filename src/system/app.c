@@ -40,6 +40,10 @@ static bool sleep_blocked;
 static uint32_t monotonic_minutes;
 static int consecutive_critical;
 
+#define IDLE_AFTER_MS 30000 /* sem botões por 30 s: modo Ocioso */
+#define IDLE_MAX_FPS 5
+static int swallowed_key = -1; /* tecla que só acordou do Ocioso: ignorada até ser solta */
+
 /* Milissegundos desde o boot. */
 uint32_t app_ms(void)
 {
@@ -170,6 +174,7 @@ static void show_storage_error(storage_status_t st)
 void app_init(void)
 {
     rng_seed(&g_rng, esp_random());
+    power_init();
     config_load();
     audio_init();
     audio_mute(g_cfg.mute);
@@ -316,20 +321,60 @@ static void check_battery(void)
     }
 }
 
+/* Entra no modo Ocioso após 30 s sem botões, exceto nas telas que impedem o sono. */
+static void check_idle(uint32_t now)
+{
+    bool should_idle = !sleep_blocked && !screens_alarm_ringing() && now - buttons_last_use_ms() > IDLE_AFTER_MS;
+    if (should_idle && !power_is_idle()) {
+        power_set_idle(true);
+        buttons_set_idle(true);
+    } else if (!should_idle && power_is_idle() && (sleep_blocked || screens_alarm_ringing())) {
+        power_set_idle(false); /* um jogo ou alarme começou */
+        buttons_set_idle(false);
+    }
+}
+
+/*
+ * Trata uma tecla. No modo Ocioso, o primeiro toque só acorda a tela: a tecla
+ * é ignorada até ser solta.
+ */
+static void handle_key(const key_event_t *ev)
+{
+    if (power_is_idle()) {
+        power_set_idle(false);
+        buttons_set_idle(false);
+        if (ev->type == KEY_PRESSED) {
+            swallowed_key = ev->key;
+        }
+        return;
+    }
+    if (swallowed_key == (int)ev->key) {
+        if (ev->type == KEY_RELEASED) {
+            swallowed_key = -1;
+        }
+        return;
+    }
+    ui_process_key(ev);
+}
+
 /* Laço principal: teclas, quadros na taxa da tela atual, tarefas por segundo e por minuto. */
 void app_run(void)
 {
     uint32_t last_frame = 0, last_second = 0, last_minute_ms = app_ms();
     for (;;) {
-        uint32_t period = 1000u / (uint32_t)ui_fps();
+        int fps = ui_fps();
+        if (power_is_idle() && fps > IDLE_MAX_FPS) {
+            fps = IDLE_MAX_FPS;
+        }
+        uint32_t period = 1000u / (uint32_t)fps;
         uint32_t now = app_ms();
         uint32_t wait = now - last_frame >= period ? 0 : period - (now - last_frame);
 
         key_event_t ev;
         if (buttons_read(&ev, wait)) {
-            ui_process_key(&ev);
+            handle_key(&ev);
             while (buttons_read(&ev, 0)) {
-                ui_process_key(&ev);
+                handle_key(&ev);
             }
         }
 
@@ -353,6 +398,7 @@ void app_run(void)
                 screens_trigger_alarm("Temporizador");
             }
             check_inactivity(now);
+            check_idle(now);
         }
 
         while (now - last_minute_ms >= 60000) {

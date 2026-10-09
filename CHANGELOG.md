@@ -3,6 +3,13 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.7.0 — 2026-10-08
+
+### Energia
+- Modo Ocioso após 30 s sem botões: brilho mínimo, telas a no máximo 5 FPS, CPU entre 80 e 160 MHz com light sleep automático e botões lidos a cada 20 ms. O primeiro toque só restaura o modo Ativo. Jogos, combate, cronômetro e alarme tocando impedem o modo Ocioso; o buzzer bloqueia o light sleep enquanto toca.
+- Os botões A e B também acordam o aparelho do deep sleep, pelo coprocessador ULP (o `ext1` do ESP32 não acorda com "qualquer pino em nível baixo").
+- Console de depuração acorda o chip do light sleep pela UART; o `console.py` manda um preâmbulo antes de cada comando.
+
 ## v0.6.1 — 2026-10-08
 
 ### Ciclo de vida

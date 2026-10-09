@@ -11,6 +11,8 @@
 #include "buttons.h"
 #include "display.h"
 #include "driver/uart.h"
+#include "driver/uart_wakeup.h"
+#include "esp_sleep.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -74,6 +76,11 @@ static void job(void *arg)
 void debug_console_init(void)
 {
     if (uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0) == ESP_OK) {
+        /* No modo Ocioso o chip entra em light sleep: bordas na RX acordam,
+           mas os bytes do despertar se perdem (o console.py manda um preâmbulo). */
+        uart_wakeup_cfg_t wake = {.wakeup_mode = UART_WK_MODE_ACTIVE_THRESH, .rx_edge_threshold = 3};
+        uart_wakeup_setup(UART_NUM_0, &wake);
+        esp_sleep_enable_uart_wakeup(UART_NUM_0);
         xTaskCreatePinnedToCore(job, "depuracao", 3072, NULL, 3, NULL, 0);
     }
 }

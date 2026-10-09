@@ -45,6 +45,7 @@ python3 tools/bmp-builder/bmp_builder.py in.png -o bitmaps/icons/x.bmp --preset 
 - `P` dumps the framebuffer; `S` prints the pet state.
 - Never open the port with DTR asserted: GPIO0 goes low and the board enters download mode.
 - The user may be pressing physical buttons at the same time.
+- After 30 s without keys the device enters Idle mode (light sleep, dim screen): the first key only wakes it and is swallowed. `console.py` sends a wake preamble before each command, since the UART bytes that wake the chip are lost.
 
 ## Code layout
 
