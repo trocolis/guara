@@ -29,7 +29,7 @@
 #define HIT_SECOND_MS 450 /* segundo impacto do ataque duplo, no mesmo lugar do primeiro */
 #define MENU_GRACE_MS 600 /* depois do impacto, A não mexe na barra de ações (toques atrasados da janela) */
 #define ACTION_BAR_X 10 /* barra de ações: no lugar do ícone do A, ao lado da barra ATB */
-#define ACTION_BAR_Y 54
+#define ACTION_BAR_Y 53
 #define ACTION_COUNT 3
 
 static combat_t combat;
@@ -530,15 +530,16 @@ static void draw_atb(gfx_t *g, int x, const fighter_t *l)
 }
 
 /*
- * Barra de ações: os três ícones 8x8 lado a lado, separados por 2 px; o
- * selecionado fica dentro de um retângulo sem preenchimento.
+ * Barra de ações: os três ícones 8x8 lado a lado, separados por 4 px; o
+ * selecionado fica dentro de um retângulo sem preenchimento de cantos
+ * arredondados (raio 1), a 1 px do ícone.
  */
 static void draw_action_bar(gfx_t *g)
 {
     for (int i = 0; i < ACTION_COUNT; i++) {
-        int x = ACTION_BAR_X + 1 + i * 10;
+        int x = ACTION_BAR_X + 1 + i * 12;
         if (i == pick_index) {
-            gfx_rect(g, x - 1, ACTION_BAR_Y - 1, 10, 10, GFX_WHITE);
+            gfx_rect_rounded(g, x - 2, ACTION_BAR_Y - 2, 12, 12, 1, GFX_WHITE);
         }
         ui_icon_mode(g, ACTION_ICONS[i], x, ACTION_BAR_Y, GFX_COPY, 0);
     }

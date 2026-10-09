@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.11.2 — 2026-10-09
+
+### Combate
+- Barra de ações: 4 px entre os ícones e retângulo de seleção a 1 px do ícone, com cantos arredondados (raio 1).
+
 ## v0.11.1 — 2026-10-09
 
 ### Combate
