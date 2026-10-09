@@ -26,8 +26,7 @@
 #define HIT_FRAMES 7
 #define HIT_FRAME_MS 33   /* 30 FPS */
 #define HIT_START_MS 150  /* começa no impacto, junto com o recuo */
-#define HIT_SECOND_MS 450 /* segundo impacto do ataque duplo (segundo pulo começa em 300 ms) */
-#define HIT_SECOND_INSET 8 /* o segundo impacto fica 8 px mais para dentro do sprite */
+#define HIT_SECOND_MS 450 /* segundo impacto do ataque duplo, no mesmo lugar do primeiro */
 #define MENU_GRACE_MS 600 /* depois de um golpe, A não abre o menu (toques atrasados da janela) */
 
 static combat_t combat;
@@ -403,9 +402,8 @@ static void draw_fighter(gfx_t *g, int side, uint32_t now)
         x -= dir * ((int)tw < windup ? back : 3 - ((int)tw - windup) * 3 / REACTION_WINDOW_MS);
     }
     if (animating && last.actor == side && !last.failed && last.type == ACTION_ATTACK &&
-        t < (last.hits == 2 ? 600u : 300u)) {
-        uint32_t tj = t % 300; /* no ataque duplo, o pulinho se repete */
-        x += dir * (tj < 150 ? (int)tj / 25 : (int)(300 - tj) / 25); /* pulinho na direção do alvo */
+        t < 300) {
+        x += dir * (t < 150 ? (int)t / 25 : (int)(300 - t) / 25); /* pulinho na direção do alvo */
     }
     if (animating && last.target == side && last.damage > 0 && t > 150 && t < 600) {
         x -= dir * (last.guarded ? 1 : 2); /* recuo */
@@ -429,12 +427,11 @@ static void draw_hit(gfx_t *g, uint32_t now)
         return;
     }
     uint32_t t = now - anim_start;
-    int frame = -1, inset = 0;
+    int frame = -1;
     if (t >= HIT_START_MS && t < HIT_START_MS + HIT_FRAMES * HIT_FRAME_MS) {
         frame = (int)(t - HIT_START_MS) / HIT_FRAME_MS;
     } else if (last.hits == 2 && t >= HIT_SECOND_MS && t < HIT_SECOND_MS + HIT_FRAMES * HIT_FRAME_MS) {
         frame = (int)(t - HIT_SECOND_MS) / HIT_FRAME_MS;
-        inset = HIT_SECOND_INSET;
     }
     if (frame < 0) {
         return;
@@ -442,7 +439,7 @@ static void draw_hit(gfx_t *g, uint32_t now)
     /* Centro do efeito na borda do sprite voltada para o atacante, à meia altura.
        Jogador à esquerda do usuário: o golpe vem da direita da tela (e vice-versa). */
     int half = fighter_height[last.target] / 2;
-    int cx = last.target == 0 ? X_PLAYER + half - inset : X_OPPONENT - half + inset;
+    int cx = last.target == 0 ? X_PLAYER + half : X_OPPONENT - half;
     int cy = BASE_Y - half;
     char name[8];
     snprintf(name, sizeof(name), "hit_%d", frame + 1);

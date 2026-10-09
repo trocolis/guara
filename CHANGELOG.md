@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## Sem versão — 2026-10-09 (aprimoramento do combate)
+
+### Combate
+- Ataque duplo: o atacante dá um só pulo e a animação de impacto se repete duas vezes no mesmo lugar (antes eram dois pulos e o segundo impacto 8 px mais para dentro do sprite).
+
 ## Sem versão — 2026-10-09 (licença)
 
 ### Documentação
