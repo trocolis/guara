@@ -220,7 +220,7 @@ static void on_close(void)
     app_block_sleep(false);
 }
 
-/* A escolhe a ação a qualquer momento (ou reage na janela do golpe); B oferece desistir. */
+/* A escolhe a ação uma vez por ciclo (ou reage na janela do golpe); B oferece desistir. */
 static void on_key(const key_event_t *ev)
 {
     if (ev->type != KEY_PRESSED) {
@@ -248,7 +248,7 @@ static void on_key(const key_event_t *ev)
         }
         return;
     }
-    if (ev->key == KEY_A) {
+    if (ev->key == KEY_A && !pending) { /* escolhida a ação, só no próximo ciclo */
         static const char *const options[] = {"Atacar", "Habilidade", "Itens", "Desistir"};
         at_modal = true;
         notice[0] = '\0';

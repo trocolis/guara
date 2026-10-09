@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.5.1 — 2026-10-08
+
+### Combate
+- A ação escolhida fica travada até ser executada: apertar A não abre o modal de ações antes do próximo ciclo da barra.
+
 ## v0.5.0 — 2026-10-08
 
 ### Combate
