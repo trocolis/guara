@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.9.5 — 2026-10-09
+
+### Combate
+- Recuo do preparo do golpe mais rápido: 3 px em 120 ms (antes em 350 ms), segurando até a janela de reação.
+
 ## v0.9.4 — 2026-10-08
 
 ### Combate

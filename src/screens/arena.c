@@ -22,6 +22,7 @@
 #define BASE_Y 50
 #define ANIM_MS 900
 #define INTRO_MS 1800 /* abertura "Fulano  VS  Siclano" */
+#define WINDUP_RECOIL_MS 120 /* recuo rápido no início do preparo do golpe */
 #define HIT_FRAMES 7
 #define HIT_FRAME_MS 33   /* 30 FPS */
 #define HIT_START_MS 150  /* começa no impacto, junto com o recuo */
@@ -395,11 +396,11 @@ static void draw_fighter(gfx_t *g, int side, uint32_t now)
     bool visible = true;
     if (winding && windup_side == side) {
         uint32_t tw = now - windup_start;
-        /* Toma impulso (recua 3 px) e, na janela de reação, avança de volta até o
-           impacto: o jogador prevê o tempo pelo movimento, sem indicação na tela */
+        /* Toma impulso (recua 3 px em 120 ms e segura) e, na janela de reação, avança
+           de volta até o impacto: o jogador prevê o tempo pelo movimento, sem indicação */
         int windup = REACTION_WINDUP_MS - REACTION_WINDOW_MS;
-        x -= dir * (tw < (uint32_t)windup ? (int)tw * 3 / windup
-                                          : 3 - ((int)tw - windup) * 3 / REACTION_WINDOW_MS);
+        int back = (int)tw < WINDUP_RECOIL_MS ? (int)tw * 3 / WINDUP_RECOIL_MS : 3;
+        x -= dir * ((int)tw < windup ? back : 3 - ((int)tw - windup) * 3 / REACTION_WINDOW_MS);
     }
     if (animating && last.actor == side && !last.failed && last.type == ACTION_ATTACK &&
         t < (last.hits == 2 ? 600u : 300u)) {

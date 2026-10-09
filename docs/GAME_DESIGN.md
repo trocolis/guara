@@ -139,7 +139,7 @@ As fórmulas de ATB, dano físico, crítico, esquiva e multiplicador elemental s
   - Neutra e Psíquica são neutras contra tudo.
 - **Reação no tempo certo (janela de A):**
   - Golpes com janela: ataque físico e habilidades (exceto cura) contra o outro lado.
-  - O golpe tem 600 ms de preparo; a janela são os últimos 250 ms. Nos primeiros 350 ms o atacante recua 3 px; na janela ele avança de volta até a posição original, sem indicação na tela. Uma tentativa por golpe: apertar antes da janela perde a reação.
+  - O golpe tem 600 ms de preparo; a janela são os últimos 250 ms. Nos primeiros 350 ms o atacante recua 3 px (em 120 ms) e segura; na janela ele avança de volta até a posição original, sem indicação na tela. Uma tentativa por golpe: apertar antes da janela perde a reação.
   - **Golpe certeiro (quem ataca):** +20% de chance de crítico (somado depois do limite de 50%) e, só no ataque físico, 30% de chance de ataque duplo (o segundo golpe sorteia o próprio crítico).
   - **Defesa (quem é atacado):** dano ×0,5 (mínimo 1) e +15% de chance de o atacante errar, sorteada depois da esquiva.
   - O oponente acerta a janela com 25% de chance, tanto para atacar quanto para se defender.
