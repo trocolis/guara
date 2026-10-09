@@ -38,8 +38,6 @@ static combat_result_t last;
 static bool animating;
 static uint32_t anim_start;
 static bool at_modal;
-static bool modal_hidden; /* modal escondido durante um golpe; volta depois da animação */
-static int modal_kind;    /* qual modal está aberto (MODAL_*) */
 static bool end_shown;
 static uint32_t end_at;
 static uint32_t intro_until;
@@ -88,11 +86,6 @@ static void execute_now(int side, combat_action_t action, const catalog_record_t
 /* Começa a ação: golpes contra o outro lado passam pelo preparo com a janela de reação. */
 static void begin_action(int side, combat_action_t action, uint32_t now)
 {
-    if (at_modal && !modal_hidden && ui_top() != &SCREEN_COMBAT) {
-        /* Esconde o modal de escolha para mostrar o golpe; ele volta depois da animação */
-        ui_back_until(&SCREEN_COMBAT);
-        modal_hidden = true;
-    }
     if (!combat_has_window(&combat, side, action)) {
         execute_now(side, action, action.type == ACTION_ITEM ? &pending_item : NULL, now);
         return;
@@ -217,11 +210,9 @@ static bool open_items(void)
     return true;
 }
 
-/* Abre (ou reabre, depois de um golpe) um modal do combate. */
+/* Abre um modal do combate. */
 static void open_modal(int kind)
 {
-    modal_kind = kind;
-    modal_hidden = false;
     if (kind == MODAL_SKILLS) {
         at_modal = open_skills();
     } else if (kind == MODAL_ITEMS) {
@@ -255,7 +246,7 @@ static void on_open(void *param)
     combat_start(&combat, &player, &opponent, &g_rng);
     player = combat.side[0];
     memset(&last, 0, sizeof(last));
-    animating = at_modal = modal_hidden = picking = end_shown = pending = winding = false;
+    animating = at_modal = picking = end_shown = pending = winding = false;
     notice[0] = '\0';
     intro_until = menu_free_at = app_ms() + INTRO_MS;
     app_block_sleep(true);
@@ -387,19 +378,17 @@ static void step(uint32_t now)
         if (now - anim_start >= ANIM_MS) {
             animating = false;
             if (combat.finished) {
-                if (at_modal && !modal_hidden) {
+                if (at_modal) {
                     /* O combate acabou com um modal aberto: fecha os modais */
                     ui_back_until(&SCREEN_COMBAT);
                 }
-                at_modal = modal_hidden = picking = pending = false;
+                at_modal = picking = pending = false;
                 end_at = now;
                 if (combat.winner == 0) {
                     audio_victory();
                 } else {
                     audio_defeat();
                 }
-            } else if (modal_hidden) {
-                open_modal(modal_kind); /* o modal escondido pelo golpe volta */
             }
         }
         return;
@@ -600,27 +589,39 @@ static void on_draw(gfx_t *g, uint32_t now)
                 ui_icon_mode(g, last.icon, 56, 24, GFX_COPY, 0);
             }
         }
-        char msg[16] = "";
-        if (last.failed) {
-            snprintf(msg, sizeof(msg), "Falhou!");
-        } else if (last.dodged) {
-            snprintf(msg, sizeof(msg), "Esquivou!");
-        } else if (last.missed && !last.self_hit) {
-            snprintf(msg, sizeof(msg), "Errou!");
-        } else if (last.damage > 0) {
-            snprintf(msg, sizeof(msg), "%s-%d%s", last.hits == 2 ? "2x" : "", last.damage, last.critical ? "!" : "");
-        } else if (last.heal > 0) {
-            snprintf(msg, sizeof(msg), "+%d", last.heal);
-        }
-        if (msg[0] && t > 150) {
-            int xa = last.target == 0 ? X_PLAYER : X_OPPONENT;
-            int dy = (int)(t - 150) / 60;
-            gfx_text_center(g, xa - 20, 40, 22 - dy, msg, GFX_INVERT);
-        }
     } else if (combat.finished) {
         gfx_text_center(g, 0, GFX_WIDTH, 22, combat.winner == 0 ? "VITORIA!" : "DERROTA", GFX_WHITE);
     } else if (notice[0]) {
         gfx_text_center(g, 0, GFX_WIDTH, 22, notice, GFX_WHITE);
+    }
+}
+
+/*
+ * Valor do dano (ou cura, ou erro) subindo sobre o alvo, desenhado por cima
+ * dos modais em XOR: com o modal de escolha aberto, o combate continua visível.
+ */
+static void draw_over(gfx_t *g, uint32_t now)
+{
+    uint32_t t = now - anim_start;
+    if (!animating || t <= 150 || (int32_t)(intro_until - now) > 0) {
+        return;
+    }
+    char msg[16] = "";
+    if (last.failed) {
+        snprintf(msg, sizeof(msg), "Falhou!");
+    } else if (last.dodged) {
+        snprintf(msg, sizeof(msg), "Esquivou!");
+    } else if (last.missed && !last.self_hit) {
+        snprintf(msg, sizeof(msg), "Errou!");
+    } else if (last.damage > 0) {
+        snprintf(msg, sizeof(msg), "%s-%d%s", last.hits == 2 ? "2x" : "", last.damage, last.critical ? "!" : "");
+    } else if (last.heal > 0) {
+        snprintf(msg, sizeof(msg), "+%d", last.heal);
+    }
+    if (msg[0]) {
+        int xa = last.target == 0 ? X_PLAYER : X_OPPONENT;
+        int dy = (int)(t - 150) / 60;
+        gfx_text_center(g, xa - 20, 40, 22 - dy, msg, GFX_INVERT); /* INVERT = XOR com o fundo */
     }
 }
 
@@ -631,6 +632,7 @@ static const screen_t SCREEN_COMBAT = {
     .on_close = on_close,
     .on_key = on_key,
     .on_draw = on_draw,
+    .on_draw_over = draw_over,
 };
 
 /* ---------------- Menu da Arena ---------------- */

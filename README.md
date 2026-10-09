@@ -281,7 +281,7 @@ O console nunca abre a porta com o DTR ativo, porque o GPIO0 iria a nível baixo
 	- `ui/`: pilha de telas (`ui.h`), componentes padrão (`widgets.h`), modais e teclado virtual (`modal.h`);
 	- `screens/`: um arquivo por tela; `screens.h` lista todas, `submenu.h` monta sub-menus padrão e `sprite.h` compõe o Guará. A API Lua fica em `games.c` (VM e módulos básicos) e `game_api.c` (desenho da VROM, `catalog`, `ui` e `guara.draw`).
 
-**Telas:** cada tela é um `screen_t` com os callbacks `on_open`, `on_resume`, `on_close`, `on_key` e `on_draw`, empilhado por `ui_open` e removido por `ui_back`. Telas reutilizáveis que podem se empilhar (modais, sub-menus) guardam estado por camada, indexado por `ui_current_layer()`. O resultado de um modal chega por um callback *depois* que o modal sai da pilha, então o callback pode abrir outras telas. Quem altera o Guará chama `app_mark_changed()`, que espelha na RTC RAM e marca o *dirty flag*.
+**Telas:** cada tela é um `screen_t` com os callbacks `on_open`, `on_resume`, `on_close`, `on_key`, `on_draw` e o opcional `on_draw_over` (desenha por cima dos modais abertos sobre a tela), empilhado por `ui_open` e removido por `ui_back`. Telas reutilizáveis que podem se empilhar (modais, sub-menus) guardam estado por camada, indexado por `ui_current_layer()`. O resultado de um modal chega por um callback *depois* que o modal sai da pilha, então o callback pode abrir outras telas. Quem altera o Guará chama `app_mark_changed()`, que espelha na RTC RAM e marca o *dirty flag*.
 
 **Laço principal (`app_run`):** lê as teclas, desenha a tela do topo na taxa dela (20 FPS por padrão, 30 FPS em jogos, combate e cronômetro, no máximo 5 FPS no modo Ocioso), confere a cada segundo bateria, despertadores, temporizador, inatividade e modo Ocioso, e roda o ciclo de vida do Guará a cada minuto.
 
@@ -462,7 +462,7 @@ Roda a 30 FPS e não deixa o aparelho entrar no modo Ocioso nem no deep sleep.
 	- ![Habilidade](./bitmaps/ui/action_skill.bmp) **Habilidade:** abre o modal de escolha entre as habilidades ativas, com o custo de MP.
 	- ![Poções](./bitmaps/ui/action_potion.bmp) **Poções:** abre o modal de escolha entre os itens do tipo poção possuídos.
 	- **Desistir:** B abre a confirmação; desistir vale na hora e encerra o combate como derrota.
-	- **Tempo real:** o combate não pausa com a barra ou um modal aberto: as barras ATB continuam enchendo e o oponente age. Quando um golpe começa, só o modal de escolha some, a animação do ataque e do dano é exibida e depois ele volta. Se o combate terminar, o modal fecha.
+	- **Tempo real:** o combate não pausa com a barra ou um modal aberto: as barras ATB continuam enchendo e o oponente age. O modal de escolha continua aberto durante os golpes (com ele aberto, as teclas vão para o modal, e o A não reage na janela), e o valor do dano subindo é desenhado por cima dele em XOR. Se o combate terminar, o modal fecha.
 
 	![Ações do combate](./bitmaps/exemple/screen_combat_actions.bmp)
 

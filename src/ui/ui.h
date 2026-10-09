@@ -20,6 +20,7 @@ typedef struct screen {
     void (*on_close)(void);
     void (*on_key)(const key_event_t *ev);
     void (*on_draw)(gfx_t *g, uint32_t now_ms);
+    void (*on_draw_over)(gfx_t *g, uint32_t now_ms); /* opcional: desenhado por cima dos modais abertos sobre a tela */
 } screen_t;
 
 #define UI_FPS_DEFAULT 20

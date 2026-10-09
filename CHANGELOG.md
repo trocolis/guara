@@ -3,6 +3,14 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.11.3 — 2026-10-09
+
+### Combate
+- O modal de escolha não some mais durante os golpes: tudo segue em tempo real, e o valor do dano subindo é desenhado por cima do modal em XOR.
+
+### Interface
+- `screen_t.on_draw_over`: callback opcional desenhado depois dos modais abertos sobre a tela.
+
 ## v0.11.2 — 2026-10-09
 
 ### Combate

@@ -107,7 +107,10 @@ void ui_process_key(const key_event_t *ev)
     }
 }
 
-/* Desenha a tela do topo; se for modal, desenha antes as telas de baixo. */
+/*
+ * Desenha a tela do topo; se for modal, desenha antes as telas de baixo. Por
+ * último, o on_draw_over de cada camada desenha por cima dos modais.
+ */
 void ui_draw(gfx_t *g, uint32_t now)
 {
     if (top < 0) {
@@ -123,6 +126,13 @@ void ui_draw(gfx_t *g, uint32_t now)
         layer = i;
         if (stack[i]->on_draw) {
             stack[i]->on_draw(g, now);
+        }
+    }
+    for (int i = base; i <= top; i++) {
+        gfx_reset_clip(g);
+        layer = i;
+        if (stack[i]->on_draw_over) {
+            stack[i]->on_draw_over(g, now);
         }
     }
     gfx_reset_clip(g);
