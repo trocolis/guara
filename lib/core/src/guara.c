@@ -321,8 +321,8 @@ static void gain_hp_percent(guara_t *g, int pct)
 
 /*
  * Recuperação de HP: liga quando alimentação, saúde e energia passam de 50% e
- * desliga quando a energia chega a 10%. Ligada, cada minuto com HP incompleto
- * sobe o HP queimando energia.
+ * desliga quando a energia chega a 10%. Ligada, cada minuto acordado com HP
+ * incompleto sobe o HP queimando energia; dormindo, fica em pausa.
  */
 static void recover_hp(guara_t *g)
 {
@@ -334,7 +334,7 @@ static void recover_hp(guara_t *g)
     if (g->energy <= LIMIT_HP_RECOVERY_STOPS) {
         recovering = false;
     }
-    if (recovering && g->hp < g->hp_max) {
+    if (recovering && g->hp < g->hp_max && !guara_has_state(g, ST_SLEEPING)) {
         gain_hp_percent(g, REGEN_HP_PCT);
         add_to_vital(&g->energy, -REGEN_HP_ENERGY_COST);
     }

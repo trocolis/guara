@@ -177,6 +177,18 @@ static void test_hp_recovery_burns_energy(void)
     guara_tick_minute(&g, &clock_ctx, false);
     TEST_ASSERT_FALSE(guara_has_state(&g, ST_RECOVERING));
     TEST_ASSERT_EQUAL_UINT16(hp, g.hp);
+    /* Dormindo fica em pausa, sem perder o estado */
+    g.energy = CENTI(60);
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_RECOVERING));
+    hp = g.hp;
+    guara_set_state(&g, ST_SLEEPING, true);
+    guara_tick_minute(&g, &clock_ctx, false);
+    TEST_ASSERT_EQUAL_UINT16(hp, g.hp);
+    TEST_ASSERT_TRUE(guara_has_state(&g, ST_RECOVERING));
+    guara_set_state(&g, ST_SLEEPING, false);
+    g.energy = CENTI(10);
+    guara_tick_minute(&g, &clock_ctx, false);
     /* Desligada, não volta só com a energia em 30% */
     g.energy = CENTI(30);
     guara_tick_minute(&g, &clock_ctx, false);

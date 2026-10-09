@@ -3,6 +3,11 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.6.1 — 2026-10-08
+
+### Ciclo de vida
+- A recuperação de HP fica em pausa enquanto o Guará dorme; o sono só repõe energia.
+
 ## v0.6.0 — 2026-10-08
 
 ### Ciclo de vida
