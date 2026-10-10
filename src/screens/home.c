@@ -158,10 +158,6 @@ static void draw_top_bar(gfx_t *g, uint32_t now)
         }
         x -= 10;
     }
-    if (g_cfg.bt_on) {
-        ui_icon(g, "status_bluetooth", x, 1);
-        x -= 10;
-    }
     if (alarms_count() > 0) {
         ui_icon(g, "status_alarm", x, 1);
         x -= 10;

@@ -3,6 +3,7 @@
 
 #include "../common/test_storage.h"
 #include "combat.h"
+#include "link_proto.h"
 #include "guara.h"
 #include "rules.h"
 #include "save.h"
@@ -412,6 +413,63 @@ static void test_opponent_potion(void)
     TEST_ASSERT_EQUAL_INT(ACTION_ATTACK, combat_ai(&c, 1).type);
 }
 
+/* ---------------- Encontro (protocolo) ---------------- */
+
+/* Codifica e decodifica uma oferta; rejeita assinatura, versão e tamanho errados. */
+static void test_link_roundtrip(void)
+{
+    guara_t g;
+    guara_birth(&g, "Aline", &rng, 1);
+    link_msg_t m = {LINK_OFFER, {0}, 0xA1B2C3D4u, 42, 3};
+    link_profile_from_guara(&g, &m.from);
+    uint8_t buf[LINK_MESSAGE_SIZE];
+    TEST_ASSERT_EQUAL_INT(LINK_MESSAGE_SIZE, link_encode(&m, buf));
+    link_msg_t d;
+    TEST_ASSERT_TRUE(link_decode(buf, sizeof(buf), &d));
+    TEST_ASSERT_EQUAL_INT(LINK_OFFER, d.type);
+    TEST_ASSERT_EQUAL_STRING("Aline", d.from.name);
+    TEST_ASSERT_EQUAL_UINT32(g.uid, d.from.uid);
+    TEST_ASSERT_EQUAL_UINT32(0xA1B2C3D4u, d.tx);
+    TEST_ASSERT_EQUAL_INT(42, d.item_id);
+    TEST_ASSERT_EQUAL_INT(3, d.count);
+    TEST_ASSERT_FALSE(link_decode(buf, LINK_MESSAGE_SIZE - 1, &d));
+    buf[2] = LINK_VERSION + 1;
+    TEST_ASSERT_FALSE(link_decode(buf, sizeof(buf), &d));
+    buf[2] = LINK_VERSION;
+    buf[0] = 'X';
+    TEST_ASSERT_FALSE(link_decode(buf, sizeof(buf), &d));
+}
+
+/* Vizinhos entram na ordem, atualizam sem duplicar e expiram sem sinal. */
+static void test_link_peers(void)
+{
+    link_peers_t t = {0};
+    link_profile_t a = {1, "A", 1, 0, 0, 0, 1}, b = {2, "B", 2, 0, 0, 0, 1};
+    const uint8_t mac_a[6] = {1, 1, 1, 1, 1, 1}, mac_b[6] = {2, 2, 2, 2, 2, 2};
+    link_peers_seen(&t, mac_a, &a, 0);
+    link_peers_seen(&t, mac_b, &b, 1000);
+    link_peers_seen(&t, mac_a, &a, 2000);
+    TEST_ASSERT_EQUAL_INT(2, t.count);
+    TEST_ASSERT_EQUAL_UINT32(1, t.peers[0].profile.uid);
+    link_peers_expire(&t, 1000 + LINK_PEER_TIMEOUT_MS);
+    TEST_ASSERT_EQUAL_INT(1, t.count); /* B sumiu, A foi visto em 2000 */
+    TEST_ASSERT_EQUAL_UINT32(1, t.peers[0].profile.uid);
+}
+
+/* Uma oferta aceita é lembrada pelo par (UID, tx). */
+static void test_link_tx_log(void)
+{
+    link_tx_log_t log = {0};
+    TEST_ASSERT_FALSE(link_tx_log_has(&log, 7, 100));
+    link_tx_log_add(&log, 7, 100);
+    TEST_ASSERT_TRUE(link_tx_log_has(&log, 7, 100));
+    TEST_ASSERT_FALSE(link_tx_log_has(&log, 8, 100));
+    for (uint32_t i = 0; i < LINK_TX_LOG; i++) {
+        link_tx_log_add(&log, 9, 200 + i);
+    }
+    TEST_ASSERT_FALSE(link_tx_log_has(&log, 7, 100)); /* a mais antiga saiu */
+}
+
 static void test_forfeit(void)
 {
     guara_t g;
@@ -486,6 +544,9 @@ int main(void)
     RUN_TEST(test_combat_ends);
     RUN_TEST(test_opponent_potion);
     RUN_TEST(test_forfeit);
+    RUN_TEST(test_link_roundtrip);
+    RUN_TEST(test_link_peers);
+    RUN_TEST(test_link_tx_log);
     RUN_TEST(test_combat_reaction);
     return UNITY_END();
 }

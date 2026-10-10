@@ -340,7 +340,7 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `speech_balloon.bmp` | 20x24 | firmware / jogos de exemplo | Bruno Trócolis |
 | `status_alarm.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
 | `status_bateria_ausente_8x8.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
-| `status_bluetooth.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
+| `status_bluetooth.bmp` | 8x8 | **sem uso** | Bruno Trócolis |
 | `status_mute.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
 | `status_relogio_8x8.bmp` | 8x8 | **sem uso** | Bruno Trócolis |
 | `status_timer.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |

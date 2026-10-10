@@ -13,7 +13,6 @@ typedef struct {
     uint16_t wake_minute;
     char timezone[32];         /* POSIX TZ */
     bool wifi_on;
-    bool bt_on;
 } config_t;
 
 #define CONFIG_COUNT_POWER_SAVE 5

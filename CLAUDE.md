@@ -63,6 +63,7 @@ python3 tools/bmp-builder/bmp_builder.py in.png -o bitmaps/icons/x.bmp --preset 
     - `persistence`: storage mmap, save ring, RTC-RAM mirror;
     - `config`: NVS;
     - `network`: Wi-Fi on demand. Never call `wifi_*` from screens; use `network_use`/`network_wait`/`network_release`, `network_run` for background jobs, and `network_suspend` around memory-hungry tasks;
+    - `radio_link`: ESP-NOW for the Encontro screen (suspends `network`, fixed channel 1, 1 s presence broadcast, inbox queue); message format and peer/transaction logic in `lib/core/src/link_proto.c`;
     - `alarms`, `debug_console`;
     - `ota`: updates from the SD card or from the latest GitHub release (`OTA_GITHUB_REPO`). Pushing a `v#.#.#` tag that matches `GUARA_VERSION` runs `.github/workflows/release.yml`, which publishes `firmware.bin` and `storage.bin`. The `network` task checks for a newer release every 24 h (NTP every 6 h) and the app loop offers it on the home screen.
   - `ui/` — screen stack (`ui.h`), standard widgets (`widgets.h`), modals and virtual keyboard (`modal.h`).

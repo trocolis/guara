@@ -114,6 +114,16 @@ static void details(const catalog_record_t *r)
     ui_details(r->name, text);
 }
 
+/* Quantidade escolhida para compartilhar: abre o Encontro para escolher quem recebe. */
+static void share_count(int count, void *ctx)
+{
+    (void)ctx;
+    int id = item_sel();
+    if (count > 0 && id >= 0) {
+        screens_open_meet(id, count);
+    }
+}
+
 /* Trata Comer/Beber/Usar, Detalhes, Descartar e Compartilhar. */
 static void action_chosen(int option, void *ctx)
 {
@@ -134,8 +144,7 @@ static void action_chosen(int option, void *ctx)
         ui_quantity_picker("QUANTIDADE", 1, g_guara.inventory[id], 1, discard_count, NULL);
         break;
     case 3:
-        /* README: TODO "Elaborar a opção de Compartilhar" (depende do Bluetooth) */
-        ui_alert("COMPARTILHAR", "bluetooth", "Em breve: troca de itens entre Guarás.", "OK", NULL, NULL);
+        ui_quantity_picker("COMPARTILHAR", 1, g_guara.inventory[id], 1, share_count, NULL);
         break;
     default:
         break;

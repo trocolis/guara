@@ -1,5 +1,5 @@
 /*
- * Ajustes: Wi-Fi, Bluetooth, Energia, Armazenamento, Controle, Som, Sistema
+ * Ajustes: Wi-Fi, Encontro, Energia, Armazenamento, Controle, Som, Sistema
  * (com atualização pelo cartão SD) e Reiniciar.
  */
 #include <stdio.h>
@@ -212,24 +212,6 @@ static const submenu_item_t ITEMS_WIFI[] = {
 };
 static const submenu_t MENU_WIFI = {"WI-FI", ITEMS_WIFI, 4};
 
-/* ========================================================================= */
-/* Bluetooth (rádio presente; protocolo de troca ainda não especificado)     */
-/* ========================================================================= */
-
-static void info_bt(char *b, int t) { snprintf(b, (size_t)t, "%s", g_cfg.bt_on ? "ON" : "OFF"); }
-
-/* Bluetooth ainda não implementado. */
-static void bt_coming_soon(void)
-{
-    ui_alert("BLUETOOTH", "bluetooth", "Em breve: trocas e combates locais.", "OK", NULL, NULL);
-}
-
-static const submenu_item_t ITEMS_BT[] = {
-    {"on_off", "Liga/Desliga", info_bt, bt_coming_soon},
-    {"search", "Buscar", NULL, bt_coming_soon},
-    {"save", "Dispositivos pareados", NULL, bt_coming_soon},
-};
-static const submenu_t MENU_BT = {"BLUETOOTH", ITEMS_BT, 3};
 
 /* ========================================================================= */
 /* Energia                                                                   */
@@ -638,7 +620,8 @@ static void restart(void)
 /* ========================================================================= */
 
 static void open_wifi(void) { submenu_open(&MENU_WIFI); }
-static void open_bt(void) { submenu_open(&MENU_BT); }
+/* Encontro: fica visível para outros Guarás por perto e recebe itens. */
+static void open_meet(void) { screens_open_meet(-1, 0); }
 static void open_energy(void) { submenu_open(&MENU_ENERGY); }
 static void open_storage(void) { submenu_open(&MENU_STORAGE); }
 static void open_sound(void) { submenu_open(&MENU_SOUND); }
@@ -646,7 +629,7 @@ static void open_system(void) { submenu_open(&MENU_SYSTEM); }
 
 static const submenu_item_t ITEMS_SETTINGS[] = {
     {"wifi", "Wi-Fi", info_wifi, open_wifi},
-    {"bluetooth", "Bluetooth", info_bt, open_bt},
+    {"bluetooth", "Encontro", NULL, open_meet},
     {"battery", "Energia", info_energy, open_energy},
     {"box", "Armazenamento", info_storage, open_storage},
     {"joystick", "Controle", NULL, open_controller},

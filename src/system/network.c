@@ -296,7 +296,8 @@ static void maintenance(void)
 {
     uint32_t now = now_ms();
     xSemaphoreTake(lock, portMAX_DELAY);
-    if (wifi_on() && users == 0 && !connecting && now - last_use_ms >= NETWORK_IDLE_MS) {
+    /* Suspensa, o rádio pode estar emprestado (jogo Lua ou Encontro): não mexe nele */
+    if (!suspended && wifi_on() && users == 0 && !connecting && now - last_use_ms >= NETWORK_IDLE_MS) {
         ESP_LOGI(TAG, "Ociosa: desligando o rádio");
         wifi_turn_off();
     }

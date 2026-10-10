@@ -87,6 +87,16 @@ void wifi_turn_off(void)
     enabled = false;
 }
 
+/* Fixa o canal sem conectar e desliga a economia do modem (recepção contínua). */
+bool wifi_set_channel(uint8_t channel)
+{
+    if (!enabled) {
+        return false;
+    }
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    return esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE) == ESP_OK;
+}
+
 /* Verdadeiro se o rádio está ligado. */
 bool wifi_on(void)
 {

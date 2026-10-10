@@ -34,7 +34,7 @@ ___
 4. **Armazenamento:** Flash interna do ESP32 e cartão microSD em SPI (módulo Micro SD SPI TF), formatado em FAT32.
 5. **Alimentação:** bateria LiPo de 3,7 V e 1200 mAh, módulo de carga TP4056 e conversor DC-DC S09 para 3,3 V (até 1100 mA).
 6. **Controles:** 6 botões táteis ligados ao GND, com pull-up interno: Cima, Baixo, Esquerda, Direita, A (confirmar) e B (voltar/cancelar).
-7. **Conectividade:** Wi-Fi e Bluetooth do próprio ESP32. Só o Wi-Fi está implementado.
+7. **Conectividade:** Wi-Fi do próprio ESP32, para a internet (hora, atualizações) e para o Encontro entre dois Guarás por ESP-NOW. O Bluetooth do chip não é usado.
 8. **Relógio (RTC):** módulo DS3231 (I2C, endereço `0x68`) com bateria CR2032, no mesmo barramento do display. É a fonte de hora do sistema e mantém a hora no deep sleep e com a LiPo descarregada. O RTC interno do ESP32 não serve de referência: os pinos do cristal de 32 kHz (GPIO32/33) estão ocupados pelos botões, e o oscilador RC interno deriva vários minutos por hora. Sem o DS3231, o firmware usa o RTC interno e sincroniza pela rede (NTP).
 
 ### Pinagem
@@ -277,7 +277,7 @@ O console nunca abre a porta com o DTR ativo, porque o GPIO0 iria a nível baixo
 	- `lua`: Lua 5.4.7.
 - **`src/`:** componente principal do ESP-IDF, só com código de hardware e de interface:
 	- `hal/`: drivers. `display` (SH1106; uma task envia só as páginas alteradas), `buttons` (fila de eventos com *debounce* e repetição), `audio` (task do LEDC com efeitos e música de fundo), `battery`, `sdcard`, `rtc_clock` (DS3231, NTP e fuso), `power` (modo Ocioso, deep sleep e ULP), `wifi`, `i2c` e `pins.h`;
-	- `system/`: serviços. `app` (boot, laço principal, ciclo de vida por minuto, modo Ocioso, inatividade, bateria crítica), `persistence` (storage, anel de saves, espelho na RTC RAM), `config` (NVS), `network` (Wi-Fi sob demanda), `alarms`, `ota` e `debug_console`;
+	- `system/`: serviços. `app` (boot, laço principal, ciclo de vida por minuto, modo Ocioso, inatividade, bateria crítica), `persistence` (storage, anel de saves, espelho na RTC RAM), `config` (NVS), `network` (Wi-Fi sob demanda), `radio_link` (ESP-NOW do Encontro), `alarms`, `ota` e `debug_console`;
 	- `ui/`: pilha de telas (`ui.h`), componentes padrão (`widgets.h`), modais e teclado virtual (`modal.h`);
 	- `screens/`: um arquivo por tela; `screens.h` lista todas, `submenu.h` monta sub-menus padrão e `sprite.h` compõe o Guará. A API Lua fica em `games.c` (VM e módulos básicos) e `game_api.c` (desenho da VROM, `catalog`, `ui` e `guara.draw`).
 
@@ -311,8 +311,26 @@ Implementação: `src/system/network.c`. O rádio só liga quando alguma tarefa 
 - **Deep sleep:** o rádio é sempre desligado antes de dormir, e o comportamento é o mesmo no boot frio e ao acordar.
 - **Jogos e tarefas pesadas:** `network_suspend()` descarrega o Wi-Fi enquanto um jogo Lua roda, para liberar memória.
 - **Indicador na barra superior:** ícone de Wi-Fi apagado (xadrez) quando a rede está permitida e ociosa; barras subindo durante a conexão; barras de sinal (`wifi_1` a `wifi_3`) conectado; nenhum ícone com o Wi-Fi em `OFF`.
-- **Quem usa a rede:** sincronização NTP (automática e em Relógio > Configurar), busca, conexão e status em Ajustes > Wi-Fi e a atualização pelo GitHub (automática e no menu). O combate online está previsto.
+- **Quem usa a rede:** sincronização NTP (automática e em Relógio > Configurar), busca, conexão e status em Ajustes > Wi-Fi e a atualização pelo GitHub (automática e no menu). O Encontro suspende a rede enquanto usa o rádio.
 
+
+### Encontro
+
+Implementação: `src/screens/meet.c` (tela), `src/system/radio_link.c` (rádio) e `lib/core/src/link_proto.c` (protocolo, testado no `native`). Dois Guarás conversam por **ESP-NOW**, os quadros diretos do rádio Wi-Fi do ESP32, sem roteador nem pareamento.
+
+- **Rádio:** só fica ligado com a tela Encontro aberta. Ao abrir, a rede com roteador é suspensa (como nos jogos Lua), o Wi-Fi liga em modo estação no **canal 1** fixo, sem economia de energia do modem, e o ESP-NOW começa. Ao fechar, tudo é desligado e a rede volta. Com a tela aberta, o aparelho não entra no modo Ocioso nem no deep sleep, e a volta automática à tela principal não vale.
+- **Presença:** a cada 1 s, cada aparelho envia em broadcast uma mensagem com UID, nome, nível, estágio, natureza, cor e cabeça. A lista mostra quem foi visto nos últimos 3,5 s (até 8), com o ícone da natureza, o nome e o nível (`NV7`).
+- **Mensagens:** 30 bytes fixos, little-endian: `GL`, versão (1), tipo, UID, nome (11 bytes), nível, estágio, natureza, cor, cabeça, número da troca (`tx`, u32), item e quantidade. Tipos: `HELLO` (presença), `OFFER`, `ACCEPT` e `DECLINE`. Mensagens de outra versão ou do próprio UID são ignoradas.
+- **Abrir:**
+	- por **Ajustes > Encontro**: fica visível e recebe; A num Guará da lista explica que para dar um item é preciso usar Inventário > Compartilhar;
+	- por **Inventário > Compartilhar**: depois da quantidade, mostra "Procurando Guarás..." e "Dar 3 Maçã"; A no Guará escolhido envia a oferta e mostra "Aguardando Fulano..." (B cancela a espera).
+- **Troca de itens:**
+	1. Quem envia sorteia um `tx` e repete o `OFFER` a cada 700 ms até a resposta, por até 30 s ("Fulano não respondeu.").
+	2. Quem recebe, com a tela Encontro aberta, toca um bipe e pergunta "Fulano quer te dar 3 Maçã. Aceitar?". SIM soma os itens (limitado a 255 por item; o excedente se perde), grava o save e responde `ACCEPT`; NAO responde `DECLINE`. Itens que o catálogo de quem recebe não tem são recusados sozinhos.
+	3. Quem envia só desconta os itens ao receber o `ACCEPT`, uma vez por `tx`, grava o save e mostra "Fulano recebeu 3 Maçã!"; o OK volta ao Inventário. Um `ACCEPT` que chegar depois de cancelar a espera ainda desconta.
+	4. As respostas ficam registradas pelo par (UID, `tx`) nas 8 últimas ofertas aceitas e recusadas: uma oferta repetida porque a resposta se perdeu recebe a mesma resposta, sem somar de novo.
+	- Limite conhecido: se quem envia fechar a tela antes de o `ACCEPT` chegar, quem recebeu fica com os itens e quem enviou também.
+- **Combate pelo Encontro:** previsto; o protocolo já tem versão para crescer.
 ___
 
 ## Interface
@@ -374,7 +392,7 @@ Mostra o Guará e suas animações, a barra superior e o balão de estados. A ab
 - **Barra superior:** no canto superior direito do aparelho (esquerda de quem olha, X=1, Y=1), o relógio `HH:MM`, ou `--:--` se a hora não estiver configurada. No canto oposto, da borda para o centro, os indicadores de 8x8 px:
 	- **Bateria:** ![bateria 0](./bitmaps/ui/battery_0.bmp) ![bateria 1](./bitmaps/ui/battery_1.bmp) ![bateria 2](./bitmaps/ui/battery_2.bmp) ![bateria 3](./bitmaps/ui/battery_3.bmp), um nível a cada 25%. Carregando, os níveis se alternam a cada 0,5 s; sem bateria detectada, ![sem bateria](./bitmaps/ui/status_bateria_ausente_8x8.bmp).
 	- **Wi-Fi:** ![wifi 1](./bitmaps/ui/wifi_1.bmp) ![wifi 2](./bitmaps/ui/wifi_2.bmp) ![wifi 3](./bitmaps/ui/wifi_3.bmp), conforme *Wi-Fi sob demanda*.
-	- **Bluetooth** ![bluetooth](./bitmaps/ui/status_bluetooth.bmp) (ligado), **Despertador** ![despertador](./bitmaps/ui/status_alarm.bmp) (algum despertador salvo), **Temporizador** ![temporizador](./bitmaps/ui/status_timer.bmp) (contando) e **Mudo** ![mudo](./bitmaps/ui/status_mute.bmp).
+	- **Despertador** ![despertador](./bitmaps/ui/status_alarm.bmp) (algum despertador salvo), **Temporizador** ![temporizador](./bitmaps/ui/status_timer.bmp) (contando) e **Mudo** ![mudo](./bitmaps/ui/status_mute.bmp).
 - **Área do Guará:** o sprite composto (ver *Sprites*) ampliado 2x, centralizado em X=64, com a base em Y=61 (2 px acima da borda inferior).
 - **Balão de estados:** do lado direito do aparelho (esquerda de quem olha, X=18, Y=14), o balão ![balão](./bitmaps/ui/speech_balloon.bmp) com o ícone do estado ou da emoção dentro, 2 px abaixo do topo do balão. O balão "respira": desce 8 px e volta suavemente num ciclo de 3 s. Estados físicos aparecem sempre; as emoções seguem as regras de exibição de [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
 - **Área de itens:** do lado esquerdo do aparelho (direita de quem olha, X=100, Y=34). Ao usar um item, a tela principal aparece com a animação e depois volta para onde estava; a animação não pode ser interrompida.
@@ -423,7 +441,7 @@ A abre um modal de escolha com:
 - **Comer / Beber / Usar** (conforme o tipo): aplica o item e mostra a animação na tela principal. Se o Guará estiver desmaiado ou amaldiçoado, um alerta explica por que não dá para usar. Se o item não faria efeito, ele não é gasto e o Guará o recusa na tela principal (ver *Área de itens*): comida e bebida com a alimentação (FP) cheia; poção que só recupera HP e/ou MP já cheios e não cura nenhum estado que ele tenha.
 - **Detalhes:** descrição, efeitos (ex.: `Alimentação +15%`), curas e afinidade.
 - **Descartar:** modal de quantidade e, depois, confirmação ("Descartar 3 Maçã?").
-- **Compartilhar:** ainda não implementado (troca de itens entre Guarás, depende do Bluetooth); mostra um aviso.
+- **Compartilhar:** modal de quantidade e, depois, o *Encontro* no modo envio, para escolher o Guará que vai receber (ver *Ajustes > Encontro*).
 
 O conteúdo do catálogo está em [CATALOG.md](CATALOG.md).
 
@@ -446,7 +464,7 @@ Sub-menu com as habilidades possuídas. As até 4 habilidades ativas, usadas no 
 Sub-menu com duas opções:
 
 - **Treino** ![Treino](./bitmaps/icons/training.bmp): luta contra um Guará gerado com o mesmo nível e atributos de ±10%, que leva algumas poções (ver *Combate > Poções*). Não abre se o Guará estiver desmaiado, dormindo ou com HP abaixo de 20%.
-- **Combate** ![Combate](./bitmaps/icons/fight.bmp): combate contra outro Guará pela rede ou pelo Bluetooth. Ainda não implementado; mostra um aviso.
+- **Combate** ![Combate](./bitmaps/icons/fight.bmp): combate contra outro Guará pelo *Encontro* (ESP-NOW). Ainda não implementado; mostra um aviso.
 
 ![Arena](./bitmaps/exemple/screen_arena.bmp)
 
@@ -680,7 +698,7 @@ Sub-menu com o estado de cada opção à direita.
 
 	![Wi-Fi](./bitmaps/exemple/screen_settings_wifi.bmp)
 
-2. **Bluetooth** ![Bluetooth](./bitmaps/icons/bluetooth.bmp) (`ON` / `OFF`): Liga/Desliga, Buscar e Dispositivos pareados. Ainda não implementado; as opções mostram um aviso.
+2. **Encontro** ![Encontro](./bitmaps/icons/bluetooth.bmp): comunicação direta com outros Guarás por perto, sem roteador. Ver *Encontro*.
 3. **Energia** ![Energia](./bitmaps/icons/battery.bmp) (`###%` / `USB`):
 	1. **Status** ![status](./bitmaps/icons/info.bmp): porcentagem, tensão e se está carregando.
 	2. **Economia** ![economia](./bitmaps/icons/plant.bmp): tempo sem uso até o deep sleep: 1, 2, 5 ou 10 minutos, ou Desativado (`OFF`).
