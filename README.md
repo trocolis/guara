@@ -500,7 +500,7 @@ Sub-menu com as obras da pasta `/sdcard/library`, montando o cartão se for prec
 ![Biblioteca](./bitmaps/exemple/screen_library.bmp)
 
 - **Texto simples** ![texto](./bitmaps/icons/txt.bmp): arquivos `.txt`, com o nome do arquivo tratado como título (sem extensão e com `_` virando espaço).
-- **Livro** ![livro](./bitmaps/icons/book.bmp): uma pasta com `book.ini`, `book.txt` e imagens. O título vem de `title=` na seção `[BOOK]` do `book.ini`, ou do nome da pasta. O texto pode citar imagens 1-bit de até 16x16 como `{{imagem.bmp}}`, que aparecem centralizadas numa linha própria.
+- **Livro** ![livro](./bitmaps/icons/book.bmp): uma pasta com `book.ini`, `book.txt` e imagens. O título vem de `title=` na seção `[BOOK]` do `book.ini`, ou do nome da pasta. O texto pode citar imagens 1-bit de até 16x16 como `{{imagem.bmp}}`, que aparecem centralizadas numa linha própria; não há limite de imagens por livro (o leitor guarda as 4 usadas mais recentemente). Exemplo: `examples/sdcard/library/manual_de_batalha/`, um manual de batalha com os ícones do jogo.
 
 O leitor quebra o texto em linhas de até 20 caracteres, preferindo os espaços, e aceita arquivos de até 64 KB. ↑/↓ rolam uma linha e ←/→ uma página; a barra de título some suavemente ao rolar para baixo. B fecha o leitor. Arquivos `.txt` abertos pelo Cartão SD usam o mesmo leitor.
 

@@ -44,6 +44,8 @@ static struct {
     uint32_t scrolled_at;
     gfx_bitmap_t images[4];
     char image_names[4][32];
+    uint32_t image_used[4]; /* último uso de cada imagem do cache (contador) */
+    uint32_t use_clock;
 } reader;
 
 /* Acrescenta uma linha ao índice do leitor. */
@@ -105,32 +107,48 @@ static void paginate(void)
     }
 }
 
-/* Carrega (com cache de 4) uma imagem do livro de até 16x16. */
+/*
+ * Carrega uma imagem do livro de até 16x16, com cache de 4: cheio, a imagem
+ * usada há mais tempo dá lugar à nova (cabem até 3 linhas de imagem na tela,
+ * então as visíveis nunca saem).
+ */
 static const gfx_bitmap_t *book_image(const char *name, int n)
 {
     char key[32];
     snprintf(key, sizeof(key), "%.*s", n < 31 ? n : 31, name);
     for (int i = 0; i < 4; i++) {
         if (reader.images[i].data && strcmp(reader.image_names[i], key) == 0) {
+            reader.image_used[i] = ++reader.use_clock;
             return &reader.images[i];
         }
     }
-    for (int i = 0; i < 4; i++) {
+    int slot = -1;
+    for (int i = 0; i < 4 && slot < 0; i++) {
         if (!reader.images[i].data) {
-            char c[200];
-            snprintf(c, sizeof(c), "%s/%s", reader.folder, key);
-            if (files_load_bmp(c, &reader.images[i])) {
-                if (reader.images[i].width > 16 || reader.images[i].height > 16) {
-                    files_release_bmp(&reader.images[i]); /* README: máximo 16x16 */
-                    return NULL;
-                }
-                snprintf(reader.image_names[i], sizeof(reader.image_names[i]), "%s", key);
-                return &reader.images[i];
-            }
-            return NULL;
+            slot = i;
         }
     }
-    return NULL;
+    if (slot < 0) {
+        slot = 0;
+        for (int i = 1; i < 4; i++) {
+            if (reader.image_used[i] < reader.image_used[slot]) {
+                slot = i;
+            }
+        }
+        files_release_bmp(&reader.images[slot]);
+    }
+    char c[200];
+    snprintf(c, sizeof(c), "%s/%s", reader.folder, key);
+    if (!files_load_bmp(c, &reader.images[slot])) {
+        return NULL;
+    }
+    if (reader.images[slot].width > 16 || reader.images[slot].height > 16) {
+        files_release_bmp(&reader.images[slot]); /* README: máximo 16x16 */
+        return NULL;
+    }
+    snprintf(reader.image_names[slot], sizeof(reader.image_names[slot]), "%s", key);
+    reader.image_used[slot] = ++reader.use_clock;
+    return &reader.images[slot];
 }
 
 #define HEIGHT_LINE 9

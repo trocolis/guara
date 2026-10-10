@@ -1,0 +1,175 @@
+MANUAL DE BATALHA
+
+Tudo o que um Guará precisa saber para vencer na Arena.
+
+{{arena.bmp}}
+
+1. A ARENA
+
+No menu principal, abra a Arena. Ela tem duas opções:
+
+{{training.bmp}}
+
+Treino: luta contra um Guará gerado com o seu nível e atributos parecidos, que leva algumas poções. Não abre se o seu Guará estiver desmaiado, dormindo ou com HP abaixo de 20%.
+
+{{fight.bmp}}
+
+Combate: contra outro Guará pela rede ou pelo Bluetooth. Ainda não chegou.
+
+2. A TELA
+
+Seu Guará fica à esquerda e o oponente à direita, olhando para você.
+
+{{hp.bmp}}
+
+No topo de cada lado há uma barra dupla: em cima o HP, a vida; embaixo, numa linha fina, o MP, a magia das habilidades.
+
+{{mp.bmp}}
+
+No canto de baixo de cada lado, a barra de ação enche de baixo para cima. Quando ela fica cheia, o lutador age. Quanto maior a AGI, mais rápido ela enche: de 6 s até o mínimo de 1,5 s.
+
+3. ESCOLHENDO A AÇÃO
+
+{{button_a.bmp}}
+
+Enquanto o A pisca ao lado da sua barra, você pode escolher. Aperte A a qualquer momento, mesmo com a barra incompleta: aparecem três ícones. Use esquerda e direita para escolher e A para confirmar.
+
+{{action_atk.bmp}}
+
+Atacar: um golpe físico.
+
+{{action_skill.bmp}}
+
+Habilidade: abre a lista das suas habilidades, com o custo de MP de cada uma.
+
+{{action_potion.bmp}}
+
+Poções: abre a lista das poções que você tem.
+
+A ação escolhida espera a barra encher. Depois de escolher, ela não muda até a próxima rodada.
+
+{{button_b.bmp}}
+
+B abre a confirmação para desistir. Desistir é derrota na hora.
+
+A batalha não para: com a lista aberta, as barras continuam enchendo e o oponente continua agindo. Escolha rápido!
+
+4. A JANELA DE REAÇÃO
+
+Antes de cada golpe, o atacante recua um pouco e depois avança de volta. O fim desse avanço, os últimos 250 ms antes do impacto, é a janela. Nada na tela avisa: observe o movimento.
+
+{{button_a.bmp}}
+
+Se for você atacando, aperte A na janela para um golpe certeiro: mais chance de crítico e, no ataque físico, 30% de chance de bater duas vezes.
+
+Se for você apanhando, aperte A na janela para se defender: o dano cai pela metade e o atacante erra mais.
+
+Só vale uma tentativa por golpe. Apertar cedo demais perde a reação. O oponente também reage, uma vez a cada quatro, mais ou menos.
+
+{{hit_4.bmp}}
+
+Quando um golpe acerta, o impacto aparece no alvo e o dano sobe sobre ele: -10 é um golpe comum, -10! um crítico e 2x-20 um golpe duplo.
+
+5. OS ATRIBUTOS
+
+{{attack.bmp}}
+
+ATK: aumenta o dano dos golpes e das habilidades.
+
+{{strength.bmp}}
+
+FOR: soma ao dano do golpe físico.
+
+{{defense.bmp}}
+
+DEF: reduz o dano recebido e aumenta o HP máximo.
+
+{{agility.bmp}}
+
+AGI: enche a barra de ação mais rápido e ajuda a esquivar de quem é mais lento.
+
+{{intelligence.bmp}}
+
+INT: fortalece as habilidades e as curas e deixa as habilidades mais baratas.
+
+{{luck.bmp}}
+
+SOR: aumenta a chance de crítico, que causa 1,5 vez o dano, e a de ganhar um item ao vencer.
+
+6. AS NATUREZAS
+
+As habilidades têm natureza, e ela muda o dano: +25% com vantagem e -25% com desvantagem. O ciclo é:
+
+{{fire.bmp}}
+
+Fogo vence Ar e perde para Água.
+
+{{water.bmp}}
+
+Água vence Fogo e perde para Terra.
+
+{{earth.bmp}}
+
+Terra vence Água e perde para Ar.
+
+{{air.bmp}}
+
+Ar vence Terra e perde para Fogo.
+
+{{neutral.bmp}}
+
+Neutra não tem vantagem nem desvantagem.
+
+Luz e Sombra têm vantagem uma sobre a outra. Naturezas compostas, como o Vapor, escapam da fraqueza quando também têm o elemento do atacante.
+
+7. AS POÇÕES
+
+{{potion.bmp}}
+
+Poções recuperam HP. Ao beber, o frasco tomba, a magia voa até o Guará e o que mudou sobe na tela: HP+150, por exemplo.
+
+{{tonic.bmp}}
+
+Tônicos recuperam MP, para voltar a usar habilidades.
+
+{{antidote.bmp}}
+
+Antídotos e outras curas tiram estados ruins: -PSN quer dizer que o veneno saiu.
+
+Cuidado: o oponente do treino também leva poções e bebe quando está mal.
+
+8. OS ESTADOS
+
+{{poisoned.bmp}}
+
+Envenenado: perde 5% do HP máximo a cada rodada.
+
+{{burning.bmp}}
+
+Queimado: também perde 5% do HP máximo por rodada.
+
+{{frozen.bmp}}
+
+Congelado: perde a vez e 5% do HP máximo.
+
+{{paralyzed.bmp}}
+
+Paralisado: perde a vez.
+
+{{confused.bmp}}
+
+Confuso: erra metade dos golpes e às vezes acerta a si mesmo.
+
+{{cursed.bmp}}
+
+Amaldiçoado: não usa habilidades nem itens. Vencer uma luta tira a maldição.
+
+Paralisado, congelado ou amaldiçoado, nenhuma poção funciona. Cure antes!
+
+9. DEPOIS DA LUTA
+
+Na vitória, o Guará ganha XP, pode ganhar um item e perde a maldição. Na derrota, ele fica mais perto de ficar triste.
+
+O HP e os estados da luta voltam com ele para casa, e cada luta custa 5% de energia. Descanse e coma bem antes da próxima.
+
+Boa sorte na Arena!
