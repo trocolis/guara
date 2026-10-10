@@ -39,7 +39,6 @@ bool audio_music_paused(void);
 void audio_beep(void);
 void audio_error(void);
 void audio_bite(void);
-void audio_gulp(void);
 void audio_magic(void);
 void audio_victory(void);
 void audio_defeat(void);
