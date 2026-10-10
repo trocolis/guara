@@ -443,7 +443,7 @@ Sub-menu com as habilidades possuídas. As até 4 habilidades ativas, usadas no 
 
 Sub-menu com duas opções:
 
-- **Treino** ![Treino](./bitmaps/icons/training.bmp): luta contra um Guará gerado com o mesmo nível e atributos de ±10%. Não abre se o Guará estiver desmaiado, dormindo ou com HP abaixo de 20%.
+- **Treino** ![Treino](./bitmaps/icons/training.bmp): luta contra um Guará gerado com o mesmo nível e atributos de ±10%, que leva algumas poções (ver *Combate > Poções*). Não abre se o Guará estiver desmaiado, dormindo ou com HP abaixo de 20%.
 - **Combate** ![Combate](./bitmaps/icons/fight.bmp): combate contra outro Guará pela rede ou pelo Bluetooth. Ainda não implementado; mostra um aviso.
 
 ![Arena](./bitmaps/exemple/screen_arena.bmp)

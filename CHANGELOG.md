@@ -3,6 +3,22 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.14.0 — 2026-10-09
+
+### Tela principal
+- O Guará dormindo fica parado no quadro 1, como desmaiado.
+- Uso de itens:
+  - **Comida:** mordidas de 350 ms (antes 450 ms), com o ícone parado.
+  - **Bebida e poção:** sobem 8 px e tombam 45° na direção do Guará em 0,3 s, como se ele as entornasse.
+  - **Absorção:** em seguida, partículas voam da comida ou da boca do frasco até o Guará, com um arpejo, e ele pisca invertido 3 vezes (só a silhueta).
+  - **Efeito:** junto com as piscadas, sobem na área do balão de estados os textos do que o item mudou de fato, com as abreviações do CATALOG.md (`HP+10`, `EP+12`, `FP+4`, `-PSN`…).
+  - Substitui o ícone piscando das bebidas e poções.
+
+### Combate
+- **Poções:** o mesmo efeito da tela principal (código comum em `src/screens/item_fx.c`). O frasco aparece ao lado de quem bebe, e os textos abreviados sobem sobre ele, por cima dos modais.
+- **Oponente do treino:** leva 1 a 2 poções de HP, 0 a 1 de MP e, com 50% de chance, uma cura de veneno, queimadura ou confusão.
+- **IA:** com HP abaixo de 30% e sem habilidade de cura, toma poção; cura esses estados com 60% de chance; sem MP para as habilidades, toma tônico com 50% de chance. Não tenta usar itens paralisada, congelada ou amaldiçoada.
+
 ## v0.13.0 — 2026-10-09
 
 ### Conectividade
