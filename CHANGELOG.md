@@ -3,6 +3,39 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.15.0 — 2026-10-10
+
+### Menu Guará
+- A primeira aba virou NÍVEL, sem o sprite: nome e ID, nível e XP com a barra mais larga, e idade.
+- A antiga aba NIVEL virou ATRIBUTOS.
+
+### Itens
+- **Recusa:** um item que não faria efeito não é gasto. Isso vale para comida e bebida com a alimentação cheia, e para poção sem HP ou MP a recuperar nem estado a curar.
+- **O que aparece na tela principal:** o ícone do item, o Guará com olhar de raiva e o balão com `not` piscando 1,5 vez por segundo por 2 s, com o som de erro.
+- Novo ícone `icons/not.bmp`.
+
+### Biblioteca
+- **Leitor sem barra de título:** o título fica a cargo do texto. Uma linha `#TEXTO#` vira uma barra branca, com o texto rolando se não couber.
+- **Estilos** em `.txt` e livros (`lib/gfx/src/rich_text.c`):
+  - `**negrito**`, com 1 px a mais por letra;
+  - `*itálico*`;
+  - `__sublinhado__`;
+  - `==marcado==`;
+  - `\` mostra o caractere seguinte literalmente.
+- **Quebra de linha** por largura em pixels (120 px).
+- **Imagens:**
+  - `{{nome}}` cita bitmaps da VROM, e `{{arquivo.bmp}}` sem o arquivo na pasta também cai na VROM.
+  - Sem limite de imagens por livro: cache das 4 imagens da pasta usadas mais recentemente.
+  - Cada imagem ocupa a altura dela + 1 px.
+- **Livros de exemplo** em `examples/sdcard/library`: Manual de Batalha, Como Criar Livros e Manual do Guará.
+
+### Ajustes
+- Armazenamento > Micro SD virou um sub-menu com Status e **Remover**, que desmonta o cartão com segurança.
+
+### Interface
+- Menu ou modal aberto por 1 minuto sem botões volta à tela principal.
+- **Exceções:** jogos, combate, cronômetro contando, alarme tocando, antes do nascimento, e o leitor e o visualizador de imagens (`screen_t.keep_open`).
+
 ## v0.14.0 — 2026-10-09
 
 ### Tela principal
