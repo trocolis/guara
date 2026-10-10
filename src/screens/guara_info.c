@@ -1,17 +1,16 @@
 /*
- * Tela do Guará com as abas GUARA, ESTADO, NIVEL e NATUREZA.
+ * Tela do Guará com as abas NÍVEL, ESTADO, ATRIBUTOS e NATUREZA.
  */
 #include <stdio.h>
 
 #include "app.h"
 #include "widgets.h"
 #include "rules.h"
-#include "sprite.h"
 #include "screens.h"
 
-/* Tela do Guará: abas GUARA, ESTADO, NIVEL e NATUREZA (README > Menu principal > Guará). */
+/* Tela do Guará: abas NÍVEL, ESTADO, ATRIBUTOS e NATUREZA (README > Menu principal > Guará). */
 
-static const char *const TABS[] = {"GUARA", "ESTADO", "NIVEL", "NATUREZA"};
+static const char *const TABS[] = {"NÍVEL", "ESTADO", "ATRIBUTOS", "NATUREZA"};
 static int tab;
 
 /* ←/→ trocam de aba; B volta. */
@@ -29,29 +28,27 @@ static void on_key(const key_event_t *ev)
     }
 }
 
-/* Aba GUARA: sprite, nome e UID, nível e XP, idade. */
-static void draw_pet_tab(gfx_t *g, uint32_t now)
+/* Aba NÍVEL: nome e UID, nível e XP, idade. */
+static void draw_level_tab(gfx_t *g)
 {
     const guara_t *pet = &g_guara;
     char buf[32];
-    sprite_guara(g, pet->color, pet->head, pet->stage, EYE_NORMAL, 10, 50, sprite_frame(now), 0);
-
-    ui_icon(g, "id", 22, 13);
-    gfx_text(g, 40, 13, pet->name, GFX_WHITE);
+    ui_icon(g, "id", 1, 13);
+    gfx_text(g, 19, 13, pet->name, GFX_WHITE);
     snprintf(buf, sizeof(buf), "ID: %08lX", (unsigned long)pet->uid);
-    gfx_text(g, 40, 22, buf, GFX_WHITE);
+    gfx_text(g, 19, 22, buf, GFX_WHITE);
 
-    ui_icon(g, "level", 22, 31);
+    ui_icon(g, "level", 1, 31);
     snprintf(buf, sizeof(buf), "NV: %d | XP: %lu", pet->level, (unsigned long)pet->xp);
-    gfx_text(g, 40, 31, buf, GFX_WHITE);
-    ui_progress(g, 40, 40, 84, 5, (int)pet->xp, (int)guara_xp_to_next_level(pet->level));
+    gfx_text(g, 19, 31, buf, GFX_WHITE);
+    ui_progress(g, 19, 40, 106, 5, (int)pet->xp, (int)guara_xp_to_next_level(pet->level));
 
-    ui_icon(g, "calendar", 22, 47);
+    ui_icon(g, "calendar", 1, 47);
     snprintf(buf, sizeof(buf), "Dias: %lu", (unsigned long)(pet->age_minutes / 1440));
-    gfx_text(g, 40, 47, buf, GFX_WHITE);
+    gfx_text(g, 19, 47, buf, GFX_WHITE);
     snprintf(buf, sizeof(buf), "Horas: %02lu:%02lu", (unsigned long)(pet->age_minutes % 1440 / 60),
              (unsigned long)(pet->age_minutes % 60));
-    gfx_text(g, 40, 56, buf, GFX_WHITE);
+    gfx_text(g, 19, 56, buf, GFX_WHITE);
 }
 
 /* Célula com ícone, texto e barra de progresso (abas ESTADO e NATUREZA). */
@@ -84,8 +81,8 @@ static void draw_status_tab(gfx_t *g)
     cell(g, 1, 2, "health", buf, pet->health, VITAL_MAX);
 }
 
-/* Aba NIVEL: os seis atributos com equipamentos aplicados. */
-static void draw_level_tab(gfx_t *g)
+/* Aba ATRIBUTOS: os seis atributos com equipamentos aplicados. */
+static void draw_attributes_tab(gfx_t *g)
 {
     static const char *const icons[] = {"attack", "defense", "strength", "agility", "intelligence", "luck"};
     static const char *const abbrevs[] = {"ATK", "DEF", "FOR", "AGI", "INT", "SOR"};
@@ -140,9 +137,9 @@ static void on_draw(gfx_t *g, uint32_t now)
 {
     ui_tabs(g, TABS, 4, tab, now);
     switch (tab) {
-    case 0: draw_pet_tab(g, now); break;
+    case 0: draw_level_tab(g); break;
     case 1: draw_status_tab(g); break;
-    case 2: draw_level_tab(g); break;
+    case 2: draw_attributes_tab(g); break;
     default: draw_nature_tab(g); break;
     }
 }

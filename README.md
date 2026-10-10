@@ -396,19 +396,19 @@ ___
 
 ### Guará ![Guará](./bitmaps/icons/guara.bmp)
 
-Tela com quatro abas, GUARA, ESTADO, NIVEL e NATUREZA, trocadas com ←/→. B volta.
+Tela com quatro abas, NÍVEL, ESTADO, ATRIBUTOS e NATUREZA, trocadas com ←/→. B volta.
 
-![Aba GUARA](./bitmaps/exemple/screen_guara_guara.bmp) ![Aba ESTADO](./bitmaps/exemple/screen_guara_status.bmp)
+![Aba NÍVEL](./bitmaps/exemple/screen_guara_level.bmp) ![Aba ESTADO](./bitmaps/exemple/screen_guara_status.bmp)
 
-- **GUARA:** à esquerda, o Guará animado em 1x; à direita, três linhas:
+- **NÍVEL:** três linhas, com o ícone à esquerda:
 	- ![identidade](./bitmaps/icons/id.bmp) nome e, embaixo, o UID (`ID: A1B2C3D4`);
 	- ![nível](./bitmaps/icons/level.bmp) nível e XP (`NV: 8 | XP: 120`) e uma barra com o progresso até o próximo nível;
 	- ![idade](./bitmaps/icons/calendar.bmp) dias de vida (`Dias: 3`) e, embaixo, as horas (`Horas: 08:20`).
 - **ESTADO:** duas colunas iguais com ícone, valor e barra de progresso: HP ![HP](./bitmaps/icons/hp.bmp) e MP ![MP](./bitmaps/icons/mp.bmp) (pontos), Energia ![energia](./bitmaps/icons/energy.bmp) e Humor ![humor](./bitmaps/icons/humor.bmp), Alimentação ![alimentação](./bitmaps/icons/hamburger.bmp) e Saúde ![saúde](./bitmaps/icons/health.bmp) (em %).
-- **NIVEL:** duas colunas e três linhas com os atributos já somados aos equipamentos, cada um com ícone, sigla e valor embaixo: ATK ![ATK](./bitmaps/icons/attack.bmp), DEF ![DEF](./bitmaps/icons/defense.bmp), FOR ![FOR](./bitmaps/icons/strength.bmp), AGI ![AGI](./bitmaps/icons/agility.bmp), INT ![INT](./bitmaps/icons/intelligence.bmp) e SOR ![SOR](./bitmaps/icons/luck.bmp).
+- **ATRIBUTOS:** duas colunas e três linhas com os atributos já somados aos equipamentos, cada um com ícone, sigla e valor embaixo: ATK ![ATK](./bitmaps/icons/attack.bmp), DEF ![DEF](./bitmaps/icons/defense.bmp), FOR ![FOR](./bitmaps/icons/strength.bmp), AGI ![AGI](./bitmaps/icons/agility.bmp), INT ![INT](./bitmaps/icons/intelligence.bmp) e SOR ![SOR](./bitmaps/icons/luck.bmp).
 - **NATUREZA:** na primeira linha, o ícone e o nome da natureza atual. Embaixo, em duas colunas, as afinidades das outras três naturezas primárias e da Neutra, com ícone, % e barra. Se o Guará já tem uma natureza secundária, o sistema de afinidades está desligado e a aba mostra a natureza de nascimento, um sinal de mais e a afinidade que gerou a natureza atual.
 
-![Aba NIVEL](./bitmaps/exemple/screen_guara_level.bmp) ![Aba NATUREZA](./bitmaps/exemple/screen_guara_nature.bmp)
+![Aba ATRIBUTOS](./bitmaps/exemple/screen_guara_attributes.bmp) ![Aba NATUREZA](./bitmaps/exemple/screen_guara_nature.bmp)
 
 ### Inventário ![Inventário](./bitmaps/icons/inventory.bmp)
 
