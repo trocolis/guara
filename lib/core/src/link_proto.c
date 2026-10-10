@@ -1,5 +1,5 @@
 /*
- * Protocolo do Encontro: formato fixo de 30 bytes (little-endian), tabela de
+ * Protocolo do Conectar: formato fixo de 30 bytes (little-endian), tabela de
  * vizinhos e registro de trocas aceitas.
  *
  * Bytes: 0-1 "GL", 2 versão, 3 tipo, 4-7 UID, 8-18 nome (11, com o '\0'),

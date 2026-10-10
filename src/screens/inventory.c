@@ -114,7 +114,7 @@ static void details(const catalog_record_t *r)
     ui_details(r->name, text);
 }
 
-/* Quantidade escolhida para compartilhar: abre o Encontro para escolher quem recebe. */
+/* Quantidade escolhida para compartilhar: abre o Conectar para escolher quem recebe. */
 static void share_count(int count, void *ctx)
 {
     (void)ctx;

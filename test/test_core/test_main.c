@@ -413,7 +413,7 @@ static void test_opponent_potion(void)
     TEST_ASSERT_EQUAL_INT(ACTION_ATTACK, combat_ai(&c, 1).type);
 }
 
-/* ---------------- Encontro (protocolo) ---------------- */
+/* ---------------- Conectar (protocolo) ---------------- */
 
 /* Codifica e decodifica uma oferta; rejeita assinatura, versão e tamanho errados. */
 static void test_link_roundtrip(void)

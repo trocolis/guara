@@ -1,5 +1,5 @@
 /*
- * Protocolo de comunicação entre dois Guarás (Encontro): mensagens de 30
+ * Protocolo de comunicação entre dois Guarás (Conectar): mensagens de 30
  * bytes, tabela de vizinhos com expiração e registro das trocas já aceitas.
  * Não depende do rádio: o firmware transporta os bytes pelo ESP-NOW.
  */

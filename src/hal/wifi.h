@@ -26,7 +26,7 @@ bool wifi_connect(const char *ssid, const char *password, uint32_t timeout_ms, c
 /* BSSID e canal do roteador atual (para a próxima reconexão rápida). */
 bool wifi_current_ap(uint8_t bssid[6], uint8_t *channel);
 bool wifi_connected(void);
-/* Fixa o canal do rádio (sem conexão; usado pelo ESP-NOW do Encontro). */
+/* Fixa o canal do rádio (sem conexão; usado pelo ESP-NOW do Conectar). */
 bool wifi_set_channel(uint8_t channel);
 int wifi_rssi(void);
 /* 0..3 barras para o indicador da barra superior. */

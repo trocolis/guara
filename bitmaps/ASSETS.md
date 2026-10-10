@@ -109,7 +109,7 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `banana_smoothie.bmp`           | 16x16   | catálogo                    |                |
 | `battery.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
 | `beans.bmp`                     | 16x16   | catálogo                    |                |
-| `bluetooth.bmp`                 | 16x16   | firmware / jogos de exemplo |                |
+| `bluetooth.bmp`                 | 16x16   | **sem uso**                 |                |
 | `book.bmp`                      | 16x16   | firmware / jogos de exemplo |                |
 | `boom_box.bmp`                  | 16x16   | firmware / jogos de exemplo |                |
 | `bored.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
@@ -131,6 +131,7 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `confusao_confuso_16.bmp`       | 16x16   | **sem uso**                 |                |
 | `confused.bmp`                  | 16x16   | firmware / jogos de exemplo |                |
 | `congelamento_congelado_16.bmp` | 16x16   | **sem uso**                 |                |
+| `connect.bmp`                   | 16x16   | firmware                    |                |
 | `cookie.bmp`                    | 16x16   | catálogo                    |                |
 | `croissant.bmp`                 | 16x16   | catálogo                    |                |
 | `crystal.bmp`                   | 16x16   | firmware / jogos de exemplo |                |

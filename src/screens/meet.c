@@ -1,6 +1,6 @@
 /*
- * Encontro: lista os Guarás por perto (ESP-NOW) e troca itens entre eles.
- * Aberto por Ajustes > Encontro (só recebe) ou por Inventário > Compartilhar
+ * Conectar: lista os Guarás por perto (ESP-NOW) e troca itens entre eles.
+ * Aberto por Ajustes > Conectar (só recebe) ou por Inventário > Compartilhar
  * (envia o item escolhido para quem for selecionado). Enquanto a tela está
  * aberta, o rádio fica ligado e o aparelho não entra em modo Ocioso.
  *
@@ -81,7 +81,7 @@ static void offer_answer(int r, void *ctx)
     char name[32], msg[64];
     item_name(o->item_id, name, sizeof(name));
     snprintf(msg, sizeof(msg), "Recebeu %d %s de %s!", o->count, name, o->from.name);
-    ui_alert("ENCONTRO", "inventory", msg, "OK", NULL, NULL);
+    ui_alert("CONECTAR", "inventory", msg, "OK", NULL, NULL);
 }
 
 /* Oferta recebida: repetição responde de novo; nova pergunta ao usuário. */
@@ -110,10 +110,10 @@ static void handle_offer(const uint8_t mac[6], const link_msg_t *m)
     char msg[80];
     snprintf(msg, sizeof(msg), "%s quer te dar %d %s. Aceitar?", m->from.name, m->count, r.name);
     audio_beep();
-    ui_confirm("ENCONTRO", r.icon, msg, "NAO", "SIM", offer_answer, NULL);
+    ui_confirm("CONECTAR", r.icon, msg, "NAO", "SIM", offer_answer, NULL);
 }
 
-/* Fecha o Encontro depois do envio concluído (volta ao Inventário). */
+/* Fecha o Conectar depois do envio concluído (volta ao Inventário). */
 static void sent_done(int r, void *ctx)
 {
     (void)r;
@@ -138,12 +138,12 @@ static void handle_answer(const link_msg_t *m)
         app_save();
         audio_level_up();
         snprintf(msg, sizeof(msg), "%s recebeu %d %s!", meet.to_name, meet.count, name);
-        ui_alert("ENCONTRO", "inventory", msg, "OK", sent_done, NULL);
+        ui_alert("CONECTAR", "inventory", msg, "OK", sent_done, NULL);
     } else if (m->type == LINK_DECLINE && meet.waiting) {
         meet.waiting = false;
         audio_error();
         snprintf(msg, sizeof(msg), "%s recusou.", meet.to_name);
-        ui_alert("ENCONTRO", "inventory", msg, "OK", NULL, NULL);
+        ui_alert("CONECTAR", "inventory", msg, "OK", NULL, NULL);
     }
 }
 
@@ -178,7 +178,7 @@ static void poll(uint32_t now)
             audio_error();
             char msg[48];
             snprintf(msg, sizeof(msg), "%s não respondeu.", meet.to_name);
-            ui_alert("ENCONTRO", "inventory", msg, "OK", NULL, NULL);
+            ui_alert("CONECTAR", "inventory", msg, "OK", NULL, NULL);
         } else if (now - meet.last_try >= OFFER_RETRY_MS) {
             send_offer(now);
         }
@@ -216,11 +216,11 @@ static void on_key(const key_event_t *ev)
         return;
     }
     if (meet.item_id < 0) {
-        ui_alert("ENCONTRO", "inventory", "Para dar um item, use Inventário > Compartilhar.", "OK", NULL, NULL);
+        ui_alert("CONECTAR", "inventory", "Para dar um item, use Inventário > Compartilhar.", "OK", NULL, NULL);
         return;
     }
     if (meet.applied || g_guara.inventory[meet.item_id] < meet.count) {
-        ui_alert("ENCONTRO", "inventory", "Sem estoque.", "OK", NULL, NULL);
+        ui_alert("CONECTAR", "inventory", "Sem estoque.", "OK", NULL, NULL);
         return;
     }
     const link_peer_t *p = &meet.peers[meet.list.sel];
@@ -237,7 +237,7 @@ static void on_key(const key_event_t *ev)
 static void on_draw(gfx_t *g, uint32_t now)
 {
     poll(now);
-    ui_title(g, "ENCONTRO", now);
+    ui_title(g, "CONECTAR", now);
     char line[48];
     if (!meet.started) {
         gfx_text_center(g, 0, GFX_WIDTH, 28, "Rádio não iniciou.", GFX_WHITE);
@@ -262,7 +262,7 @@ static void on_draw(gfx_t *g, uint32_t now)
     ui_list_draw(g, &meet.list, UI_LIST_Y, UI_LINES_VISIBLE, peer_item, NULL, now);
 }
 
-/* Liga o rádio do Encontro com o perfil do Guará e segura o sono. */
+/* Liga o rádio do Conectar com o perfil do Guará e segura o sono. */
 static void on_open(void *param)
 {
     (void)param;
@@ -280,14 +280,14 @@ static void on_close(void)
 }
 
 static const screen_t SCREEN_MEET = {
-    .name = "encontro",
+    .name = "conectar",
     .on_open = on_open,
     .on_close = on_close,
     .on_key = on_key,
     .on_draw = on_draw,
 };
 
-/* Abre o Encontro: `item_id` -1 só recebe; senão, envia `count` unidades do item. */
+/* Abre o Conectar: `item_id` -1 só recebe; senão, envia `count` unidades do item. */
 void screens_open_meet(int item_id, int count)
 {
     memset(&meet, 0, sizeof(meet));

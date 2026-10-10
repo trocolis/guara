@@ -1,5 +1,5 @@
 /*
- * Rádio do Encontro (ESP-NOW): suspende a rede com roteador, liga o Wi-Fi em
+ * Rádio do Conectar (ESP-NOW): suspende a rede com roteador, liga o Wi-Fi em
  * modo estação no canal RADIO_LINK_CHANNEL, anuncia a presença a cada segundo
  * em broadcast e entrega as outras mensagens por uma fila.
  */
@@ -16,7 +16,7 @@
 #include "network.h"
 #include "wifi.h"
 
-static const char *TAG = "encontro";
+static const char *TAG = "conectar";
 
 static const uint8_t BROADCAST[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -77,7 +77,7 @@ static void send_hello(void *arg)
     radio_link_send(BROADCAST, &m);
 }
 
-/* Liga o rádio do Encontro e começa a anunciar. */
+/* Liga o rádio do Conectar e começa a anunciar. */
 bool radio_link_start(const link_profile_t *me)
 {
     if (active) {
@@ -86,7 +86,7 @@ bool radio_link_start(const link_profile_t *me)
     if (!lock) {
         lock = xSemaphoreCreateMutex();
         inbox = xQueueCreate(8, sizeof(received_t));
-        const esp_timer_create_args_t args = {.callback = send_hello, .name = "encontro"};
+        const esp_timer_create_args_t args = {.callback = send_hello, .name = "conectar"};
         esp_timer_create(&args, &hello_timer);
     }
     profile = *me;
@@ -108,7 +108,7 @@ bool radio_link_start(const link_profile_t *me)
     return true;
 }
 
-/* Desliga o rádio do Encontro e devolve a rede. */
+/* Desliga o rádio do Conectar e devolve a rede. */
 void radio_link_stop(void)
 {
     if (!active) {

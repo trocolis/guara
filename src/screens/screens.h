@@ -37,6 +37,6 @@ bool screens_play_background_music(const char *path);
 void screens_trigger_alarm(const char *title);
 bool screens_alarm_ringing(void);
 void screens_offer_update(const char *tag); /* confirma a release achada no GitHub */
-void screens_open_meet(int item_id, int count); /* Encontro: -1 só recebe; senão envia o item */
+void screens_open_meet(int item_id, int count); /* Conectar: -1 só recebe; senão envia o item */
 
 #endif

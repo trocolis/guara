@@ -1,5 +1,5 @@
 /*
- * Ajustes: Wi-Fi, Encontro, Energia, Armazenamento, Controle, Som, Sistema
+ * Ajustes: Wi-Fi, Conectar, Energia, Armazenamento, Controle, Som, Sistema
  * (com atualização pelo cartão SD) e Reiniciar.
  */
 #include <stdio.h>
@@ -620,7 +620,7 @@ static void restart(void)
 /* ========================================================================= */
 
 static void open_wifi(void) { submenu_open(&MENU_WIFI); }
-/* Encontro: fica visível para outros Guarás por perto e recebe itens. */
+/* Conectar: fica visível para outros Guarás por perto e recebe itens. */
 static void open_meet(void) { screens_open_meet(-1, 0); }
 static void open_energy(void) { submenu_open(&MENU_ENERGY); }
 static void open_storage(void) { submenu_open(&MENU_STORAGE); }
@@ -629,7 +629,7 @@ static void open_system(void) { submenu_open(&MENU_SYSTEM); }
 
 static const submenu_item_t ITEMS_SETTINGS[] = {
     {"wifi", "Wi-Fi", info_wifi, open_wifi},
-    {"bluetooth", "Encontro", NULL, open_meet},
+    {"connect", "Conectar", NULL, open_meet},
     {"battery", "Energia", info_energy, open_energy},
     {"box", "Armazenamento", info_storage, open_storage},
     {"joystick", "Controle", NULL, open_controller},

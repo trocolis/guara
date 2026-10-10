@@ -17,10 +17,10 @@ Legenda: `[ ]` pendente · `[x]` feito · ✅ decidido/adotado · ⏳ pendente
 | 4 — UI | ✅ componentes, modais, teclado, pilha de telas |
 | 5 — Núcleo do pet | ✅ com valores provisórios (docs/GAME_DESIGN.md) |
 | 6 — Menus | ✅ |
-| 7 — Combate | ✅ treino; combate entre dois Guarás pendente (Encontro, ESP-NOW) |
+| 7 — Combate | ✅ treino; combate entre dois Guarás pendente (Conectar, ESP-NOW) |
 | 8 — Mídia | ✅ músicas MIDI e biblioteca |
 | 9 — Lua | ✅ VM 5.4, APIs do README, exemplos em examples/sdcard (apple_catch e boitata) |
-| 10 — Conectividade | ⏳ Wi-Fi sob demanda, NTP automático, OTA pelo SD e pelo GitHub e Encontro (ESP-NOW) com troca de itens prontos; combate pelo Encontro pendente |
+| 10 — Conectividade | ⏳ Wi-Fi sob demanda, NTP automático, OTA pelo SD e pelo GitHub e Conectar (ESP-NOW) com troca de itens prontos; combate pelo Conectar pendente |
 
 Gravado e verificado no NodeMCU do protótipo: boot, storage, cartão SD (10 MHz), nascimento, tela principal, carrossel e lista de músicas. Sem o DS3231 ligado, a hora fica `--:--` até um ajuste manual ou NTP.
 
@@ -224,7 +224,7 @@ Ordem sugerida, das telas mais simples para as mais dependentes:
 
 - Wi-Fi: busca, conexão, redes salvas.
 - Atualização OTA de firmware pelo SD, depois pelo GitHub (no menu e verificada a cada 24 h). Atualização do `storage.bin` pelo SD.
-- Encontro entre dois Guarás por ESP-NOW em vez de Bluetooth (o Bluetooth não cabia na partição de firmware): presença, troca de itens (Compartilhar) e, depois, combate PvP. Protocolo em `lib/core/src/link_proto.c`.
+- Conectar entre dois Guarás por ESP-NOW em vez de Bluetooth (o Bluetooth não cabia na partição de firmware): presença, troca de itens (Compartilhar) e, depois, combate PvP. Protocolo em `lib/core/src/link_proto.c`.
 
 ---
 

@@ -1,5 +1,5 @@
 /*
- * Rádio do Encontro: ESP-NOW entre dois Guarás, sem roteador. Enquanto ativo,
+ * Rádio do Conectar: ESP-NOW entre dois Guarás, sem roteador. Enquanto ativo,
  * a rede (Wi-Fi com roteador) fica suspensa e o rádio fica num canal fixo.
  * O formato das mensagens está em lib/core/src/link_proto.h.
  */
