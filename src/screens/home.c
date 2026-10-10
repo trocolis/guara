@@ -251,23 +251,23 @@ static struct {
     int n_texts;
 } usage;
 
-#define FRAME_BITE_MS 450 /* duração de cada quadro da mordida */
+#define FRAME_BITE_MS 350 /* duração de cada quadro da mordida */
 #define BITES 5
-#define RISE_PX 8 /* o ícone sobe enquanto é consumido */
-/* Bebida e poção: sobem e tombam até 60° na direção do Guará, como se ele as entornasse */
-#define SIP_MS 900
-#define POUR_DEGREES 60
+#define RISE_PX 8 /* a bebida e a poção sobem enquanto tombam */
+/* Bebida e poção: sobem e tombam até 45° na direção do Guará, como se ele as entornasse */
+#define SIP_MS 300
+#define POUR_DEGREES 45
 /* Partículas que voam do ícone até o Guará; depois ele pisca invertido */
-#define FLY_MS 450
+#define FLY_MS 350
 #define PARTICLES 8
-#define PARTICLE_DELAY_MS 25
+#define PARTICLE_DELAY_MS 20
 #define FLASH_AT (FLY_MS + PARTICLES * PARTICLE_DELAY_MS) /* contado do fim do consumo */
-#define FLASH_MS 600
+#define FLASH_MS 450
 /* Textos de efeito: cada um sobe por TEXT_MS, um a cada TEXT_STEP_MS, na área do balão de estados */
-#define TEXT_MS 800
-#define TEXT_STEP_MS 300
+#define TEXT_MS 600
+#define TEXT_STEP_MS 200
 #define TEXT_X 22 /* centro da área livre à esquerda do Guará (onde fica o balão) */
-#define TEXT_Y 44 /* linha de partida; sobe até Y=18 */
+#define TEXT_Y 44 /* linha de partida; sobe até Y=14 */
 #define GUARA_CENTER_Y 36 /* centro aproximado do Guará 2x, alvo das partículas */
 
 /* Prepara a animação do item usado. */
@@ -333,22 +333,22 @@ static void draw_icon_rotated(gfx_t *g, const char *name, int x, int y, float de
 }
 
 /*
- * Ícone subindo enquanto é consumido: a comida é coberta pelas mordidas, uma a
- * cada FRAME_BITE_MS; a bebida e a poção tombam na direção do Guará.
+ * Consumo do ícone: a comida é coberta pelas mordidas, uma a cada
+ * FRAME_BITE_MS; a bebida e a poção sobem e tombam na direção do Guará.
  */
 static void draw_consume(gfx_t *g, uint32_t now, uint32_t t)
 {
-    int y = ITEM_Y - (int)(t * RISE_PX / consume_ms());
     if (usage.item.type != ITEM_FOOD) {
+        int y = ITEM_Y - (int)(t * RISE_PX / SIP_MS);
         draw_icon_rotated(g, usage.item.icon, ITEM_X, y, (float)t * POUR_DEGREES / SIP_MS);
         return;
     }
-    ui_icon_mode(g, usage.item.icon, ITEM_X, y, GFX_COPY, 0);
+    ui_icon_mode(g, usage.item.icon, ITEM_X, ITEM_Y, GFX_COPY, 0);
     int frame = (int)(t / FRAME_BITE_MS);
     if (frame >= 1) {
         char name[12];
         snprintf(name, sizeof(name), "bite_%d", frame);
-        ui_icon_mode(g, name, ITEM_X, y, GFX_MASK, 0);
+        ui_icon_mode(g, name, ITEM_X, ITEM_Y, GFX_MASK, 0);
         if (frame != usage.last_frame) {
             /* cada mordida: som e olhar feliz por meio quadro, depois volta ao normal */
             audio_bite();
@@ -430,8 +430,9 @@ static void draw_particles(gfx_t *g, uint32_t t)
 {
     /* Curva quadrática do ícone até o Guará, passando por cima; cada partícula com seu desvio.
        Na bebida e na poção, saem da boca do frasco tombado (borda voltada ao Guará) */
-    int x0 = ITEM_X + 8, y0 = ITEM_Y - RISE_PX + 8;
+    int x0 = ITEM_X + 8, y0 = ITEM_Y + 8;
     if (usage.item.type != ITEM_FOOD) {
+        y0 -= RISE_PX;
         /* topo do ícone (8 px acima do centro) girado POUR_DEGREES */
         float a = POUR_DEGREES * (float)M_PI / 180.0f;
         x0 -= (int)lroundf(8 * sinf(a));
@@ -474,8 +475,8 @@ static bool draw_effect_texts(gfx_t *g, uint32_t now)
             continue;
         }
         running = true;
-        /* 1 px a cada 30 ms: textos seguidos ficam 10 px (uma linha) um do outro */
-        int y = TEXT_Y - st / 30;
+        /* 1 px a cada 20 ms: textos seguidos ficam 10 px (uma linha) um do outro */
+        int y = TEXT_Y - st / 20;
         int w = gfx_text_width(usage.texts[i]);
         gfx_rect_rounded_filled(g, TEXT_X - w / 2 - 2, y - 1, w + 4, 10, 2, GFX_BLACK);
         gfx_text(g, TEXT_X - w / 2, y, usage.texts[i], GFX_WHITE);
@@ -506,9 +507,9 @@ static void item_use_on_draw(gfx_t *g, uint32_t now)
     }
     bool flashing = ta < FLASH_AT + FLASH_MS;
     if (flashing) {
-        anim.bite_happy_until = now + 100;
-        /* 3 piscadas invertidas de 100 ms */
-        if (((ta - FLASH_AT) / 100) % 2 == 0) {
+        anim.bite_happy_until = now + 75;
+        /* 3 piscadas invertidas de 75 ms */
+        if (((ta - FLASH_AT) / 75) % 2 == 0) {
             invert_guara(g, guara_frame(now));
         }
     }
