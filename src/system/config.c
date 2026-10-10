@@ -18,7 +18,7 @@ const uint8_t CONFIG_POWER_SAVE_MIN[CONFIG_COUNT_POWER_SAVE] = {1, 2, 5, 10, 0};
 
 config_t g_cfg;
 
-/* link_visible ocupou o byte de alinhamento: o blob gravado pelas versões anteriores continua válido */
+/* `reserved` ocupa o byte de alinhamento: o blob gravado pelas versões anteriores continua válido */
 _Static_assert(sizeof(config_t) == 42, "config_t mudou de tamanho: suba VERSION_CONFIG ou migre o blob");
 
 /* Valores padrão das configurações. */
@@ -63,6 +63,7 @@ void config_load(void)
     if (nvs_get_u8(h, "versao", &version) == ESP_OK && version == VERSION_CONFIG &&
         nvs_get_blob(h, "cfg", &bytes_read, &length) == ESP_OK && length == sizeof(bytes_read)) {
         g_cfg = bytes_read;
+        g_cfg.reserved = 0; /* a v0.18.0 guardava o Visível aqui */
     }
     nvs_close(h);
 }
@@ -181,83 +182,24 @@ void config_save_fast_reconnect(const fast_reconnect_t *r)
     nvs_close(h);
 }
 
-/* Lê as conexões aceitas da NVS. Retorna quantas há. */
-static int read_connections(saved_connection_t connections[CONFIG_MAX_CONNECTIONS])
-{
-    memset(connections, 0, sizeof(saved_connection_t) * CONFIG_MAX_CONNECTIONS);
-    nvs_handle_t h;
-    if (nvs_open(NAMESPACE, NVS_READONLY, &h) != ESP_OK) {
-        return 0;
-    }
-    size_t length = sizeof(saved_connection_t) * CONFIG_MAX_CONNECTIONS;
-    if (nvs_get_blob(h, "conexoes", connections, &length) != ESP_OK) {
-        memset(connections, 0, sizeof(saved_connection_t) * CONFIG_MAX_CONNECTIONS);
-    }
-    nvs_close(h);
-    int n = 0;
-    while (n < CONFIG_MAX_CONNECTIONS && connections[n].uid) {
-        n++;
-    }
-    return n;
-}
-
-/* Grava a lista de conexões aceitas. */
-static void write_connections(const saved_connection_t connections[CONFIG_MAX_CONNECTIONS])
+/* Lista de conhecidos da v0.18.0 na NVS: copia, apaga a chave e retorna quantos havia. */
+int config_take_legacy_connections(known_t *out, int max)
 {
     nvs_handle_t h;
     if (nvs_open(NAMESPACE, NVS_READWRITE, &h) != ESP_OK) {
-        return;
+        return 0;
     }
-    nvs_set_blob(h, "conexoes", connections, sizeof(saved_connection_t) * CONFIG_MAX_CONNECTIONS);
-    nvs_commit(h);
-    nvs_close(h);
-}
-
-/* Conexões aceitas, da mais antiga para a mais recente. */
-int config_connections(saved_connection_t *connections)
-{
-    return read_connections(connections);
-}
-
-/* Salva ou atualiza uma conexão (a mais recente fica no fim; cheia, sai a mais antiga). */
-void config_save_connection(uint32_t uid, const char *name, uint8_t level)
-{
-    if (uid == 0) {
-        return;
-    }
-    saved_connection_t connections[CONFIG_MAX_CONNECTIONS];
-    int n = read_connections(connections);
-    for (int i = 0; i < n; i++) {
-        if (connections[i].uid == uid) {
-            /* já conhecida: sai da posição antiga e vai para o fim */
-            memmove(&connections[i], &connections[i + 1], sizeof(saved_connection_t) * (size_t)(n - 1 - i));
-            n--;
-            break;
+    known_t legacy[KNOWN_MAX] = {0};
+    size_t length = sizeof(legacy);
+    int n = 0;
+    if (nvs_get_blob(h, "conexoes", legacy, &length) == ESP_OK) {
+        while (n < max && n < KNOWN_MAX && legacy[n].uid) {
+            out[n] = legacy[n];
+            n++;
         }
+        nvs_erase_key(h, "conexoes");
+        nvs_commit(h);
     }
-    if (n == CONFIG_MAX_CONNECTIONS) {
-        memmove(&connections[0], &connections[1], sizeof(saved_connection_t) * (CONFIG_MAX_CONNECTIONS - 1));
-        n--;
-    }
-    connections[n].uid = uid;
-    snprintf(connections[n].name, sizeof(connections[n].name), "%s", name);
-    connections[n].level = level;
-    for (int i = n + 1; i < CONFIG_MAX_CONNECTIONS; i++) {
-        memset(&connections[i], 0, sizeof(saved_connection_t));
-    }
-    write_connections(connections);
-}
-
-/* Remove uma conexão aceita. */
-void config_forget_connection(int position)
-{
-    saved_connection_t connections[CONFIG_MAX_CONNECTIONS];
-    int n = read_connections(connections);
-    if (position < 0 || position >= n) {
-        return;
-    }
-    memmove(&connections[position], &connections[position + 1],
-            sizeof(saved_connection_t) * (size_t)(CONFIG_MAX_CONNECTIONS - 1 - position));
-    memset(&connections[CONFIG_MAX_CONNECTIONS - 1], 0, sizeof(saved_connection_t));
-    write_connections(connections);
+    nvs_close(h);
+    return n;
 }

@@ -12,6 +12,7 @@
 #include "battery.h"
 #include "widgets.h"
 #include "config.h"
+#include "radio_link.h"
 #include "item_fx.h"
 #include "modal.h"
 #include "persistence.h"
@@ -158,7 +159,7 @@ static void draw_top_bar(gfx_t *g, uint32_t now)
         }
         x -= 10;
     }
-    if (g_cfg.link_visible) {
+    if (radio_link_visible()) {
         ui_icon(g, "visible", x, 1); /* Conectar > Visível: outros Guarás podem encontrá-lo */
         x -= 10;
     }

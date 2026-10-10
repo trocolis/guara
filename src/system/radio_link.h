@@ -26,6 +26,12 @@ void radio_link_stop(void);
  */
 void radio_link_background(bool want, const link_profile_t *me);
 /*
+ * Conectar > Visível: só na RTC RAM (sobrevive ao deep sleep, volta a OFF ao
+ * ligar ou reiniciar), para não gravar na Flash uma opção que muda sempre.
+ */
+bool radio_link_visible(void);
+void radio_link_set_visible(bool on);
+/*
  * Só escuta (sub-menu Conectar aberto, para mostrar os conhecidos online): liga
  * o rádio como o segundo plano, mas sem anunciar a presença; quem está com
  * Visível em OFF continua invisível.

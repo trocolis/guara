@@ -18,6 +18,7 @@
 #include "app.h"
 #include "audio.h"
 #include "config.h"
+#include "known.h"
 #include "esp_random.h"
 #include "link_proto.h"
 #include "modal.h"
@@ -81,7 +82,7 @@ static void close_after_alert(int r, void *ctx)
 /* Guarda quem aceitou ou teve a oferta/desafio aceito na lista de conexões. */
 static void remember(const link_profile_t *p)
 {
-    config_save_connection(p->uid, p->name, p->level);
+    known_save(p->uid, p->name, p->level);
 }
 
 /* Resposta do usuário à oferta recebida: soma os itens e aceita, ou recusa. */
@@ -505,7 +506,7 @@ void screens_open_meet(int item_id, int count)
 #define MENU_LINES 3
 
 static struct {
-    saved_connection_t connections[CONFIG_MAX_CONNECTIONS];
+    known_t connections[KNOWN_MAX];
     int count;
     ui_list_t list;
     int known;                /* conhecido escolhido: posição na lista salva */
@@ -519,7 +520,7 @@ static void open_known_actions(void);
 /* Relê os conhecidos (podem ter mudado numa busca). */
 static void menu_reload(void)
 {
-    menu.count = config_connections(menu.connections);
+    menu.count = known_list(menu.connections);
     menu.list.total = MENU_LINES;
 }
 
@@ -530,7 +531,7 @@ static void menu_item(int i, ui_item_t *it, void *ctx)
     if (i == MENU_VISIBLE) {
         it->icon = "on_off";
         snprintf(it->text, sizeof(it->text), "Visível");
-        snprintf(it->info, sizeof(it->info), "%s", g_cfg.link_visible ? "ON" : "OFF");
+        snprintf(it->info, sizeof(it->info), "%s", radio_link_visible() ? "ON" : "OFF");
     } else if (i == MENU_SEARCH) {
         it->icon = "search";
         snprintf(it->text, sizeof(it->text), "Buscar Guará");
@@ -542,7 +543,7 @@ static void menu_item(int i, ui_item_t *it, void *ctx)
 }
 
 /* Conhecido selecionado na lista salva. */
-static const saved_connection_t *known(void)
+static const known_t *known(void)
 {
     return &menu.connections[menu.known];
 }
@@ -551,7 +552,7 @@ static const saved_connection_t *known(void)
 static void known_item(int i, ui_item_t *it, void *ctx)
 {
     (void)ctx;
-    const saved_connection_t *c = &menu.connections[menu.count - 1 - i];
+    const known_t *c = &menu.connections[menu.count - 1 - i];
     snprintf(it->text, sizeof(it->text), "%s", c->name);
     snprintf(it->info, sizeof(it->info), "%s", radio_link_seen(c->uid) ? "online" : "offline");
 }
@@ -586,7 +587,7 @@ static void delete_answer(int r, void *ctx)
         open_known_actions();
         return;
     }
-    config_forget_connection(menu.known);
+    known_forget(menu.known);
     menu_reload();
     if (menu.count > 0) {
         open_known();
@@ -691,8 +692,7 @@ static void menu_key(const key_event_t *ev)
         ui_back();
     } else if (ev->key == KEY_A) {
         if (menu.list.sel == MENU_VISIBLE) {
-            g_cfg.link_visible = !g_cfg.link_visible;
-            config_save();
+            radio_link_set_visible(!radio_link_visible());
         } else if (menu.list.sel == MENU_SEARCH) {
             screens_open_meet(-1, 0);
         } else {

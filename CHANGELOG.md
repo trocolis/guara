@@ -3,6 +3,12 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.18.1 — 2026-10-10
+
+### Proteção da Flash
+- **Conhecidos no cartão SD:** a lista sai da NVS e vai para `/sdcard/guara/known.txt` (módulo `known`). A lista da v0.18.0 é migrada no primeiro boot e apagada da NVS.
+- **Visível só na RTC RAM:** a opção não é mais gravada. Sobrevive ao deep sleep e volta a `OFF` ao ligar ou reiniciar. O byte que ela ocupava em `config_t` virou `reserved`, e as configurações salvas continuam válidas.
+
 ## v0.18.0 — 2026-10-10
 
 ### Conectar

@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "known.h"
+
 /* Configurações do system, persistidas na NVS (namespace "guara"). */
 typedef struct {
     bool mute;
@@ -13,7 +15,7 @@ typedef struct {
     uint16_t wake_minute;
     char timezone[32];         /* POSIX TZ */
     bool wifi_on;
-    bool link_visible; /* Conectar: presença em segundo plano (ESP-NOW), independente do Wi-Fi */
+    uint8_t reserved; /* era Conectar > Visível na v0.18.0 (hoje na RTC RAM); zerado ao carregar */
 } config_t; /* campos novos sempre no fim (o byte de alinhamento das versões antigas é zero) */
 
 #define CONFIG_COUNT_POWER_SAVE 5
@@ -34,18 +36,11 @@ int config_networks(saved_network_t *networks);
 void config_save_network(const char *ssid, const char *password);
 void config_forget_network(int position);
 
-/* Conexões aceitas no Conectar (troca ou desafio aceito, de qualquer lado), da mais antiga para a mais recente. */
-#define CONFIG_MAX_CONNECTIONS 8
-typedef struct {
-    uint32_t uid;
-    char name[11]; /* SIZE_NAME + 1 */
-    uint8_t level;
-} saved_connection_t;
-
-int config_connections(saved_connection_t *connections);
-/* Salva ou atualiza (nome e nível) uma conexão; cheia, descarta a mais antiga. */
-void config_save_connection(uint32_t uid, const char *name, uint8_t level);
-void config_forget_connection(int position);
+/*
+ * Conhecidos que a v0.18.0 gravava na NVS (hoje no cartão, ver known.h): copia
+ * até `max` para `out`, apaga a chave e retorna quantos havia.
+ */
+int config_take_legacy_connections(known_t *out, int max);
 
 /* Último roteador conectado: permite reconectar sem busca (~1-2 s). */
 typedef struct {

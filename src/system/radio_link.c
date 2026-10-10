@@ -12,6 +12,7 @@
 
 #include <string.h>
 
+#include "esp_attr.h"
 #include "esp_log.h"
 #include "esp_now.h"
 #include "esp_timer.h"
@@ -35,6 +36,7 @@ static volatile bool active;
 static volatile bool held;       /* tela Conectar aberta */
 static volatile bool background; /* o app quer presença em segundo plano */
 static volatile bool watching;   /* sub-menu Conectar: só escuta, sem anunciar */
+static RTC_DATA_ATTR bool visible; /* Conectar > Visível: OFF ao ligar ou reiniciar, mantido no deep sleep */
 static SemaphoreHandle_t state_lock; /* liga/desliga: tela, task de fundo e devolução à rede */
 static link_profile_t profile;
 static link_peers_t peers;
@@ -208,6 +210,17 @@ void radio_link_stop(void)
         turn_off();
     }
     xSemaphoreGive(state_lock);
+}
+
+bool radio_link_visible(void)
+{
+    return visible;
+}
+
+/* Liga ou desliga o Visível (o app aplica no próximo segundo). */
+void radio_link_set_visible(bool on)
+{
+    visible = on;
 }
 
 /* Sub-menu Conectar aberto ou fechado: a task de segundo plano liga ou desliga em até 250 ms. */

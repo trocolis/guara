@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "alarms.h"
+#include "known.h"
 #include "audio.h"
 #include "battery.h"
 #include "buttons.h"
@@ -208,6 +209,7 @@ void app_init(void)
 
     sd_mount();
     alarms_load();
+    known_load();
     if (cold) {
         draw_boot(50);
     }
@@ -301,7 +303,7 @@ static void update_link(void)
 {
     link_profile_t me;
     link_profile_from_guara(&g_guara, &me);
-    radio_link_background(g_cfg.link_visible && g_has_guara && !power_is_idle(), &me);
+    radio_link_background(radio_link_visible() && g_has_guara && !power_is_idle(), &me);
     if (!radio_link_held() && !sleep_blocked && radio_link_has_invite()) {
         screens_open_meet(-1, 0);
     }
