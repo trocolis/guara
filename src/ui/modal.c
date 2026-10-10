@@ -114,8 +114,8 @@ static void on_key(const key_event_t *ev)
     }
 }
 
-/* Moldura 112x48 com sombra de 2 px e barra de título branca (como a das telas). */
-static void draw_frame(gfx_t *g, const char *title, uint32_t now)
+/* Moldura 112x52 com sombra de 2 px e barra de título branca (como a das telas). */
+void ui_modal_frame(gfx_t *g, const char *title, uint32_t now)
 {
     static marquee_t marquee;
     gfx_rect_filled(g, MX - 2, MY - 2, MW + 4, MH + 4, GFX_BLACK);
@@ -150,7 +150,7 @@ static int count_lines(const char *text, int width)
 static void on_draw(gfx_t *g, uint32_t now)
 {
     modal_t *m = current();
-    draw_frame(g, m->title, now);
+    ui_modal_frame(g, m->title, now);
     int body_y = MY + UI_TITLE_HEIGHT + 1; /* 1 px abaixo da barra de título */
     switch (m->type) {
     case M_ALERT:

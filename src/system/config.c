@@ -177,3 +177,84 @@ void config_save_fast_reconnect(const fast_reconnect_t *r)
     nvs_commit(h);
     nvs_close(h);
 }
+
+/* Lê as conexões aceitas da NVS. Retorna quantas há. */
+static int read_connections(saved_connection_t connections[CONFIG_MAX_CONNECTIONS])
+{
+    memset(connections, 0, sizeof(saved_connection_t) * CONFIG_MAX_CONNECTIONS);
+    nvs_handle_t h;
+    if (nvs_open(NAMESPACE, NVS_READONLY, &h) != ESP_OK) {
+        return 0;
+    }
+    size_t length = sizeof(saved_connection_t) * CONFIG_MAX_CONNECTIONS;
+    if (nvs_get_blob(h, "conexoes", connections, &length) != ESP_OK) {
+        memset(connections, 0, sizeof(saved_connection_t) * CONFIG_MAX_CONNECTIONS);
+    }
+    nvs_close(h);
+    int n = 0;
+    while (n < CONFIG_MAX_CONNECTIONS && connections[n].uid) {
+        n++;
+    }
+    return n;
+}
+
+/* Grava a lista de conexões aceitas. */
+static void write_connections(const saved_connection_t connections[CONFIG_MAX_CONNECTIONS])
+{
+    nvs_handle_t h;
+    if (nvs_open(NAMESPACE, NVS_READWRITE, &h) != ESP_OK) {
+        return;
+    }
+    nvs_set_blob(h, "conexoes", connections, sizeof(saved_connection_t) * CONFIG_MAX_CONNECTIONS);
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+/* Conexões aceitas, da mais antiga para a mais recente. */
+int config_connections(saved_connection_t *connections)
+{
+    return read_connections(connections);
+}
+
+/* Salva ou atualiza uma conexão (a mais recente fica no fim; cheia, sai a mais antiga). */
+void config_save_connection(uint32_t uid, const char *name, uint8_t level)
+{
+    if (uid == 0) {
+        return;
+    }
+    saved_connection_t connections[CONFIG_MAX_CONNECTIONS];
+    int n = read_connections(connections);
+    for (int i = 0; i < n; i++) {
+        if (connections[i].uid == uid) {
+            /* já conhecida: sai da posição antiga e vai para o fim */
+            memmove(&connections[i], &connections[i + 1], sizeof(saved_connection_t) * (size_t)(n - 1 - i));
+            n--;
+            break;
+        }
+    }
+    if (n == CONFIG_MAX_CONNECTIONS) {
+        memmove(&connections[0], &connections[1], sizeof(saved_connection_t) * (CONFIG_MAX_CONNECTIONS - 1));
+        n--;
+    }
+    connections[n].uid = uid;
+    snprintf(connections[n].name, sizeof(connections[n].name), "%s", name);
+    connections[n].level = level;
+    for (int i = n + 1; i < CONFIG_MAX_CONNECTIONS; i++) {
+        memset(&connections[i], 0, sizeof(saved_connection_t));
+    }
+    write_connections(connections);
+}
+
+/* Remove uma conexão aceita. */
+void config_forget_connection(int position)
+{
+    saved_connection_t connections[CONFIG_MAX_CONNECTIONS];
+    int n = read_connections(connections);
+    if (position < 0 || position >= n) {
+        return;
+    }
+    memmove(&connections[position], &connections[position + 1],
+            sizeof(saved_connection_t) * (size_t)(CONFIG_MAX_CONNECTIONS - 1 - position));
+    memset(&connections[CONFIG_MAX_CONNECTIONS - 1], 0, sizeof(saved_connection_t));
+    write_connections(connections);
+}

@@ -38,6 +38,9 @@ static QueueHandle_t queue;
 static volatile int users;
 static volatile uint32_t last_use_ms;
 static volatile bool connecting, suspended;
+/* Rádio emprestado ao Conectar (ESP-NOW): a rede o pede de volta pelo `reclaim` quando precisar */
+static volatile bool lent;
+static network_reclaim_fn reclaim;
 static volatile int bars;
 static uint32_t ntp_tried_ms;
 static bool ntp_tried;
@@ -52,6 +55,81 @@ static volatile bool update_found;
 static uint32_t now_ms(void)
 {
     return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
+/*
+ * Pede o rádio de volta ao Conectar, se estiver emprestado (sem a trava: o
+ * Conectar devolve chamando network_lend(false)).
+ */
+static void take_back(void)
+{
+    if (lent && reclaim) {
+        reclaim();
+    }
+}
+
+/*
+ * Empresta (ou devolve) o rádio ao Conectar: emprestado, a rede não usa nem
+ * desliga o rádio. Recusa o empréstimo se a rede estiver em uso (decidido sob a trava).
+ */
+bool network_lend(bool lend)
+{
+    xSemaphoreTake(lock, portMAX_DELAY);
+    if (lend && (users > 0 || connecting)) {
+        xSemaphoreGive(lock);
+        return false;
+    }
+    if (lend) {
+        wifi_turn_off(); /* sai do roteador: o Conectar religa o rádio no canal dele */
+        bars = 0;
+    }
+    lent = lend;
+    xSemaphoreGive(lock);
+    return true;
+}
+
+/* Quem chamar quando a rede precisar do rádio emprestado. */
+void network_set_reclaim(network_reclaim_fn fn)
+{
+    reclaim = fn;
+}
+
+static bool ntp_due(void);
+static bool update_due(void);
+
+/*
+ * Verdadeiro se a rede está em uso (alguém pediu, conectando, tarefa na fila)
+ * ou vai usar em seguida (NTP ou verificação de release vencidos). O rádio
+ * ligado só esperando os 30 s de folga não conta: o Conectar pode pegá-lo.
+ */
+bool network_busy(void)
+{
+    if (users > 0 || connecting || (queue && uxQueueMessagesWaiting(queue) > 0)) {
+        return true;
+    }
+    /* Trabalho automático vencido (NTP ou verificação de release ainda não tentados): a rede vai precisar
+       do rádio em seguida, então o Conectar espera, para não ligar e desligar o Wi-Fi no meio */
+    uint32_t now = now_ms();
+    bool ntp_pending = ntp_due() && (!ntp_tried || now - ntp_tried_ms >= NTP_NEW_ATTEMPT_MS);
+    bool update_pending = update_due() && (!update_tried || now - update_tried_ms >= UPDATE_NEW_ATTEMPT_MS);
+    if (!(ntp_pending || update_pending) || !network_allowed()) {
+        return false;
+    }
+    /* Há rede salva? (lido da NVS no máximo a cada 5 s: a task do Conectar pergunta 4 vezes por segundo) */
+    static uint32_t checked_at;
+    static bool has_saved;
+    if (checked_at == 0 || now - checked_at >= 5000) {
+        static saved_network_t saved[CONFIG_MAX_NETWORKS];
+        has_saved = config_networks(saved) > 0;
+        checked_at = now;
+    }
+    return has_saved;
+}
+
+/* Verdadeiro se um jogo Lua suspendeu a rede (o Conectar também não pode usar o rádio). */
+bool network_suspended(void)
+{
+    return suspended;
 }
 
 /* Rede permitida: Wi-Fi em ON e não suspenso por um jogo. */
@@ -132,6 +210,7 @@ static bool ensure_connection(uint32_t timeout_ms)
 /* Registra um usuário da rede (o rádio não desliga enquanto houver usuários). */
 void network_use(void)
 {
+    take_back();
     xSemaphoreTake(lock, portMAX_DELAY);
     users++;
     last_use_ms = now_ms();
@@ -168,6 +247,7 @@ bool network_run(network_job_fn fn, void *ctx)
 /* Busca redes ligando o rádio sob demanda. */
 int network_scan(wifi_network_t *networks, int max)
 {
+    take_back();
     xSemaphoreTake(lock, portMAX_DELAY);
     int n = suspended ? 0 : wifi_scan(networks, max);
     last_use_ms = now_ms();
@@ -178,6 +258,7 @@ int network_scan(wifi_network_t *networks, int max)
 /* Conecta a uma rede nova, salva e sincroniza a hora. */
 bool network_connect_new(const char *ssid, const char *password)
 {
+    take_back();
     xSemaphoreTake(lock, portMAX_DELAY);
     connecting = true;
     bool ok = !suspended && wifi_connect(ssid, password, 10000, NULL, 0);
@@ -219,6 +300,7 @@ void network_status(char *buf, int length)
 /* Desliga o rádio imediatamente. */
 void network_turn_off(void)
 {
+    take_back();
     xSemaphoreTake(lock, portMAX_DELAY);
     wifi_turn_off();
     bars = 0;
@@ -228,6 +310,9 @@ void network_turn_off(void)
 /* Suspende o uso da rede (libera a memória do driver para os jogos Lua). */
 void network_suspend(bool suspend)
 {
+    if (suspend) {
+        take_back(); /* o jogo precisa da memória do driver: o Conectar desliga antes */
+    }
     xSemaphoreTake(lock, portMAX_DELAY);
     suspended = suspend;
     if (suspend) {
@@ -296,8 +381,8 @@ static void maintenance(void)
 {
     uint32_t now = now_ms();
     xSemaphoreTake(lock, portMAX_DELAY);
-    /* Suspensa, o rádio pode estar emprestado (jogo Lua ou Conectar): não mexe nele */
-    if (!suspended && wifi_on() && users == 0 && !connecting && now - last_use_ms >= NETWORK_IDLE_MS) {
+    /* Suspensa ou emprestada ao Conectar, o rádio não é da rede: não mexe nele */
+    if (!suspended && !lent && wifi_on() && users == 0 && !connecting && now - last_use_ms >= NETWORK_IDLE_MS) {
         ESP_LOGI(TAG, "Ociosa: desligando o rádio");
         wifi_turn_off();
     }
@@ -307,7 +392,8 @@ static void maintenance(void)
     bool check_update =
         !schedule && update_due() && (!update_tried || now - update_tried_ms >= UPDATE_NEW_ATTEMPT_MS);
     static saved_network_t saved_networks[CONFIG_MAX_NETWORKS];
-    if ((schedule || check_update) && (!network_allowed() || config_networks(saved_networks) == 0)) {
+    /* Com o rádio no Conectar, as tarefas automáticas esperam (rodam quando ele desligar, no modo Ocioso) */
+    if ((schedule || check_update) && (lent || !network_allowed() || config_networks(saved_networks) == 0)) {
         schedule = check_update = false;
     }
     if (schedule) {
@@ -346,11 +432,17 @@ static void job_network(void *arg)
     }
 }
 
-/* Cria a trava, a fila e a task da rede (pilha maior para o TLS do GitHub). */
+/*
+ * Cria a trava, a fila e a task da rede (pilha maior para o TLS do GitHub).
+ * O aperto de mão do TLS calcula por mais de 5 s seguidos: com prioridade
+ * acima da task ociosa, ela não rodava e o watchdog disparava. Na mesma
+ * prioridade da ociosa (0), as duas se revezam a cada tick; no núcleo 1, longe
+ * do laço principal da tela.
+ */
 void network_init(void)
 {
     lock = xSemaphoreCreateMutex();
     queue = xQueueCreate(8, sizeof(network_job_t));
     last_use_ms = now_ms();
-    xTaskCreatePinnedToCore(job_network, "rede", 8192, NULL, 4, NULL, 0);
+    xTaskCreatePinnedToCore(job_network, "rede", 8192, NULL, tskIDLE_PRIORITY, NULL, 1);
 }

@@ -167,6 +167,10 @@ static void captions(gfx_t *g, int x_b, int x_a_end, int y, int width, const cha
                      uint32_t now)
 {
     static marquee_t marquee_b, marquee_a;
+    /* Com uma legenda só, ela usa a largura toda entre os dois sprites */
+    if (!text_a || !text_b) {
+        width = x_a_end - x_b + 1;
+    }
     if (text_b) {
         ui_marquee_text(g, x_b, y, width, text_b, GFX_WHITE, true, &marquee_b, now);
     }
@@ -360,4 +364,20 @@ bool ui_list_key(ui_list_t *l, const key_event_t *ev, int lines)
     }
     ui_list_adjust(l, lines);
     return true;
+}
+
+/* Reticências de espera: aparecem uma a uma, somem e recomeçam. */
+const char *ui_dots(uint32_t now_ms)
+{
+    static const char *const DOTS[] = {"", ".", "..", "..."};
+    return DOTS[(now_ms / UI_DOTS_STEP_MS) % 4];
+}
+
+/* Texto com reticências animadas; a posição é a do texto completo, para não tremer. */
+void ui_text_dots(gfx_t *g, int x, int width, int y, const char *text, uint32_t now_ms, gfx_color_t color)
+{
+    char full[64], shown[64];
+    snprintf(full, sizeof(full), "%s...", text);
+    snprintf(shown, sizeof(shown), "%s%s", text, ui_dots(now_ms));
+    gfx_text(g, x + (width - gfx_text_width(full)) / 2, y, shown, color);
 }

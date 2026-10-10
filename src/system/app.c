@@ -24,6 +24,7 @@
 #include "freertos/task.h"
 #include "persistence.h"
 #include "network.h"
+#include "radio_link.h"
 #include "rtc_clock.h"
 #include "sdcard.h"
 #include "screens.h"
@@ -280,6 +281,31 @@ void app_request_sleep(void)
 }
 
 /* Grava o que estiver pendente e entra em deep sleep até o próximo alarme. */
+/* Para a presença do Conectar antes do deep sleep (o network_turn_off devolve o rádio). */
+static void stop_link(void)
+{
+    link_profile_t me;
+    link_profile_from_guara(&g_guara, &me);
+    radio_link_background(false, &me);
+}
+
+/*
+ * Conectar em segundo plano (a cada segundo): com o Wi-Fi em ON, o Guará fica
+ * visível para outros enquanto o aparelho está em uso; o rádio desliga no modo
+ * Ocioso e religa sozinho ao interagir. Uma oferta ou um desafio que chegar
+ * abre a busca do Conectar, menos nas telas que seguram o sono (jogos,
+ * combate, cronômetro), onde espera.
+ */
+static void update_link(void)
+{
+    link_profile_t me;
+    link_profile_from_guara(&g_guara, &me);
+    radio_link_background(g_cfg.wifi_on && g_has_guara && !power_is_idle(), &me);
+    if (!radio_link_held() && !sleep_blocked && radio_link_has_invite()) {
+        screens_open_meet(-1, 0);
+    }
+}
+
 static void sleep_due_to_inactivity(void)
 {
     persist_save_if_dirty(&g_guara);
@@ -292,6 +318,7 @@ static void sleep_due_to_inactivity(void)
         wake = t ? t : 1;
     }
     sd_unmount();
+    stop_link();
     network_turn_off();
     power_deep_sleep(wake);
 }
@@ -324,6 +351,7 @@ static void check_battery(void)
         display_send(&screen);
         vTaskDelay(pdMS_TO_TICKS(3000));
         sd_unmount();
+        stop_link();
         network_turn_off();
         power_deep_sleep(0);
     }
@@ -431,6 +459,7 @@ void app_run(void)
             }
             check_inactivity(now);
             check_menu_timeout(now);
+            update_link();
             check_idle(now);
         }
 

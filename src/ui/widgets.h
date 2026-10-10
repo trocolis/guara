@@ -41,6 +41,12 @@ void ui_icon_mode(gfx_t *g, const char *name, int x, int y, gfx_mode_t mode, uns
 /* Quebra o texto em linhas de até `largura` px. Retorna o número de linhas desenhadas. */
 int ui_paragraph(gfx_t *g, int x, int y, int width, int max_lines, const char *text, bool centered);
 
+/* Reticências de espera: "", ".", ".." e "..." a cada UI_DOTS_STEP_MS, em ciclo. */
+#define UI_DOTS_STEP_MS 400
+const char *ui_dots(uint32_t now_ms);
+/* `text` com as reticências animadas, centralizado em [x, x + width) como se tivesse "..." (sem tremer). */
+void ui_text_dots(gfx_t *g, int x, int width, int y, const char *text, uint32_t now_ms, gfx_color_t color);
+
 /* Lista padrão de sub-menu: 3 linhas de 16 px com ícone, texto e informação à direita. */
 typedef struct {
     const char *icon;

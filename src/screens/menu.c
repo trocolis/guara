@@ -29,6 +29,7 @@ static const item_menu_t ITEMS[] = {
     {"IMAGENS", "images", &SCREEN_IMAGES, NULL},
     {"RELOGIO", "clock", NULL, clock_open_menu},
     {"CARTAO SD", "sd_card", &SCREEN_CARD_SD, NULL},
+    {"CONECTAR", "connect", &SCREEN_CONNECT, NULL},
     {"AJUSTES", "adjustments", NULL, settings_open_menu},
 };
 #define COUNT ((int)(sizeof(ITEMS) / sizeof(ITEMS[0])))

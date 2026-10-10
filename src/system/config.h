@@ -33,6 +33,19 @@ int config_networks(saved_network_t *networks);
 void config_save_network(const char *ssid, const char *password);
 void config_forget_network(int position);
 
+/* Conexões aceitas no Conectar (troca ou desafio aceito, de qualquer lado), da mais antiga para a mais recente. */
+#define CONFIG_MAX_CONNECTIONS 8
+typedef struct {
+    uint32_t uid;
+    char name[11]; /* SIZE_NAME + 1 */
+    uint8_t level;
+} saved_connection_t;
+
+int config_connections(saved_connection_t *connections);
+/* Salva ou atualiza (nome e nível) uma conexão; cheia, descarta a mais antiga. */
+void config_save_connection(uint32_t uid, const char *name, uint8_t level);
+void config_forget_connection(int position);
+
 /* Último roteador conectado: permite reconectar sem busca (~1-2 s). */
 typedef struct {
     char ssid[33];

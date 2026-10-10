@@ -4,6 +4,8 @@
  */
 #include "ui.h"
 
+#include "busy.h"
+
 #include <stddef.h>
 
 #define DEPTH_MAX 16
@@ -113,6 +115,7 @@ void ui_process_key(const key_event_t *ev)
  */
 void ui_draw(gfx_t *g, uint32_t now)
 {
+    ui_busy_hide(); /* o laço principal voltou a desenhar: a operação demorada acabou */
     if (top < 0) {
         return;
     }

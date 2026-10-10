@@ -53,5 +53,17 @@ void network_forget_release(void);
 void network_turn_off(void);
 /* Bloqueia o uso da rede (jogos Lua precisam da memória do driver). */
 void network_suspend(bool suspend);
+bool network_suspended(void);
+
+/*
+ * Empréstimo do rádio ao Conectar (ESP-NOW, canal fixo, sem roteador). Quem
+ * usar a rede (network_use, busca, conexão, jogos) chama antes o `reclaim`,
+ * e o Conectar devolve o rádio com network_lend(false).
+ */
+typedef void (*network_reclaim_fn)(void);
+bool network_lend(bool lend);
+void network_set_reclaim(network_reclaim_fn fn);
+/* Verdadeiro se a rede está em uso (alguém pediu ou está conectando). */
+bool network_busy(void);
 
 #endif

@@ -13,11 +13,22 @@
 
 #define RADIO_LINK_CHANNEL 1          /* canal fixo: os dois aparelhos se encontram nele */
 #define RADIO_LINK_HELLO_MS 1000      /* presença em broadcast */
+#define RADIO_LINK_BACKGROUND_MS 250  /* a task de segundo plano confere o pedido do app */
 
-/* Liga o rádio e começa a anunciar `me`. Falso se o rádio não iniciou. */
+/* Tela Conectar aberta: liga o rádio (se preciso) e anuncia `me`. Falso se o rádio não iniciou. */
 bool radio_link_start(const link_profile_t *me);
-/* Para de anunciar, desliga o rádio e devolve a rede. */
+/* Tela Conectar fechada: desliga, a menos que o segundo plano esteja pedido. */
 void radio_link_stop(void);
+/*
+ * Presença em segundo plano, pedida pelo app a cada segundo (Wi-Fi em ON, Guará
+ * nascido, fora do modo Ocioso). Uma task liga e desliga sem prender a tela; a
+ * rede tem prioridade e pega o rádio de volta quando precisa.
+ */
+void radio_link_background(bool want, const link_profile_t *me);
+/* Verdadeiro se chegou uma oferta ou um desafio (para o app abrir a tela Conectar). */
+bool radio_link_has_invite(void);
+/* Verdadeiro com a tela Conectar aberta (ela mesma trata as mensagens). */
+bool radio_link_held(void);
 bool radio_link_active(void);
 /* Envia uma mensagem para `mac` (o perfil `from` é preenchido aqui). */
 bool radio_link_send(const uint8_t mac[6], link_msg_t *m);

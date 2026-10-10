@@ -1,7 +1,12 @@
 /*
- * Rádio do Conectar (ESP-NOW): suspende a rede com roteador, liga o Wi-Fi em
- * modo estação no canal RADIO_LINK_CHANNEL, anuncia a presença a cada segundo
- * em broadcast e entrega as outras mensagens por uma fila.
+ * Rádio do Conectar (ESP-NOW): pega o rádio emprestado da rede com roteador,
+ * liga o Wi-Fi em modo estação no canal RADIO_LINK_CHANNEL, anuncia a presença
+ * a cada segundo em broadcast e entrega as outras mensagens por uma fila.
+ *
+ * Fica ligado enquanto a tela Conectar está aberta ("segurado") ou, em
+ * segundo plano, enquanto o app pedir (Wi-Fi em ON e fora do modo Ocioso).
+ * Uma task própria liga e desliga a presença de segundo plano sem prender a
+ * tela; quando a rede precisa do rádio, ele é devolvido na hora.
  */
 #include "radio_link.h"
 
@@ -13,6 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "network.h"
 #include "wifi.h"
 
@@ -25,7 +31,10 @@ typedef struct {
     link_msg_t msg;
 } received_t;
 
-static bool active;
+static volatile bool active;
+static volatile bool held;       /* tela Conectar aberta */
+static volatile bool background; /* o app quer presença em segundo plano */
+static SemaphoreHandle_t state_lock; /* liga/desliga: tela, task de fundo e devolução à rede */
 static link_profile_t profile;
 static link_peers_t peers;
 static SemaphoreHandle_t lock;
@@ -77,26 +86,36 @@ static void send_hello(void *arg)
     radio_link_send(BROADCAST, &m);
 }
 
-/* Liga o rádio do Conectar e começa a anunciar. */
-bool radio_link_start(const link_profile_t *me)
+/* Cria as estruturas na primeira vez. */
+static void ensure_init(void)
 {
-    if (active) {
-        return true;
-    }
     if (!lock) {
         lock = xSemaphoreCreateMutex();
+        state_lock = xSemaphoreCreateMutex();
         inbox = xQueueCreate(8, sizeof(received_t));
         const esp_timer_create_args_t args = {.callback = send_hello, .name = "conectar"};
         esp_timer_create(&args, &hello_timer);
     }
-    profile = *me;
+}
+
+/* Liga o ESP-NOW (com state_lock). */
+static bool turn_on(void)
+{
+    if (active) {
+        return true;
+    }
+    if (network_suspended()) {
+        return false; /* um jogo Lua está com a memória do driver */
+    }
     memset(&peers, 0, sizeof(peers));
     xQueueReset(inbox);
-    network_suspend(true); /* desconecta do roteador e libera o rádio */
+    if (!network_lend(true)) { /* sai do roteador e pega o rádio, se a rede não estiver em uso */
+        return false;
+    }
     if (!wifi_turn_on() || !wifi_set_channel(RADIO_LINK_CHANNEL) || esp_now_init() != ESP_OK) {
         ESP_LOGE(TAG, "Rádio não iniciou");
         wifi_turn_off();
-        network_suspend(false);
+        network_lend(false);
         return false;
     }
     esp_now_register_recv_cb(on_receive);
@@ -104,12 +123,12 @@ bool radio_link_start(const link_profile_t *me)
     active = true;
     send_hello(NULL);
     esp_timer_start_periodic(hello_timer, RADIO_LINK_HELLO_MS * 1000);
-    ESP_LOGI(TAG, "Ativo no canal %d", RADIO_LINK_CHANNEL);
+    ESP_LOGI(TAG, "Ativo no canal %d%s", RADIO_LINK_CHANNEL, held ? "" : " (segundo plano)");
     return true;
 }
 
-/* Desliga o rádio do Conectar e devolve a rede. */
-void radio_link_stop(void)
+/* Desliga o ESP-NOW e devolve o rádio à rede (com state_lock). */
+static void turn_off(void)
 {
     if (!active) {
         return;
@@ -119,8 +138,91 @@ void radio_link_stop(void)
     esp_now_unregister_recv_cb();
     esp_now_deinit();
     wifi_turn_off();
-    network_suspend(false);
+    network_lend(false);
     ESP_LOGI(TAG, "Desligado");
+}
+
+/* A rede pediu o rádio (NTP, GitHub, busca de redes, jogo): devolve, mesmo com a tela aberta. */
+static void give_back(void)
+{
+    xSemaphoreTake(state_lock, portMAX_DELAY);
+    turn_off();
+    xSemaphoreGive(state_lock);
+}
+
+/* Task de segundo plano: liga quando o app quer e a rede está livre; desliga quando não quer mais. */
+static void job_background(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(RADIO_LINK_BACKGROUND_MS));
+        xSemaphoreTake(state_lock, portMAX_DELAY);
+        if (background && !active && !network_busy()) {
+            turn_on();
+        } else if (!background && !held && active) {
+            turn_off();
+        }
+        xSemaphoreGive(state_lock);
+    }
+}
+
+/* Pedido do app, a cada segundo: presença em segundo plano (ou não) e o perfil atual. */
+void radio_link_background(bool want, const link_profile_t *me)
+{
+    ensure_init();
+    static bool task_started;
+    if (!task_started) {
+        task_started = true;
+        network_set_reclaim(give_back);
+        xTaskCreatePinnedToCore(job_background, "conectar", 3072, NULL, 3, NULL, 0);
+    }
+    profile = *me; /* nome e nível atualizados na próxima presença */
+    background = want;
+}
+
+/* Tela Conectar aberta: liga na hora (ou aproveita o segundo plano) e segura até fechar. */
+bool radio_link_start(const link_profile_t *me)
+{
+    ensure_init();
+    xSemaphoreTake(state_lock, portMAX_DELAY);
+    profile = *me;
+    held = true;
+    bool ok = turn_on();
+    xSemaphoreGive(state_lock);
+    return ok;
+}
+
+/* Tela Conectar fechada: continua só se o segundo plano quiser. */
+void radio_link_stop(void)
+{
+    if (!lock) {
+        return;
+    }
+    xSemaphoreTake(state_lock, portMAX_DELAY);
+    held = false;
+    if (!background) {
+        turn_off();
+    }
+    xSemaphoreGive(state_lock);
+}
+
+/* Verdadeiro com a tela Conectar aberta. */
+bool radio_link_held(void)
+{
+    return held;
+}
+
+/* Verdadeiro se há uma oferta ou um desafio esperando (outras mensagens soltas são descartadas). */
+bool radio_link_has_invite(void)
+{
+    received_t r;
+    while (active && xQueuePeek(inbox, &r, 0) == pdTRUE) {
+        if (r.msg.type == LINK_OFFER || r.msg.type == LINK_CHALLENGE) {
+            return true;
+        }
+        xQueueReceive(inbox, &r, 0);
+    }
+    return false;
 }
 
 bool radio_link_active(void)

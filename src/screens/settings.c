@@ -1,5 +1,5 @@
 /*
- * Ajustes: Wi-Fi, Conectar, Energia, Armazenamento, Controle, Som, Sistema
+ * Ajustes: Wi-Fi, Energia, Armazenamento, Controle, Som, Sistema
  * (com atualização pelo cartão SD) e Reiniciar.
  */
 #include <stdio.h>
@@ -7,6 +7,7 @@
 
 #include "app.h"
 #include "audio.h"
+#include "busy.h"
 #include "battery.h"
 #include "widgets.h"
 #include "config.h"
@@ -33,21 +34,11 @@ static wifi_network_t networks[WIFI_MAX_NETWORKS];
 static ui_list_t network_list;
 static char ssid_chosen[33];
 
-/* Mostra uma mensagem enquanto uma operação bloqueante roda. */
-static void screen_busy(const char *text)
-{
-    /* Feedback imediato para operações bloqueantes (busca, conexão) */
-    static gfx_t g;
-    gfx_init(&g);
-    ui_icon(&g, "wifi", 56, 14);
-    gfx_text_center(&g, 0, GFX_WIDTH, 38, text, GFX_WHITE);
-    display_send(&g);
-}
 
 /* Conecta a uma rede, salva e liga o Wi-Fi. */
 static void connect(const char *ssid, const char *password)
 {
-    screen_busy("Conectando...");
+    ui_busy_show("wifi", "Conectando");
     bool ok = network_connect_new(ssid, password);
     if (ok) {
         g_cfg.wifi_on = true;
@@ -115,7 +106,7 @@ static const screen_t SCREEN_SCAN_WIFI = {
 /* Busca redes e abre a lista. */
 static void scan_wifi(void)
 {
-    screen_busy("Buscando redes...");
+    ui_busy_show("wifi", "Buscando redes");
     network_list = (ui_list_t){0};
     network_list.total = network_scan(networks, WIFI_MAX_NETWORKS);
     ui_open(&SCREEN_SCAN_WIFI, NULL);
@@ -430,14 +421,10 @@ static void show_system_status(void)
     ui_details("SISTEMA", text);
 }
 
-/* Tela de progresso da atualização. */
+/* Tela de progresso da atualização (reticências animadas enquanto grava). */
 static void progress_ota(int pct)
 {
-    static gfx_t g;
-    gfx_init(&g);
-    gfx_text_center(&g, 0, GFX_WIDTH, 20, "Atualizando...", GFX_WHITE);
-    ui_progress(&g, 14, 34, 100, 8, pct, 100);
-    display_send(&g);
+    ui_busy_progress("Atualizando", pct);
 }
 
 /* Reinicia o aparelho. */
@@ -496,14 +483,6 @@ static void update_sd(void)
     ui_confirm("ATUALIZAR", "sd_card", "Atualizar pelo cartão SD?", "NAO", "SIM", update_sd_confirmed, NULL);
 }
 
-/* Tela de espera enquanto fala com o GitHub. */
-static void show_waiting(const char *text)
-{
-    static gfx_t g;
-    gfx_init(&g);
-    gfx_text_center(&g, 0, GFX_WIDTH, 28, text, GFX_WHITE);
-    display_send(&g);
-}
 
 static char github_tag[24];
 
@@ -516,7 +495,7 @@ static void update_github_confirmed(int r, void *ctx)
     }
     char error[48] = "";
     app_save();
-    show_waiting("Conectando...");
+    ui_busy_show("github", "Conectando");
     network_use();
     bool ok = network_wait(15000);
     if (!ok) {
@@ -543,7 +522,7 @@ static void update_github(void)
         return;
     }
     char error[48] = "";
-    show_waiting("Verificando...");
+    ui_busy_show("github", "Verificando");
     network_use();
     bool ok = network_wait(15000);
     if (!ok) {
@@ -620,8 +599,6 @@ static void restart(void)
 /* ========================================================================= */
 
 static void open_wifi(void) { submenu_open(&MENU_WIFI); }
-/* Conectar: fica visível para outros Guarás por perto e recebe itens. */
-static void open_meet(void) { screens_open_meet(-1, 0); }
 static void open_energy(void) { submenu_open(&MENU_ENERGY); }
 static void open_storage(void) { submenu_open(&MENU_STORAGE); }
 static void open_sound(void) { submenu_open(&MENU_SOUND); }
@@ -629,7 +606,6 @@ static void open_system(void) { submenu_open(&MENU_SYSTEM); }
 
 static const submenu_item_t ITEMS_SETTINGS[] = {
     {"wifi", "Wi-Fi", info_wifi, open_wifi},
-    {"connect", "Conectar", NULL, open_meet},
     {"battery", "Energia", info_energy, open_energy},
     {"box", "Armazenamento", info_storage, open_storage},
     {"joystick", "Controle", NULL, open_controller},
@@ -637,7 +613,7 @@ static const submenu_item_t ITEMS_SETTINGS[] = {
     {"info", "Sistema", NULL, open_system},
     {"kill", "Reiniciar", NULL, restart},
 };
-static const submenu_t MENU_SETTINGS = {"AJUSTES", ITEMS_SETTINGS, 8};
+static const submenu_t MENU_SETTINGS = {"AJUSTES", ITEMS_SETTINGS, 7};
 
 /* Abre o sub-menu Ajustes. */
 void settings_open_menu(void)

@@ -9,6 +9,7 @@
 #include "ui.h"
 
 extern const screen_t SCREEN_HOME;
+extern const screen_t SCREEN_CONNECT; /* sub-menu Conectar: Buscar Guará e conexões aceitas */
 extern const screen_t SCREEN_BIRTH;
 extern const screen_t SCREEN_MENU;
 extern const screen_t SCREEN_GUARA;
@@ -38,6 +39,7 @@ void screens_trigger_alarm(const char *title);
 bool screens_alarm_ringing(void);
 void screens_offer_update(const char *tag); /* confirma a release achada no GitHub */
 void screens_open_meet(int item_id, int count); /* Conectar: -1 só recebe; senão envia o item */
+void screens_close_meet(void); /* fecha a busca do Conectar (e o que houver sobre ela) */
 /* Combate contra outro Guará pelo Conectar (quem desafiou é o anfitrião) e o motivo de não poder lutar */
 void arena_open_versus(const uint8_t mac[6], uint32_t uid, const char *name, bool host);
 const char *arena_cannot_fight(const char **icon);

@@ -42,6 +42,8 @@
 #define VERSUS_STATE_MS 100   /* anfitrião: estado das barras para o convidado */
 #define VERSUS_RESEND_MS 300  /* repete o que ainda não teve resposta (START, ação do convidado) */
 #define VERSUS_STUCK_MS 3000  /* convidado: preparo sem resultado (mensagem perdida) é abandonado */
+#define VERSUS_ALIVE_MS 300   /* presença direta (unicast, com reenvio do rádio) para o outro aparelho */
+#define VERSUS_TIMEOUT_MS 6000 /* sem nenhuma notícia do outro por esse tempo: conexão perdida */
 
 static combat_t combat;
 static fighter_t player, opponent;
@@ -71,6 +73,7 @@ static bool versus_started;   /* os dois lutadores trocados (START) */
 static bool connection_lost;
 static uint16_t send_seq, last_seq; /* mensagens enviadas e a última recebida do anfitrião */
 static uint32_t last_state_at, last_resend_at;
+static uint32_t peer_heard_at, last_alive_at; /* última notícia do outro e última presença direta enviada */
 /* Anfitrião: ação escolhida e reação do convidado */
 static bool remote_pending;
 static combat_action_t remote_action;
@@ -376,6 +379,7 @@ static void on_open(void *param)
     memset(&last, 0, sizeof(last));
     animating = at_modal = picking = end_shown = pending = winding = item_fx = false;
     versus_started = connection_lost = remote_pending = input_acked = false;
+    peer_heard_at = last_alive_at = app_ms();
     send_seq = last_seq = remote_input_seq = input_seq = 0;
     notice[0] = '\0';
     combat_fighter_from_guara(&g_guara, &player);
@@ -455,12 +459,25 @@ static void on_key(const key_event_t *ev)
     }
 }
 
+/*
+ * Sai do combate: no treino, volta à Arena; contra outro Guará, fecha também
+ * a busca do Conectar e volta à tela em que se estava antes do desafio.
+ */
+static void leave_combat(void)
+{
+    if (mode == MODE_TRAINING) {
+        ui_back();
+    } else {
+        screens_close_meet();
+    }
+}
+
 /* Fecha a tela de combate depois da ficha de vitória. */
 static void card_closed(int r, void *ctx)
 {
     (void)r;
     (void)ctx;
-    ui_back();
+    leave_combat();
 }
 
 /* Aplica o resultado no Guará e mostra a ficha do vencedor. */
@@ -479,7 +496,7 @@ static void finish(void)
     if (!won) {
         guara_add_gauge(&g_guara, GAUGE_ANGER, -GAUGE_STEP_SADNESS);
         app_mark_changed();
-        ui_back();
+        leave_combat();
         return;
     }
     guara_set_state(&g_guara, ST_CURSED, false); /* cura com a vitória */
@@ -524,7 +541,7 @@ static void lost_closed(int r, void *ctx)
 {
     (void)r;
     (void)ctx;
-    ui_back();
+    leave_combat();
 }
 static void versus_lost(void)
 {
@@ -590,7 +607,7 @@ static void guest_apply_result(const link_msg_t *m, uint32_t now)
     (void)was_finished;
 }
 
-/* Verdadeiro se o outro Guará ainda dá sinal de presença. */
+/* Verdadeiro se o outro Guará deu presença há pouco (a lista do rádio esquece em 3,5 s). */
 static bool peer_present(void)
 {
     link_peer_t peers[LINK_MAX_PEERS];
@@ -612,6 +629,7 @@ static void versus_poll(uint32_t now)
         if (m.from.uid != peer_uid) {
             continue; /* outros Guarás por perto: ofertas e desafios ficam sem resposta */
         }
+        peer_heard_at = now; /* qualquer mensagem do outro é sinal de vida */
         if (m.type == LINK_BYE) {
             versus_lost();
         } else if (m.type == LINK_CHALLENGE) {
@@ -684,7 +702,21 @@ static void versus_poll(uint32_t now)
             last_resend_at = now;
         }
     }
-    if (!peer_present()) {
+    /*
+     * Queda: nenhuma mensagem nem presença do outro por VERSUS_TIMEOUT_MS. A
+     * presença em broadcast não tem reenvio e se perde fácil; por isso, no
+     * combate, cada lado manda também uma presença direta (unicast, com
+     * confirmação e reenvio do rádio) a cada VERSUS_ALIVE_MS.
+     */
+    if (now - last_alive_at >= VERSUS_ALIVE_MS) {
+        last_alive_at = now;
+        link_msg_t alive = {.type = LINK_HELLO};
+        versus_send(&alive);
+    }
+    if (peer_present()) {
+        peer_heard_at = now;
+    }
+    if (now - peer_heard_at >= VERSUS_TIMEOUT_MS) {
         versus_lost();
     }
 }
@@ -931,8 +963,9 @@ static void on_draw(gfx_t *g, uint32_t now)
     step(now);
     if (mode != MODE_TRAINING && !versus_started) {
         char line[40];
-        snprintf(line, sizeof(line), "Conectando com %s...", peer_name);
-        ui_paragraph(g, 4, 24, GFX_WIDTH - 8, 2, line, true);
+        snprintf(line, sizeof(line), "com %s", peer_name);
+        ui_text_dots(g, 0, GFX_WIDTH, 22, "Conectando", now, GFX_WHITE);
+        gfx_text_center(g, 0, GFX_WIDTH, 32, line, GFX_WHITE);
         return;
     }
     const fighter_t *me = &combat.side[0], *op = &combat.side[1];

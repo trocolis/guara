@@ -313,26 +313,32 @@ Implementação: `src/system/network.c`. O rádio só liga quando alguma tarefa 
 - **Deep sleep:** o rádio é sempre desligado antes de dormir, e o comportamento é o mesmo no boot frio e ao acordar.
 - **Jogos e tarefas pesadas:** `network_suspend()` descarrega o Wi-Fi enquanto um jogo Lua roda, para liberar memória.
 - **Indicador na barra superior:** ícone de Wi-Fi apagado (xadrez) quando a rede está permitida e ociosa; barras subindo durante a conexão; barras de sinal (`wifi_1` a `wifi_3`) conectado; nenhum ícone com o Wi-Fi em `OFF`.
-- **Quem usa a rede:** sincronização NTP (automática e em Relógio > Configurar), busca, conexão e status em Ajustes > Wi-Fi e a atualização pelo GitHub (automática e no menu). A tela Conectar suspende a rede enquanto usa o rádio.
+- **Quem usa a rede:** sincronização NTP (automática e em Relógio > Configurar), busca, conexão e status em Ajustes > Wi-Fi e a atualização pelo GitHub (automática e no menu). O Conectar pega o rádio emprestado enquanto o aparelho está em uso e o devolve quando a rede precisa.
 
 
 ### Conectar
 
 Implementação: `src/screens/meet.c` (tela), `src/system/radio_link.c` (rádio) e `lib/core/src/link_proto.c` (protocolo, testado no `native`). Dois Guarás conversam por **ESP-NOW**, os quadros diretos do rádio Wi-Fi do ESP32, sem roteador nem pareamento.
 
-- **Rádio:** só fica ligado com a tela Conectar aberta. Ao abrir, a rede com roteador é suspensa (como nos jogos Lua), o Wi-Fi liga em modo estação no **canal 1** fixo, sem economia de energia do modem, e o ESP-NOW começa. Ao fechar, tudo é desligado e a rede volta. Com a tela aberta, o aparelho não entra no modo Ocioso nem no deep sleep, e a volta automática à tela principal não vale.
+- **Rádio:** o Conectar pega o rádio emprestado da rede com roteador (`network_lend`): o Wi-Fi liga em modo estação no **canal 1** fixo, sem economia de energia do modem, e o ESP-NOW começa.
+	- **Em segundo plano:** com o Wi-Fi em `ON` (Ajustes > Wi-Fi) e o Guará nascido, o aparelho fica visível e recebendo enquanto está em uso, em qualquer tela. O rádio só desliga no **modo Ocioso** (tela no brilho mínimo, após 30 s sem botões) e no deep sleep, e religa sozinho em segundo plano ao interagir. Uma task própria (`radio_link_background`) liga e desliga sem prender a tela. Isso gasta mais bateria do que o Wi-Fi sob demanda: o rádio fica ligado o tempo todo de uso.
+	- **Com a tela Conectar aberta:** o rádio liga na hora (ou aproveita o segundo plano) e fica até ela fechar; o aparelho não entra no modo Ocioso nem no deep sleep, e a volta automática à tela principal não vale.
+	- **A internet tem prioridade:** quem precisar da rede com roteador (NTP, GitHub, busca e conexão de redes, jogos Lua) pede o rádio de volta, e o Conectar o devolve na hora. Ele volta quando a rede termina, sem esperar os 30 s de folga dela. Enquanto a rede ainda tem trabalho automático vencido (NTP ou verificação de release ainda não tentados, como logo depois do boot), o Conectar espera; com o rádio emprestado, essas tarefas automáticas rodam quando ele desligar, no modo Ocioso.
+	- **Convites em qualquer tela:** uma oferta ou um desafio que chegar fora da tela Conectar abre o modal da busca, que pergunta se aceita. Nas telas que seguram o sono (jogos, combate, cronômetro contando) o convite espera.
 - **Presença:** a cada 1 s, cada aparelho envia em broadcast uma mensagem com UID, nome, nível, estágio, natureza, cor e cabeça. A lista mostra quem foi visto nos últimos 3,5 s (até 8), com o ícone da natureza, o nome e o nível (`NV7`).
 - **Mensagens:** 30 bytes fixos, little-endian: `GL`, versão (1), tipo, UID, nome (11 bytes), nível, estágio, natureza, cor, cabeça, número da troca (`tx`, u32), item e quantidade. Tipos: `HELLO` (presença), `OFFER`, `ACCEPT` e `DECLINE`. Mensagens de outra versão ou do próprio UID são ignoradas.
 - **Abrir:**
-	- por **Ajustes > Conectar** ou **Arena > Combate**: fica visível, recebe itens e desafios, e A num Guará da lista o desafia para um combate;
-	- por **Inventário > Compartilhar**: depois da quantidade, mostra "Procurando Guarás..." e "Dar 3 Maçã"; A no Guará escolhido envia a oferta e mostra "Aguardando Fulano..." (B cancela a espera).
+	- por **Conectar > Buscar Guará** (menu principal) ou **Arena > Combate**: fica visível, recebe itens e desafios, e A num Guará da lista o desafia para um combate;
+	- por uma **conexão aceita** do sub-menu Conectar, com **Desafiar**: mostra "Buscando Fulano..." e envia o desafio assim que esse Guará aparecer;
+	- por **Inventário > Compartilhar**: depois da quantidade, o mesmo modal mostra "Buscando... Dar 3 Maçã" e, com os resultados, DAR (A); A no Guará escolhido envia a oferta e mostra "Aguardando Fulano..." (B cancela a espera).
 - **Troca de itens:**
 	1. Quem envia sorteia um `tx` e repete o `OFFER` a cada 700 ms até a resposta, por até 30 s ("Fulano não respondeu.").
 	2. Quem recebe, com a tela Conectar aberta, toca um bipe e pergunta "Fulano quer te dar 3 Maçã. Aceitar?". SIM soma os itens (limitado a 255 por item; o excedente se perde), grava o save e responde `ACCEPT`; NAO responde `DECLINE`. Itens que o catálogo de quem recebe não tem são recusados sozinhos.
 	3. Quem envia só desconta os itens ao receber o `ACCEPT`, uma vez por `tx`, grava o save e mostra "Fulano recebeu 3 Maçã!"; o OK volta ao Inventário. Um `ACCEPT` que chegar depois de cancelar a espera ainda desconta.
 	4. As respostas ficam registradas pelo par (UID, `tx`) nas 8 últimas ofertas aceitas e recusadas: uma oferta repetida porque a resposta se perdeu recebe a mesma resposta, sem somar de novo.
 	- Limite conhecido: se quem envia fechar a tela antes de o `ACCEPT` chegar, quem recebeu fica com os itens e quem enviou também.
-- **Desafio:** em Ajustes > Conectar ou Arena > Combate, A num Guará da lista pergunta "Desafiar Fulano (NV7) para um combate?" e envia o `CHALLENGE`, repetido como a oferta. Do outro lado aparece "Fulano (NV7) te desafiou! Aceitar?"; quem não pode lutar (desmaiado, dormindo ou com HP abaixo de 20%) recusa sozinho. Aceito, os dois abrem a tela de combate; ver *Combate entre dois Guarás*.
+- **Ao terminar:** o fim de uma troca (o OK do aviso, dos dois lados, ou recusar a oferta) e o fim do combate (vitória, derrota ou conexão perdida) fecham também a busca e voltam à tela em que se estava antes: a tela principal, o Inventário, o sub-menu Conectar etc. Quem ofereceu ou desafiou e recebeu um "não" continua na busca, para escolher outro Guará.
+- **Desafio:** em Conectar > Buscar Guará ou Arena > Combate, A num Guará da lista pergunta "Desafiar Fulano (NV7) para um combate?" e envia o `CHALLENGE`, repetido como a oferta. Do outro lado aparece "Fulano (NV7) te desafiou! Aceitar?"; quem não pode lutar (desmaiado, dormindo ou com HP abaixo de 20%) recusa sozinho. Aceito, os dois abrem a tela de combate; ver *Combate entre dois Guarás*.
 ___
 
 ## Interface
@@ -356,7 +362,7 @@ As capturas desta seção estão em `bitmaps/exemple/`, ampliadas 4x (512x256).
 - **Rodapé:** só aparece nas telas que o pedem. Ocupa a faixa Y=54..63 com fundo preto, separado por uma linha branca em Y=53, e fica por cima do conteúdo que rola. Segue a disposição física dos botões (B à esquerda de quem olha, A à direita), com os sprites de 10x10 ![botão B](./bitmaps/ui/button_b.bmp) e ![botão A](./bitmaps/ui/button_a.bmp):
 	- **Tela cheia:** B em X=2, Y=54 e A em X=116, Y=54.
 	- **Modal:** B em X=11, Y=47 e A em X=107, Y=47.
-	- As legendas ficam a 3 px dos sprites, sem divisória central (cerca de 47 px para cada lado na tela cheia e 38 px no modal). Os sprites são fixos; só as legendas longas rolam com *marquee*. Use termos curtos: "VOLTAR", "SAIR", "NAO" para B; "OK", "SIM", "SALVAR", "INICIAR" para A.
+	- As legendas ficam a 3 px dos sprites, sem divisória central (cerca de 47 px para cada lado na tela cheia e 38 px no modal). Com uma legenda só, ela usa a largura toda. Os sprites são fixos; só as legendas longas rolam com *marquee*. Use termos curtos: "VOLTAR", "SAIR", "NAO" para B; "OK", "SIM", "SALVAR", "INICIAR" para A.
 
 	![Rodapé](./bitmaps/exemple/screen_stopwatch.bmp)
 
@@ -368,6 +374,7 @@ As capturas desta seção estão em `bitmaps/exemple/`, ampliadas 4x (512x256).
 
 	![Modal de escolha](./bitmaps/exemple/screen_inventory_actions.bmp) ![Modal de detalhes](./bitmaps/exemple/screen_item_details.bmp) ![Modal de confirmação](./bitmaps/exemple/screen_rebirth_confirm.bmp)
 
+- **Espera:** todo texto de operação em andamento ("Buscando", "Conectando", "Verificando", "Atualizando", "Aguardando Fulano") termina com reticências animadas: os pontos aparecem um a um a cada 400 ms, somem e recomeçam. O texto fica parado, na posição que teria com os três pontos. Nas operações que seguram o laço principal (conectar ao Wi-Fi, buscar redes, falar com o GitHub, gravar uma atualização), a tela de espera (`src/ui/busy.c`, com ícone ou barra de progresso) é redesenhada por um timer e some sozinha quando o laço volta a desenhar as telas.
 - **Teclado virtual:** grade com três páginas, `ABC` (maiúsculas), `abc` (minúsculas) e `123` (números e símbolos), e a linha de atalhos página, `ESPACO`, `APAGAR` e `OK`. Os direcionais movem o cursor, A digita a tecla ou aciona o atalho e B cancela. É usado no nome do Guará, nas senhas de Wi-Fi e para renomear arquivos.
 
 	![Teclado virtual](./bitmaps/exemple/screen_keyboard.bmp)
@@ -406,11 +413,11 @@ Mostra o Guará e suas animações, a barra superior e o balão de estados. A ab
 
 ### Menu principal
 
-Um carrossel com os 12 menus. No centro fica o ícone do menu selecionado ampliado 2x; dos lados, os ícones vizinhos em 1x, a 40 px de distância, e setas apontando para fora nas bordas. Embaixo, o nome do menu numa caixa branca (Y=44) e uma linha de pontos, um por menu, com o selecionado destacado (Y=58). ←/→ giram o carrossel com uma animação de 160 ms, em que o ícone que sai do centro diminui para 1x e o que chega aumenta para 2x. A abre o menu e B volta à tela principal.
+Um carrossel com os 13 menus. No centro fica o ícone do menu selecionado ampliado 2x; dos lados, os ícones vizinhos em 1x, a 40 px de distância, e setas apontando para fora nas bordas. Embaixo, o nome do menu numa caixa branca (Y=44) e uma linha de pontos, um por menu, com o selecionado destacado (Y=58). ←/→ giram o carrossel com uma animação de 160 ms, em que o ícone que sai do centro diminui para 1x e o que chega aumenta para 2x. A abre o menu e B volta à tela principal.
 
 ![Menu principal](./bitmaps/exemple/screen_main_menu.bmp)
 
-A ordem é: Guará, Inventário, Equipamentos, Habilidades, Arena, Biblioteca, Jogos, Músicas, Imagens, Relógio, Cartão SD e Ajustes. Ao voltar de um menu com alterações pendentes, o save é gravado na Flash.
+A ordem é: Guará, Inventário, Equipamentos, Habilidades, Arena, Biblioteca, Jogos, Músicas, Imagens, Relógio, Cartão SD, Conectar e Ajustes. Ao voltar de um menu com alterações pendentes, o save é gravado na Flash.
 
 ___
 
@@ -443,7 +450,7 @@ A abre um modal de escolha com:
 - **Comer / Beber / Usar** (conforme o tipo): aplica o item e mostra a animação na tela principal. Se o Guará estiver desmaiado ou amaldiçoado, um alerta explica por que não dá para usar. Se o item não faria efeito, ele não é gasto e o Guará o recusa na tela principal (ver *Área de itens*): comida e bebida com a alimentação (FP) cheia; poção que só recupera HP e/ou MP já cheios e não cura nenhum estado que ele tenha.
 - **Detalhes:** descrição, efeitos (ex.: `Alimentação +15%`), curas e afinidade.
 - **Descartar:** modal de quantidade e, depois, confirmação ("Descartar 3 Maçã?").
-- **Compartilhar:** modal de quantidade e, depois, a tela *Conectar* no modo envio, para escolher o Guará que vai receber (ver *Ajustes > Conectar*).
+- **Compartilhar:** modal de quantidade e, depois, a tela *Conectar* no modo envio, para escolher o Guará que vai receber (ver *Conectar*).
 
 O conteúdo do catálogo está em [CATALOG.md](CATALOG.md).
 
@@ -514,7 +521,7 @@ A tela de combate é a mesma do treino, com o próprio Guará sempre à esquerda
 	- As mensagens do anfitrião têm número de sequência; o convidado descarta as repetidas e as atrasadas, e `WINDUP` e `RESULT` saem duas vezes. Um preparo sem resultado por 3 s é abandonado.
 	- As poções saem do inventário de cada um, no próprio aparelho.
 - **Fim:** cada aparelho aplica no próprio Guará as mesmas consequências do treino (HP, MP, estados, energia, XP, item e medidores).
-- **Conexão perdida:** se o outro Guará sair da tela ou deixar de dar sinal de presença por 3,5 s antes do fim, aparece "Conexão com Fulano perdida." e a tela volta ao Conectar, sem consequências para o Guará.
+- **Conexão perdida:** durante o combate, cada lado manda ao outro, a cada 300 ms, uma presença direta (unicast, com confirmação e reenvio do rádio, ao contrário da presença em broadcast, que se perde fácil), e qualquer mensagem do outro conta como sinal de vida. Se o outro Guará sair da tela ou ficar 6 s sem dar notícia antes do fim, aparece "Conexão com Fulano perdida." e a tela volta ao Conectar, sem consequências para o Guará.
 
 #### Fórmulas do combate
 
@@ -702,6 +709,13 @@ Gerenciador de arquivos do cartão no padrão de sub-menu, começando em `/sdcar
 	- **Excluir:** pede duas confirmações; pastas são apagadas com o conteúdo.
 	- **Detalhes:** nome completo, tipo e tamanho em bytes.
 
+### Conectar ![Conectar](./bitmaps/icons/connect.bmp)
+
+Sub-menu com a comunicação direta com outros Guarás por perto, sem roteador (ver *Conectar*, em Firmware):
+
+- **Buscar Guará** ![buscar](./bitmaps/icons/search.bmp): abre a busca num modal sobre o sub-menu: o ícone de busca e "Buscando...", com SAIR (B), até algum Guará aparecer. Os resultados aparecem no próprio modal, 2 por vez, com o nome e o nível (`NV7`) e a seleção em retângulo arredondado; ↑/↓ escolhem, A desafia (LUTAR) e B sai (SAIR). Enquanto o modal está aberto, recebe itens e desafios. A espera pela resposta ("Aguardando Fulano...") e a busca de uma conexão aceita ("Buscando Fulano...") usam o mesmo modal.
+- **Conexões aceitas** ![conexão](./bitmaps/icons/guara.bmp): em seguida, da mais recente para a mais antiga, os Guarás com quem uma troca de itens ou um desafio já foi aceito, de qualquer lado, com o nome e o nível (`NV7`) do último encontro. Ficam na NVS (`config_save_connection`, até 8; cheia, sai a mais antiga). A abre um modal com **Desafiar**, que abre a busca e desafia esse Guará assim que ele aparecer, e **Esquecer**, com confirmação.
+
 ### Ajustes ![Ajustes](./bitmaps/icons/adjustments.bmp)
 
 Sub-menu com o estado de cada opção à direita.
@@ -716,28 +730,27 @@ Sub-menu com o estado de cada opção à direita.
 
 	![Wi-Fi](./bitmaps/exemple/screen_settings_wifi.bmp)
 
-2. **Conectar** ![Conectar](./bitmaps/icons/connect.bmp): comunicação direta com outros Guarás por perto, sem roteador. Ver *Conectar*.
-3. **Energia** ![Energia](./bitmaps/icons/battery.bmp) (`###%` / `USB`):
+2. **Energia** ![Energia](./bitmaps/icons/battery.bmp) (`###%` / `USB`):
 	1. **Status** ![status](./bitmaps/icons/info.bmp): porcentagem, tensão e se está carregando.
 	2. **Economia** ![economia](./bitmaps/icons/plant.bmp): tempo sem uso até o deep sleep: 1, 2, 5 ou 10 minutos, ou Desativado (`OFF`).
 
 	![Energia](./bitmaps/exemple/screen_settings_energy.bmp) ![Economia](./bitmaps/exemple/screen_power_save.bmp)
 
-4. **Armazenamento** ![Armazenamento](./bitmaps/icons/box.bmp) (`OK` / `--`):
+3. **Armazenamento** ![Armazenamento](./bitmaps/icons/box.bmp) (`OK` / `--`):
 	1. **Memória interna** ![memória interna](./bitmaps/icons/chip.bmp): bitmaps da VROM, registros do catálogo, saves gravados e memória livre.
 	2. **Micro SD** ![micro SD](./bitmaps/icons/sd_card.bmp):
 		1. **Status** ![status](./bitmaps/icons/info.bmp): capacidade e espaço livre do cartão.
 		2. **Remover** ![remover](./bitmaps/icons/sd_card.bmp): remoção segura. Desmonta o cartão, gravando o que estiver pendente, e avisa "O cartão pode ser removido."; sem cartão montado, avisa "Nenhum cartão montado.". Armazenamento passa a mostrar `--`, e o cartão volta a ser montado sozinho quando alguma tela precisar dele.
-5. **Controle** ![Controle](./bitmaps/icons/joystick.bmp): teste dos botões, que acendem na tela enquanto pressionados. Segure B por 1 s para sair.
-6. **Som** ![Som](./bitmaps/icons/sound.bmp) (`MUDO` / vazio):
+4. **Controle** ![Controle](./bitmaps/icons/joystick.bmp): teste dos botões, que acendem na tela enquanto pressionados. Segure B por 1 s para sair.
+5. **Som** ![Som](./bitmaps/icons/sound.bmp) (`MUDO` / vazio):
 	1. **Mudo** ![mudo](./bitmaps/icons/mute.bmp): liga ou desliga o som. Os alarmes tocam mesmo no mudo.
 	2. **Teste de som** ![teste de som](./bitmaps/icons/boom_box.bmp): toca uma escala no buzzer.
-7. **Sistema** ![Sistema](./bitmaps/icons/info.bmp):
+6. **Sistema** ![Sistema](./bitmaps/icons/info.bmp):
 	1. **Status** ![status](./bitmaps/icons/info.bmp): versão do firmware, data da compilação, versão do ESP-IDF, memória livre e maior bloco livre.
 	2. **Atualizar** ![atualizar](./bitmaps/icons/satellite.bmp):
 		1. **GitHub** ![GitHub](./bitmaps/icons/github.bmp): com o Wi-Fi ligado, mostra "Verificando..." e busca a última release do repositório `trocolis/guara` (`OTA_GITHUB_REPO` em `src/system/ota.h`). Se ela for mais nova que o firmware, pede confirmação ("Atualizar de v0.11.4 para v0.12.0?"), grava o save, baixa o `firmware.bin` com a barra de progresso e, se a release tiver um, o `storage.bin`, e reinicia. Se não houver versão mais nova, avisa "Já está na versão mais recente". A verificação também é automática, a cada 24 h. Ver *Atualização pelo GitHub*.
 		2. **Micro SD** ![micro SD](./bitmaps/icons/sd_card.bmp): com confirmação, grava `/sdcard/update/firmware.bin` na partição OTA livre e/ou `/sdcard/update/storage.bin` na partição `storage`, e reinicia.
-8. **Reiniciar** ![Reiniciar](./bitmaps/icons/kill.bmp): apaga o Guará e começa de novo (*Factory Rebirth*). Pede duas confirmações ("Apagar o Guará e começar de novo?" e "Perda irreversível! Tem certeza?"). Ao confirmar, o anel de saves é apagado e começa o nascimento de um novo Guará.
+7. **Reiniciar** ![Reiniciar](./bitmaps/icons/kill.bmp): apaga o Guará e começa de novo (*Factory Rebirth*). Pede duas confirmações ("Apagar o Guará e começar de novo?" e "Perda irreversível! Tem certeza?"). Ao confirmar, o anel de saves é apagado e começa o nascimento de um novo Guará.
 
 ___
 
