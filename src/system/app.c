@@ -42,6 +42,7 @@ static uint32_t monotonic_minutes;
 static int consecutive_critical;
 
 #define IDLE_AFTER_MS 30000 /* sem botões por 30 s: modo Ocioso */
+#define MENU_TIMEOUT_MS 60000 /* menu aberto sem botões por 1 min: volta à tela principal */
 #define IDLE_MAX_FPS 5
 static int swallowed_key = -1; /* tecla que só acordou do Ocioso: ignorada até ser solta */
 
@@ -328,6 +329,22 @@ static void check_battery(void)
     }
 }
 
+/*
+ * Menu aberto por MENU_TIMEOUT_MS sem nenhum botão: volta à tela principal.
+ * Não vale em jogos, combate e cronômetro (bloqueiam o sono), com alarme
+ * tocando, antes do nascimento e nas telas de leitura (keep_open).
+ */
+static void check_menu_timeout(uint32_t now)
+{
+    const screen_t *top = ui_top();
+    if (!g_has_guara || top == &SCREEN_HOME || (top && top->keep_open) || sleep_blocked ||
+        screens_alarm_ringing() || now - buttons_last_use_ms() < MENU_TIMEOUT_MS) {
+        return;
+    }
+    ESP_LOGI(TAG, "Menu ocioso: voltando à tela principal");
+    ui_back_until(&SCREEN_HOME);
+}
+
 /* Entra no modo Ocioso após 30 s sem botões, exceto nas telas que impedem o sono. */
 static void check_idle(uint32_t now)
 {
@@ -413,6 +430,7 @@ void app_run(void)
                 sleep_due_to_inactivity();
             }
             check_inactivity(now);
+            check_menu_timeout(now);
             check_idle(now);
         }
 

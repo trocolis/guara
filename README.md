@@ -353,6 +353,7 @@ As capturas desta seção estão em `bitmaps/exemple/`, ampliadas 4x (512x256).
 	![Teclado virtual](./bitmaps/exemple/screen_keyboard.bmp)
 
 - **Comportamento padrão:** B, "voltar" ou o fim de uma ação sempre retornam à tela anterior pelo caminho inverso, com a mesma posição e o mesmo item selecionado. Exemplo: depois de comer um item, a animação aparece na tela principal e o inventário volta com o item ainda selecionado.
+- **Volta automática:** com qualquer menu ou modal aberto por **1 minuto** sem nenhum botão, o aparelho fecha tudo e volta à tela principal (gravando o save pendente, como ao voltar com B). Não vale nas telas que impedem o sono (jogos, combate e cronômetro contando), com alarme tocando, antes do nascimento e nas telas de leitura, marcadas com `keep_open` (o leitor da Biblioteca e o visualizador de imagens).
 
 ### Boot
 

@@ -77,7 +77,7 @@ python3 tools/bmp-builder/bmp_builder.py in.png -o bitmaps/icons/x.bmp --preset 
   - `lua`: vendored 5.4.7 with `LUA_32BITS` and no io/os/package/debug; excluded from `native`.
 
 UI patterns:
-- A screen is a `screen_t` with callbacks (`on_open`, `on_resume`, `on_close`, `on_key`, `on_draw`, and the optional `on_draw_over`, drawn on top of the modals above the screen). Reusable screens that can be stacked (modals, `submenu`) keep per-layer state indexed by `ui_current_layer()`.
+- A screen is a `screen_t` with callbacks (`on_open`, `on_resume`, `on_close`, `on_key`, `on_draw`, and the optional `on_draw_over`, drawn on top of the modals above the screen). After 1 min without keys the app returns to the home screen, except while sleep is blocked or on screens with `keep_open` (reader, image viewer). Reusable screens that can be stacked (modals, `submenu`) keep per-layer state indexed by `ui_current_layer()`.
 - Modal results arrive through a callback *after* the modal has been popped, so the callback may open new screens.
 - Call `app_mark_changed()` after changing `g_guara`. It mirrors to RTC RAM and sets the dirty flag; the flash save happens when returning to the menu or main screen. Use `app_save()` for critical events.
 

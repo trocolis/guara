@@ -15,6 +15,7 @@ typedef struct screen {
     const char *name;
     bool modal;  /* desenha a tela de baixo antes (sobreposição) */
     uint8_t fps; /* 0 = padrão (20 FPS) */
+    bool keep_open; /* não volta sozinha à tela principal por inatividade (leitura, imagem) */
     void (*on_open)(void *param);
     void (*on_resume)(void);
     void (*on_close)(void);

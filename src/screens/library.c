@@ -311,6 +311,7 @@ static void reader_close(void)
 
 static const screen_t SCREEN_READER = {
     .name = "leitor",
+    .keep_open = true, /* ler uma página pode levar mais de 1 minuto */
     .on_key = reader_key,
     .on_draw = reader_draw,
     .on_close = reader_close,

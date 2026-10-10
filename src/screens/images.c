@@ -64,6 +64,7 @@ static void viewer_close(void)
 }
 
 static const screen_t SCREEN_VIEWER = {
+    .keep_open = true,
     .name = "visualizador",
     .on_key = viewer_key,
     .on_draw = viewer_draw,
