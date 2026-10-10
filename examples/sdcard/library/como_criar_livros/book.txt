@@ -1,24 +1,24 @@
-==COMO CRIAR LIVROS==
+#Como Criar Livros#
 
 Escreva seus próprios livros para a Biblioteca do Guará.
 
 {{library}}
 
-1. TEXTO OU LIVRO
+#1. Texto ou livro#
 
 {{txt}}
 
-O jeito mais simples é um arquivo **.txt** solto na pasta /library do cartão. O nome do arquivo vira o título: o _ vira espaço e a extensão some.
+O jeito mais simples é um arquivo **.txt** solto na pasta /library do cartão. O nome do arquivo aparece na lista da Biblioteca: o _ vira espaço e a extensão some.
 
 {{book}}
 
 Um **livro** é uma pasta dentro de /library com dois arquivos:
 
-book.ini: o título.
+**book.ini:** o nome que aparece na lista.
 
-book.txt: o texto.
+**book.txt:** o texto.
 
-2. O BOOK.INI
+#2. O book.ini#
 
 Ele tem só duas linhas:
 
@@ -26,9 +26,9 @@ Ele tem só duas linhas:
 
 title=Meu Livro
 
-Sem o title, o título é o nome da pasta.
+Sem o title, a lista mostra o nome da pasta.
 
-3. ESCREVENDO
+#3. Escrevendo#
 
 Salve o texto em UTF-8, com acentos e ç à vontade. Cada linha do arquivo vira um parágrafo, e o leitor quebra o texto sozinho em linhas de até 20 letras, preferindo os espaços.
 
@@ -36,7 +36,21 @@ Uma linha vazia no arquivo vira uma linha vazia na tela. Use para separar os ass
 
 O arquivo pode ter até 64 KB.
 
-4. ESTILOS
+#4. Títulos#
+
+O leitor não mostra barra de título: o título fica por sua conta. Uma linha que começa e termina com # vira uma barra branca com o texto em preto, como esta:
+
+\#Meu título#
+
+#Meu título#
+
+Se o texto não couber na largura da tela, ele rola sozinho, como nas barras de título dos menus:
+
+#Um título comprido demais para caber numa linha só#
+
+Use um título no começo do livro e outros para separar os capítulos.
+
+#5. Estilos#
 
 Marque um trecho com os sinais abaixo, antes e depois dele:
 
@@ -56,9 +70,9 @@ Um estilo vale até ser fechado ou até o fim do parágrafo. Se esquecer de fech
 
 Para mostrar um sinal sem virar estilo, ponha uma barra antes: \\\* mostra \*. Para mostrar a barra, use duas: \\\\.
 
-5. IMAGENS
+#6. Imagens#
 
-Uma imagem fica numa linha própria, centralizada. Escreva o nome entre chaves duplas, sozinho na linha:
+Uma imagem fica numa linha própria, centralizada. Escreva o nome entre chaves duplas, **sozinho na linha**:
 
 \{{attack}}
 
@@ -88,18 +102,18 @@ bmp_builder.py desenho.png -o mapa.bmp --preset icon
 
 Não há limite de imagens por livro.
 
-6. NO APARELHO
+#7. No aparelho#
 
 {{sd_card}}
 
-Copie o .txt ou a pasta do livro para /library no cartão SD. Abra Biblioteca no menu: os livros aparecem com o ícone de livro.
+Copie o .txt ou a pasta do livro para /library no cartão SD. Abra **Biblioteca** no menu: os livros aparecem com o ícone de livro.
 
 No leitor, cima e baixo rolam uma linha, esquerda e direita uma página, e B fecha.
 
-Um .txt também abre pelo menu Cartão SD.
+Um .txt também abre pelo menu **Cartão SD**.
 
 {{info}}
 
-Dica: o Manual de Batalha, na mesma pasta de exemplos, é um livro completo com imagens da VROM. Abra o book.txt dele para ver como foi feito.
+==Dica:== o Manual de Batalha e o Manual do Guará, na mesma pasta de exemplos, são livros completos com títulos, estilos e imagens da VROM. Abra o book.txt deles para ver como foram feitos.
 
-Boa escrita!
+*Boa escrita!*

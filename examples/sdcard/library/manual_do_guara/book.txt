@@ -1,0 +1,287 @@
+#Manual do Guará#
+
+Tudo sobre cuidar do seu Guará e usar o aparelho.
+
+{{guara}}
+
+#1. Os botões#
+
+O aparelho tem seis botões: os quatro direcionais, **A** e **B**.
+
+{{button_a}}
+
+**A** abre, confirma e escolhe.
+
+{{button_b}}
+
+**B** volta. Voltar sempre leva à tela anterior, com o mesmo item selecionado.
+
+Cima e baixo movem a seleção nas listas; esquerda e direita trocam de aba.
+
+#2. O nascimento#
+
+No primeiro uso, o teclado da tela pede o nome do Guará, com até 10 letras. Ele nasce no nível 1, com uma natureza sorteada (Fogo, Terra, Água ou Ar), uma cor e uma das 9 cabeças.
+
+#3. A tela principal#
+
+O Guará fica no centro. No topo ficam o relógio e, do outro lado, os indicadores:
+
+{{battery_3}}
+
+Bateria: um tracinho a cada 25%. Carregando, os tracinhos se alternam.
+
+{{wifi_3}}
+
+Wi-Fi: o sinal da rede, quando conectado.
+
+{{happy}}
+
+O **balão** mostra como o Guará está: um estado como dormindo ou faminto, ou, de vez em quando, uma emoção.
+
+Aperte **A** para abrir o menu principal.
+
+#4. O menu principal#
+
+Os 12 menus ficam num carrossel: esquerda e direita giram, A abre e B volta para o Guará.
+
+{{guara}}
+
+**Guará:** nível, estado, atributos e natureza.
+
+{{inventory}}
+
+**Inventário:** comidas, bebidas e poções.
+
+{{equipment}}
+
+**Equipamentos:** o que o Guará veste.
+
+{{mp}}
+
+**Habilidades:** os golpes especiais.
+
+{{arena}}
+
+**Arena:** as batalhas.
+
+{{library}}
+
+**Biblioteca:** livros como este.
+
+{{games}}
+
+**Jogos:** minijogos do cartão.
+
+{{music}}
+
+**Músicas:** arquivos MIDI do cartão.
+
+{{images}}
+
+**Imagens:** desenhos do cartão.
+
+{{clock}}
+
+**Relógio:** despertador, cronômetro, temporizador e hora de dormir.
+
+{{sd_card}}
+
+**Cartão SD:** os arquivos do cartão.
+
+{{adjustments}}
+
+**Ajustes:** Wi-Fi, energia, som e sistema.
+
+#5. Os vitais#
+
+Na aba ESTADO do menu Guará:
+
+{{hp}}
+
+**HP:** a vida. Em zero, o Guará desmaia.
+
+{{mp}}
+
+**MP:** a magia das habilidades.
+
+{{energy}}
+
+**Energia:** cai acordado e volta dormindo.
+
+{{humor}}
+
+**Humor:** cai com fome ou cansaço, e quando ninguém brinca com ele.
+
+{{hamburger}}
+
+**Alimentação:** cai com o tempo. Com 10% ou menos, o Guará fica faminto e perde HP.
+
+{{health}}
+
+**Saúde:** com saúde alta, tudo se desgasta mais devagar.
+
+==Regra de ouro:== com alimentação, energia e humor acima de 50%, a saúde sobe e o HP se recupera sozinho.
+
+#6. Cuidando dele#
+
+{{apple}}
+
+No Inventário, escolha um item e **Comer**, **Beber** ou **Usar**. O Guará mostra na tela o que ganhou, como HP+10 ou FP+15.
+
+{{not}}
+
+Se o item não fizer efeito, ele recusa com cara de raiva e o item não é gasto: comida e bebida com a alimentação cheia, ou poção sem nada para recuperar.
+
+{{moon_face}}
+
+O Guará dorme na **hora de dormir** (Relógio > Hora de dormir) e acorda de manhã, se já tiver energia. Também dorme quando a energia acaba.
+
+Brinque com ele, leia, ouça música: o descaso deixa o Guará triste ou zangado.
+
+#7. Os estados#
+
+{{sleeping}}
+
+**Dormindo:** recupera energia.
+
+{{tired}}
+
+**Cansado:** energia abaixo de 20%; os atributos caem 30%.
+
+{{hungry}}
+
+**Faminto:** perde HP a cada minuto. Dê comida!
+
+{{fainted}}
+
+**Desmaiado:** com HP zero. Fica 10 minutos sem aceitar nada; depois, aceita itens que curam HP.
+
+{{poisoned}}
+
+**Envenenado:** perde HP e saúde a cada minuto. Use um antídoto.
+
+{{burning}}
+
+**Queimado:** como o veneno.
+
+{{frozen}}
+
+**Congelado:** como o veneno, e perde a vez nas batalhas.
+
+{{paralyzed}}
+
+**Paralisado:** perde a vez nas batalhas.
+
+{{confused}}
+
+**Confuso:** erra golpes e às vezes acerta a si mesmo.
+
+{{cursed}}
+
+**Amaldiçoado:** não usa itens nem habilidades. Passa ao vencer uma luta, ao desmaiar ou ao ouvir uma música.
+
+#8. As emoções#
+
+Só uma emoção vale por vez:
+
+{{happy}}
+
+**Feliz:** os quatro vitais acima de 80%; a saúde melhora mais rápido.
+
+{{sad}}
+
+**Triste:** humor baixo depois de muitas derrotas; tudo se desgasta mais rápido.
+
+{{angry}}
+
+**Zangado:** humor baixo por descaso; ATK sobe e DEF cai pela metade.
+
+{{bored}}
+
+**Entediado:** humor baixo, ou 2 horas sem atenção.
+
+#9. Nível e evolução#
+
+{{level}}
+
+Vencer na Arena e jogar minijogos dá **XP**. A cada nível, os atributos sobem. Guarás mais novos aprendem mais rápido.
+
+O Guará passa por cinco estágios: bebê, três fases de jovem e adulto.
+
+{{fire}}
+
+As comidas, as lutas e os jogos dão **afinidade** com os elementos. Ao crescer, se outro elemento for o mais forte, a natureza se funde: Fogo e Água viram Vapor, Terra e Ar viram Cristal, e assim por diante.
+
+{{light}}
+
+Um Guará que brinca logo depois de acordar pode virar **Luz**; um que brinca perto da hora de dormir, **Sombra**. Um muito inteligente, **Psíquico**.
+
+A natureza nova é para sempre.
+
+#10. Batalhas#
+
+{{fight}}
+
+Leia o **Manual de Batalha**, na Biblioteca, para aprender a lutar.
+
+#11. Diversão#
+
+{{games}}
+
+**Jogos:** pastas em /games no cartão. Jogar dá XP e humor.
+
+{{music}}
+
+**Músicas:** arquivos .mid em /music. A toca e pausa, cima e baixo trocam de faixa, esquerda e direita mudam o volume.
+
+{{library}}
+
+**Biblioteca:** livros em /library. Para escrever os seus, leia **Como Criar Livros**.
+
+{{images}}
+
+**Imagens:** arquivos .bmp de 1 bit em /image.
+
+#12. O relógio#
+
+{{alarm}}
+
+**Despertador:** até 8 horários. Toca mesmo com o aparelho dormindo.
+
+{{stopwatch}}
+
+**Cronômetro** e **Temporizador**. O temporizador também conta com o aparelho dormindo.
+
+{{satellite}}
+
+Com o Wi-Fi, a hora se acerta sozinha pela internet. Também dá para ajustar à mão em Relógio > Configurar.
+
+#13. Energia#
+
+{{battery_1}}
+
+Sem mexer por 30 segundos, a tela escurece para poupar bateria; o primeiro toque só acende de novo.
+
+{{plant}}
+
+Depois do tempo de **Economia** (Ajustes > Energia), o aparelho dorme de vez. A, B, cima ou baixo o acordam. O Guará continua vivendo enquanto o aparelho dorme.
+
+Com a bateria quase no fim, o aparelho salva tudo e desliga. Ligue o carregador.
+
+#14. Wi-Fi e atualização#
+
+{{wifi}}
+
+Em Ajustes > Wi-Fi, busque a sua rede e digite a senha. O rádio só liga quando precisa, para economizar bateria.
+
+{{github}}
+
+Com o Wi-Fi ligado, o Guará procura uma versão nova uma vez por dia e pergunta se você quer atualizar. Também dá para procurar em Ajustes > Sistema > Atualizar.
+
+#15. Começar de novo#
+
+{{kill}}
+
+Ajustes > Reiniciar apaga o Guará e começa um novo. Ele pede duas confirmações, porque ==não tem volta==.
+
+*Cuide bem do seu Guará!*

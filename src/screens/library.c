@@ -32,10 +32,12 @@
 
 /* ---------------- Leitor ---------------- */
 
+enum { LINE_TEXT, LINE_IMAGE, LINE_HEADER };
+
 typedef struct {
     uint32_t start;
     uint16_t bytes;
-    uint8_t image; /* 1 = linha de imagem {{...}} */
+    uint8_t kind;  /* LINE_TEXT, LINE_IMAGE ({{...}}) ou LINE_HEADER (#...#) */
     uint8_t style; /* estilos RICH_* ativos no começo da linha */
 } text_line_t;
 
@@ -45,8 +47,7 @@ static struct {
     int n_lines;
     int top;
     char folder[160];
-    char title[48];
-    uint32_t scrolled_at;
+    marquee_t marquees[4]; /* letreiro de cada cabeçalho visível (por posição na tela) */
     gfx_bitmap_t images[4];
     char image_names[4][32];
     uint32_t image_used[4]; /* último uso de cada imagem do cache (contador) */
@@ -54,10 +55,10 @@ static struct {
 } reader;
 
 /* Acrescenta uma linha ao índice do leitor. */
-static void add_line(uint32_t ini, int bytes, bool image, uint8_t style)
+static void add_line(uint32_t ini, int bytes, uint8_t kind, uint8_t style)
 {
     if (reader.n_lines < MAX_LINES) {
-        reader.lines[reader.n_lines++] = (text_line_t){ini, (uint16_t)bytes, image, style};
+        reader.lines[reader.n_lines++] = (text_line_t){ini, (uint16_t)bytes, kind, style};
     }
 }
 
@@ -82,7 +83,7 @@ static void paginate(void)
         if (opening && opening < paragraph_end) {
             const char *closing = strstr(opening, "}}");
             if (closing && closing < paragraph_end) {
-                add_line((uint32_t)(opening + 2 - t), (int)(closing - opening - 2), true, 0);
+                add_line((uint32_t)(opening + 2 - t), (int)(closing - opening - 2), LINE_IMAGE, 0);
                 p = closing + 2;
                 while (*p == ' ' || *p == '\r') {
                     p++;
@@ -94,11 +95,17 @@ static void paginate(void)
             }
         }
         if (p == paragraph_end || (p + 1 == paragraph_end && *p == '\r')) {
-            add_line((uint32_t)(p - t), 0, false, 0);
+            add_line((uint32_t)(p - t), 0, LINE_TEXT, 0);
         }
         const char *text_end = paragraph_end;
         if (text_end > p && text_end[-1] == '\r') {
             text_end--;
+        }
+        /* #TEXTO#: o parágrafo inteiro vira um cabeçalho (barra branca, texto rolando se não couber) */
+        if (text_end - p >= 2 && *p == '#' && text_end[-1] == '#') {
+            add_line((uint32_t)(p + 1 - t), (int)(text_end - p - 2), LINE_HEADER, 0);
+            p = *paragraph_end ? paragraph_end + 1 : paragraph_end;
+            continue;
         }
         uint8_t style = 0; /* cada parágrafo começa sem estilo */
         while (p < text_end) {
@@ -132,7 +139,7 @@ static void paginate(void)
             if (!visible) {
                 break; /* só marcações sem texto: nada mais a mostrar */
             }
-            add_line((uint32_t)(p - t), (int)(q - p), false, line_style);
+            add_line((uint32_t)(p - t), (int)(q - p), LINE_TEXT, line_style);
             style = s;
             p = q;
             while (p < paragraph_end && *p == ' ') {
@@ -208,12 +215,16 @@ static const gfx_bitmap_t *book_image(const char *name, int n)
 }
 
 #define HEIGHT_LINE 9 /* 8 px da fonte + 1 px entre linhas */
+#define HEIGHT_HEADER (UI_TITLE_HEIGHT + 1) /* barra do cabeçalho + 1 px */
 
 /* Altura em pixels da linha (texto ou imagem). */
 static int height(int i)
 {
     /* Imagem: a altura dela + 1 px, o mesmo espaço que separa duas linhas de texto */
-    if (reader.lines[i].image) {
+    if (reader.lines[i].kind == LINE_HEADER) {
+        return HEIGHT_HEADER;
+    }
+    if (reader.lines[i].kind == LINE_IMAGE) {
         const gfx_bitmap_t *b = book_image(reader.text + reader.lines[i].start, reader.lines[i].bytes);
         return b ? b->height + 1 : HEIGHT_LINE;
     }
@@ -226,7 +237,6 @@ static void reader_key(const key_event_t *ev)
     if (ev->type == KEY_RELEASED) {
         return;
     }
-    int before = reader.top;
     switch (ev->key) {
     case KEY_UP: reader.top--; break;
     case KEY_DOWN: reader.top++; break;
@@ -245,24 +255,36 @@ static void reader_key(const key_event_t *ev)
     if (reader.top < 0) {
         reader.top = 0;
     }
-    if (before == 0 && reader.top > 0) {
-        reader.scrolled_at = app_ms();
+}
+
+/*
+ * Cabeçalho #TEXTO#: barra branca da largura da tela com o texto em preto,
+ * centralizado, ou rolando como nas barras de título se não couber.
+ */
+static void draw_header(gfx_t *g, int y, const text_line_t *l, marquee_t *m, uint32_t now)
+{
+    char buf[96];
+    int n = l->bytes < (int)sizeof(buf) - 1 ? l->bytes : (int)sizeof(buf) - 1;
+    memcpy(buf, reader.text + l->start, (size_t)n);
+    buf[n] = '\0';
+    gfx_rect_filled(g, 0, y, GFX_WIDTH, UI_TITLE_HEIGHT, GFX_WHITE);
+    int w = gfx_text_width(buf);
+    if (w <= GFX_WIDTH - 4) {
+        gfx_text(g, (GFX_WIDTH - w) / 2, y + UI_TITLE_TEXT_Y, buf, GFX_BLACK);
+    } else {
+        ui_marquee_text(g, 2, y + UI_TITLE_TEXT_Y, GFX_WIDTH - 4, buf, GFX_BLACK, true, m, now);
     }
 }
 
-/* Desenha as linhas; a barra de título some suavemente ao rolar. */
+/* Desenha as linhas visíveis (o título fica a cargo do texto, com #TEXTO#). */
 static void reader_draw(gfx_t *g, uint32_t now)
 {
-    /* A barra de título some suavemente quando o texto rola para baixo */
-    int title_h = UI_TITLE_HEIGHT;
-    if (reader.top > 0) {
-        uint32_t t = now - reader.scrolled_at;
-        title_h = t >= 240 ? 0 : UI_TITLE_HEIGHT - (int)t / 20;
-    }
-    int y = title_h + 1;
+    int y = 0, headers = 0;
     for (int i = reader.top; i < reader.n_lines && y < GFX_HEIGHT; i++) {
         text_line_t *l = &reader.lines[i];
-        if (l->image) {
+        if (l->kind == LINE_HEADER) {
+            draw_header(g, y, l, &reader.marquees[headers++ % 4], now);
+        } else if (l->kind == LINE_IMAGE) {
             const gfx_bitmap_t *b = book_image(reader.text + l->start, l->bytes);
             if (b) {
                 gfx_bitmap(g, b, (GFX_WIDTH - b->width) / 2, y, GFX_COPY, 0);
@@ -273,13 +295,7 @@ static void reader_draw(gfx_t *g, uint32_t now)
         }
         y += height(i);
     }
-    if (title_h > 0) {
-        gfx_clip(g, 0, 0, GFX_WIDTH, title_h);
-        gfx_t *gg = g;
-        ui_title(gg, reader.title, now);
-        gfx_reset_clip(g);
-    }
-    ui_scrollbar(g, title_h, GFX_HEIGHT - title_h, reader.n_lines, 6, reader.top > reader.n_lines - 6 ? reader.n_lines - 6 : reader.top);
+    ui_scrollbar(g, 0, GFX_HEIGHT, reader.n_lines, 7, reader.top > reader.n_lines - 7 ? reader.n_lines - 7 : reader.top);
 }
 
 /* Libera texto, índice e imagens. */
@@ -301,7 +317,7 @@ static const screen_t SCREEN_READER = {
 };
 
 /* Carrega o texto, pagina e abre o leitor. */
-static void open_reader(const char *file, const char *folder, const char *title)
+static void open_reader(const char *file, const char *folder)
 {
     size_t length;
     reader_close();
@@ -314,7 +330,6 @@ static void open_reader(const char *file, const char *folder, const char *title)
         return;
     }
     snprintf(reader.folder, sizeof(reader.folder), "%s", folder);
-    snprintf(reader.title, sizeof(reader.title), "%s", title);
     paginate();
     ui_open(&SCREEN_READER, NULL);
 }
@@ -322,15 +337,13 @@ static void open_reader(const char *file, const char *folder, const char *title)
 /* Abre um .txt no leitor (usado também pelo Cartão SD). */
 void screens_read_text(const char *path)
 {
-    char folder[160], title[48];
+    char folder[160];
     snprintf(folder, sizeof(folder), "%s", path);
     char *bar = strrchr(folder, '/');
     if (bar) {
         *bar = '\0';
     }
-    const char *base = strrchr(path, '/');
-    files_friendly_name(base ? base + 1 : path, title, sizeof(title));
-    open_reader(path, folder, title);
+    open_reader(path, folder);
 }
 
 /* ---------------- Lista ---------------- */
@@ -411,7 +424,7 @@ static void on_key(const key_event_t *ev)
             snprintf(folder, sizeof(folder), "%s", FOLDER_LIBRARY);
             snprintf(file, sizeof(file), "%s/%s", FOLDER_LIBRARY, o->name);
         }
-        open_reader(file, folder, o->title);
+        open_reader(file, folder);
     }
 }
 

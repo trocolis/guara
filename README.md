@@ -506,7 +506,7 @@ Sub-menu com as obras da pasta `/sdcard/library`, montando o cartão se for prec
 	- Não há limite de imagens por livro: as da pasta ficam num cache das 4 usadas mais recentemente, e as da VROM não ocupam memória.
 	- A imagem ocupa a altura dela mais 1 px, o mesmo espaço que separa duas linhas de texto.
 	- `\{{` mostra as chaves em vez de abrir uma imagem.
-	- Exemplos em `examples/sdcard/library/`: `manual_de_batalha/`, um manual de batalha ilustrado com os ícones da VROM, e `como_criar_livros/`, que ensina a fazer livros e usa todos os estilos.
+	- Exemplos em `examples/sdcard/library/`: `manual_de_batalha/`, um manual de batalha ilustrado com os ícones da VROM, `como_criar_livros/`, que ensina a fazer livros e usa todos os recursos, e `manual_do_guara/`, o manual geral do aparelho.
 - **Estilos** (`lib/gfx/src/rich_text.c`), em `.txt` e livros, abertos e fechados pela mesma marcação; valem até ser fechados ou até o fim do parágrafo, e não ocupam espaço na linha:
 	- `**negrito**`: cada letra desenhada duas vezes, com 1 px de deslocamento, e 1 px a mais de avanço (7 px), para as letras não colarem; numa linha toda em negrito cabem 17 caracteres;
 	- `*itálico*`: as 4 linhas de cima de cada letra deslocadas 1 px para a direita;
@@ -514,7 +514,9 @@ Sub-menu com as obras da pasta `/sdcard/library`, montando o cartão se for prec
 	- `==marcado==`: fundo branco com o texto em preto, com 1 px de folga em volta;
 	- `\` antes de um caractere o mostra literalmente (`\*`, `\\`).
 
-O leitor quebra o texto em linhas de até 120 px (20 caracteres sem negrito), preferindo os espaços, e aceita arquivos de até 64 KB. ↑/↓ rolam uma linha e ←/→ uma página; a barra de título some suavemente ao rolar para baixo. B fecha o leitor. Arquivos `.txt` abertos pelo Cartão SD usam o mesmo leitor.
+O leitor não tem barra de título: o título fica a cargo do texto. Ele quebra o texto em linhas de até 120 px (20 caracteres sem negrito), preferindo os espaços, e aceita arquivos de até 64 KB. ↑/↓ rolam uma linha e ←/→ uma página; B fecha o leitor.
+
+- **Cabeçalho:** uma linha que começa e termina com `#` (`#Capítulo 1#`) vira uma barra branca como a de título (11 px, mais 1 px até a próxima linha), com o texto em preto centralizado ou, se não couber, rolando com *marquee*. `\#` no começo da linha mostra o `#` sem criar o cabeçalho. Arquivos `.txt` abertos pelo Cartão SD usam o mesmo leitor.
 
 ### Jogos ![Jogos](./bitmaps/icons/games.bmp)
 
