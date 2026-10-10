@@ -172,6 +172,13 @@ static void draw_top_bar(gfx_t *g, uint32_t now)
     }
 }
 
+/* Quadro do Guará na tela principal: desmaiado ou dormindo, parado no quadro 1. */
+static int guara_frame(uint32_t now)
+{
+    bool still = guara_has_state(&g_guara, ST_FAINTED) || guara_has_state(&g_guara, ST_SLEEPING);
+    return still ? 1 : sprite_frame(now);
+}
+
 /* Cena da tela principal, reutilizada pela animação de uso de item. */
 void draw_home_scene(gfx_t *g, uint32_t now, bool with_balloon)
 {
@@ -180,9 +187,7 @@ void draw_home_scene(gfx_t *g, uint32_t now, bool with_balloon)
     if (!g_has_guara) {
         return;
     }
-    /* Desmaiado ou dormindo: parado no quadro 1 */
-    bool still = guara_has_state(&g_guara, ST_FAINTED) || guara_has_state(&g_guara, ST_SLEEPING);
-    int frame = still ? 1 : sprite_frame(now);
+    int frame = guara_frame(now);
     sprite_guara(g, g_guara.color, g_guara.head, g_guara.stage, current_eye(now), GUARA_X, GUARA_BASE, frame,
                  GFX_SCALE2X);
 
@@ -232,15 +237,32 @@ const screen_t SCREEN_HOME = {
 /* Uso de item: a tela principal aparece com a animação e depois volta       */
 /* ------------------------------------------------------------------------- */
 
+#define USE_MAX_TEXTS 8
+
 static struct {
     catalog_record_t item;
     uint32_t start;
-    bool food;
     int last_frame;
+    uint32_t texts_at; /* início dos textos de efeito (0 = ainda não) */
+    char texts[USE_MAX_TEXTS][20];
+    int n_texts;
 } usage;
 
 #define FRAME_BITE_MS 450 /* duração de cada quadro da mordida */
-#define BLINK_MS 1600
+#define FRAME_GULP_MS 450 /* duração de cada gole */
+#define GULPS 4
+/* Poção: sobe, vira partículas que voam até o Guará e ele pisca invertido */
+#define POTION_RISE_MS 500
+#define POTION_FLY_MS 450
+#define POTION_PARTICLES 8
+#define POTION_PARTICLE_DELAY_MS 25
+#define POTION_FLASH_AT (POTION_RISE_MS + POTION_FLY_MS + POTION_PARTICLES * POTION_PARTICLE_DELAY_MS)
+#define POTION_FLASH_MS 600
+/* Textos de efeito: cada um sobe por TEXT_MS, um a cada TEXT_STEP_MS */
+#define TEXT_MS 800
+#define TEXT_STEP_MS 300
+#define TEXT_Y 44 /* linha de partida; sobe até Y=18 */
+#define GUARA_CENTER_Y 36 /* centro aproximado do Guará 2x, alvo das partículas */
 
 /* Prepara a animação do item usado. */
 static void item_use_on_open(void *param)
@@ -248,8 +270,8 @@ static void item_use_on_open(void *param)
     int id = (int)(intptr_t)param;
     catalog_read(CAT_ITEMS, id, &usage.item);
     usage.start = app_ms();
-    usage.food = usage.item.type == ITEM_FOOD;
     usage.last_frame = -1;
+    usage.texts_at = 0;
 }
 
 /* A animação não pode ser interrompida. */
@@ -258,41 +280,240 @@ static void item_use_on_key(const key_event_t *ev)
     (void)ev; /* a animação não pode ser interrompida */
 }
 
-/* Mordidas (comida) ou ícone piscando cada vez mais rápido (outros itens). */
+/* Encerra a animação: piscadela e volta para onde estava. */
+static void item_use_finish(uint32_t now)
+{
+    home_set_wink(now + 1500);
+    ui_back();
+}
+
+/* Comida: o ícone é coberto pelas mordidas, uma a cada FRAME_BITE_MS. Retorna se terminou. */
+static bool draw_food(gfx_t *g, uint32_t now, uint32_t t)
+{
+    int frame = (int)(t / FRAME_BITE_MS);
+    if (frame >= 6) {
+        return true;
+    }
+    ui_icon_mode(g, usage.item.icon, ITEM_X, ITEM_Y, GFX_COPY, 0);
+    if (frame >= 1) {
+        char name[12];
+        snprintf(name, sizeof(name), "bite_%d", frame);
+        ui_icon_mode(g, name, ITEM_X, ITEM_Y, GFX_MASK, 0);
+        if (frame != usage.last_frame) {
+            /* cada mordida: som e olhar feliz por meio quadro, depois volta ao normal */
+            audio_bite();
+            anim.bite_happy_until = now + FRAME_BITE_MS / 2;
+        }
+    }
+    usage.last_frame = frame;
+    return false;
+}
+
+/* Bebida: o nível baixa de cima para baixo, um gole a cada FRAME_GULP_MS. Retorna se terminou. */
+static bool draw_drink(gfx_t *g, uint32_t now, uint32_t t)
+{
+    int frame = (int)(t / FRAME_GULP_MS);
+    if (frame > GULPS) {
+        return true;
+    }
+    ui_icon_mode(g, usage.item.icon, ITEM_X, ITEM_Y, GFX_COPY, 0);
+    if (frame >= 1) {
+        gfx_rect_filled(g, ITEM_X, ITEM_Y, 16, 16 * frame / GULPS, GFX_BLACK);
+        if (frame != usage.last_frame) {
+            audio_gulp();
+            anim.bite_happy_until = now + FRAME_GULP_MS / 2;
+        }
+    }
+    usage.last_frame = frame;
+    return false;
+}
+
+/*
+ * Inverte só o Guará (a silhueta, sem o fundo): compõe o sprite num quadro à
+ * parte, marca o fundo externo por inundação a partir das bordas e inverte na
+ * tela os pixels que não são fundo externo. A máscara é refeita só quando o
+ * quadro muda.
+ */
+static void invert_guara(gfx_t *g, int frame)
+{
+    static gfx_t sprite, outside;
+    static int mask_frame;
+    if (usage.last_frame == 1) {
+        mask_frame = 0; /* primeira piscada desta poção: máscara nova */
+        usage.last_frame = 2;
+    }
+    if (frame == mask_frame) {
+        goto apply;
+    }
+    mask_frame = frame;
+    gfx_init(&sprite);
+    gfx_init(&outside);
+    sprite_guara(&sprite, g_guara.color, g_guara.head, g_guara.stage, EYE_HAPPY, GUARA_X, GUARA_BASE, frame,
+                 GFX_SCALE2X);
+    /* Sementes: pixels apagados da borda da tela */
+    for (int x = 0; x < GFX_WIDTH; x++) {
+        for (int y = 0; y < GFX_HEIGHT; y += GFX_HEIGHT - 1) {
+            if (!gfx_read_pixel(&sprite, x, y)) {
+                gfx_pixel(&outside, x, y, GFX_WHITE);
+            }
+        }
+    }
+    for (int y = 0; y < GFX_HEIGHT; y++) {
+        for (int x = 0; x < GFX_WIDTH; x += GFX_WIDTH - 1) {
+            if (!gfx_read_pixel(&sprite, x, y)) {
+                gfx_pixel(&outside, x, y, GFX_WHITE);
+            }
+        }
+    }
+    /* Varreduras de ida e volta até estabilizar (a silhueta é simples, bastam poucas) */
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (int pass = 0; pass < 2; pass++) {
+            for (int i = 0; i < GFX_WIDTH * GFX_HEIGHT; i++) {
+                int k = pass == 0 ? i : GFX_WIDTH * GFX_HEIGHT - 1 - i;
+                int x = k % GFX_WIDTH, y = k / GFX_WIDTH;
+                if (gfx_read_pixel(&outside, x, y) || gfx_read_pixel(&sprite, x, y)) {
+                    continue;
+                }
+                if ((x > 0 && gfx_read_pixel(&outside, x - 1, y)) ||
+                    (x < GFX_WIDTH - 1 && gfx_read_pixel(&outside, x + 1, y)) ||
+                    (y > 0 && gfx_read_pixel(&outside, x, y - 1)) ||
+                    (y < GFX_HEIGHT - 1 && gfx_read_pixel(&outside, x, y + 1))) {
+                    gfx_pixel(&outside, x, y, GFX_WHITE);
+                    changed = true;
+                }
+            }
+        }
+    }
+apply:
+    for (int y = 0; y < GFX_HEIGHT; y++) {
+        for (int x = 0; x < GFX_WIDTH; x++) {
+            if (!gfx_read_pixel(&outside, x, y)) {
+                gfx_pixel(g, x, y, GFX_INVERT);
+            }
+        }
+    }
+}
+
+/* Poção: sobe, se desfaz em partículas que voam até o Guará, e ele pisca invertido. Retorna se terminou. */
+static bool draw_potion(gfx_t *g, uint32_t now, uint32_t t)
+{
+    if (t < POTION_RISE_MS) {
+        ui_icon_mode(g, usage.item.icon, ITEM_X, ITEM_Y - (int)t * 8 / POTION_RISE_MS, GFX_COPY, 0);
+        return false;
+    }
+    if (usage.last_frame < 0) {
+        usage.last_frame = 0;
+        audio_magic();
+    }
+    /* Curva quadrática do ícone até o Guará, passando por cima; cada partícula com seu desvio */
+    const int x0 = ITEM_X + 8, y0 = ITEM_Y, x2 = GUARA_X, y2 = GUARA_CENTER_Y;
+    for (int i = 0; i < POTION_PARTICLES; i++) {
+        int32_t pt = (int32_t)(t - POTION_RISE_MS) - i * POTION_PARTICLE_DELAY_MS;
+        if (pt < 0 || pt >= POTION_FLY_MS) {
+            continue;
+        }
+        int dx = (i % 4 - 2) * 4, dy = (i / 4) * 6 - 3;
+        int x1 = (x0 + x2) / 2 + dx, y1 = 4 + dy;
+        int u = pt * 64 / POTION_FLY_MS, v = 64 - u; /* parâmetro em 1/64 */
+        int x = (v * v * x0 + 2 * u * v * x1 + u * u * (x2 + dx)) / 4096;
+        int y = (v * v * y0 + 2 * u * v * y1 + u * u * (y2 + dy)) / 4096;
+        gfx_pixel(g, x, y, GFX_INVERT);
+        gfx_pixel(g, x - 1, y, GFX_INVERT);
+        gfx_pixel(g, x + 1, y, GFX_INVERT);
+        gfx_pixel(g, x, y - 1, GFX_INVERT);
+        gfx_pixel(g, x, y + 1, GFX_INVERT);
+    }
+    if (t >= POTION_FLASH_AT + POTION_FLASH_MS) {
+        return true;
+    }
+    if (t >= POTION_FLASH_AT) {
+        if (usage.last_frame == 0) {
+            usage.last_frame = 1;
+            anim.bite_happy_until = now + POTION_FLASH_MS;
+        }
+        /* 3 piscadas invertidas de 100 ms */
+        if (((t - POTION_FLASH_AT) / 100) % 2 == 0) {
+            invert_guara(g, guara_frame(now));
+        }
+    }
+    return false;
+}
+
+/*
+ * Textos do efeito ("HP +150", "Energia +12%", "Curado!") subindo um após o
+ * outro, como o dano no combate. Retorna se todos terminaram.
+ */
+static bool draw_effect_texts(gfx_t *g, uint32_t now)
+{
+    if (usage.texts_at == 0) {
+        usage.texts_at = now;
+        anim.bite_happy_until = now + (uint32_t)usage.n_texts * TEXT_STEP_MS + TEXT_MS;
+    }
+    uint32_t t = now - usage.texts_at;
+    bool running = false;
+    for (int i = 0; i < usage.n_texts; i++) {
+        int32_t st = (int32_t)t - i * TEXT_STEP_MS;
+        if (st < 0 || st >= TEXT_MS) {
+            running |= st < 0;
+            continue;
+        }
+        running = true;
+        /* 1 px a cada 30 ms: textos seguidos ficam 10 px (uma linha) um do outro */
+        int y = TEXT_Y - st / 30;
+        int w = gfx_text_width(usage.texts[i]);
+        gfx_rect_rounded_filled(g, GUARA_X - w / 2 - 2, y - 1, w + 4, 10, 2, GFX_BLACK);
+        gfx_text(g, GUARA_X - w / 2, y, usage.texts[i], GFX_WHITE);
+    }
+    return !running;
+}
+
+/* Mordidas (comida), goles (bebida) ou partículas (poção); depois, os textos do efeito. */
 static void item_use_on_draw(gfx_t *g, uint32_t now)
 {
     uint32_t t = now - usage.start;
     draw_home_scene(g, now, false);
-    if (usage.food) {
-        int frame = (int)(t / FRAME_BITE_MS);
-        if (frame >= 6) {
-            home_set_wink(now + 1500);
-            ui_back();
+    if (usage.texts_at == 0) {
+        bool done = usage.item.type == ITEM_FOOD    ? draw_food(g, now, t)
+                    : usage.item.type == ITEM_DRINK ? draw_drink(g, now, t)
+                                                    : draw_potion(g, now, t);
+        if (!done) {
             return;
         }
-        ui_icon_mode(g, usage.item.icon, ITEM_X, ITEM_Y, GFX_COPY, 0);
-        if (frame >= 1) {
-            char name[12];
-            snprintf(name, sizeof(name), "bite_%d", frame);
-            ui_icon_mode(g, name, ITEM_X, ITEM_Y, GFX_MASK, 0);
-            if (frame != usage.last_frame) {
-                /* cada mordida: som e olhar feliz por meio quadro, depois volta ao normal */
-                audio_bite();
-                anim.bite_happy_until = now + FRAME_BITE_MS / 2;
-            }
-        }
-        usage.last_frame = frame;
-    } else {
-        if (t >= BLINK_MS) {
-            home_set_wink(now + 1500);
-            ui_back();
+        if (usage.item.type == ITEM_FOOD || usage.n_texts == 0) {
+            item_use_finish(now);
             return;
         }
-        /* Pisca acelerando até sumir */
-        uint32_t period = 300 - t * 260 / BLINK_MS;
-        if ((t / period) % 2 == 0) {
-            ui_icon_mode(g, usage.item.icon, ITEM_X, ITEM_Y, GFX_COPY, 0);
-        }
+    }
+    if (draw_effect_texts(g, now)) {
+        item_use_finish(now);
+    }
+}
+
+/* Adiciona um texto de efeito, se houver espaço. */
+static void add_effect_text(const char *name, int delta, const char *unit)
+{
+    if (delta != 0 && usage.n_texts < USE_MAX_TEXTS) {
+        snprintf(usage.texts[usage.n_texts++], sizeof(usage.texts[0]), "%s %+d%s", name, delta, unit);
+    }
+}
+
+/* Monta os textos com o que o item mudou de fato (antes x depois, já com os limites). */
+static void build_effect_texts(const guara_t *before, const guara_t *after)
+{
+    usage.n_texts = 0;
+    add_effect_text("HP", after->hp - before->hp, "");
+    add_effect_text("MP", after->mp - before->mp, "");
+    add_effect_text("Energia", (after->energy - before->energy) / 100, "%");
+    add_effect_text("Humor", (after->mood - before->mood) / 100, "%");
+    add_effect_text("Alimentação", (after->satiety - before->satiety) / 100, "%");
+    add_effect_text("Saúde", (after->health - before->health) / 100, "%");
+    /* Desmaio e estados negativos curados */
+    uint32_t cured = before->states & ~after->states & (STATE_BIT(ST_FAINTED) | STATE_BIT(ST_POISONED) |
+                     STATE_BIT(ST_PARALYZED) | STATE_BIT(ST_BURNED) | STATE_BIT(ST_FROZEN) |
+                     STATE_BIT(ST_CONFUSED) | STATE_BIT(ST_CURSED));
+    if (cured && usage.n_texts < USE_MAX_TEXTS) {
+        snprintf(usage.texts[usage.n_texts++], sizeof(usage.texts[0]), "Curado!");
     }
 }
 
@@ -301,6 +522,7 @@ static const screen_t SCREEN_USE_ITEM = {
     .on_open = item_use_on_open,
     .on_key = item_use_on_key,
     .on_draw = item_use_on_draw,
+    .fps = 30, /* partículas e textos suaves */
 };
 
 /* Usa o item e mostra a animação na tela principal (ou o motivo do bloqueio). */
@@ -310,6 +532,8 @@ void screens_use_item(int item_id)
     if (!catalog_read(CAT_ITEMS, item_id, &r)) {
         return;
     }
+    static guara_t before; /* estático: o guara_t é grande para a pilha */
+    before = g_guara;
     item_use_result_t res = guara_use_item(&g_guara, &r, &g_rng);
     if (res != USE_OK) {
         static const char *const reasons[] = {"", "Desmaiado! Espere ou use uma cura.", "Amaldiçoado! Não pode usar itens.",
@@ -318,6 +542,7 @@ void screens_use_item(int item_id)
         ui_alert(r.name, r.icon, reasons[res], "OK", NULL, NULL);
         return;
     }
+    build_effect_texts(&before, &g_guara);
     app_interact();
     app_mark_changed();
     ui_open(&SCREEN_USE_ITEM, (void *)(intptr_t)item_id);

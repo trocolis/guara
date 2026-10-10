@@ -215,6 +215,20 @@ void audio_bite(void)
     audio_effect(n, 3, false);
 }
 
+/* Som de gole (animação de beber). */
+void audio_gulp(void)
+{
+    static const note_t n[] = {{260, 20}, {0, 10}, {170, 45}};
+    audio_effect(n, 3, false);
+}
+
+/* Arpejo subindo (poção absorvida). */
+void audio_magic(void)
+{
+    static const note_t n[] = {{1046, 40}, {1318, 40}, {1568, 40}, {2093, 80}};
+    audio_effect(n, 4, false);
+}
+
 /* Melodia de vitória. */
 void audio_victory(void)
 {
