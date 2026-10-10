@@ -3,6 +3,28 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.16.0 — 2026-10-10
+
+### Conectar (ESP-NOW)
+- **Nova tela Conectar,** com ícone próprio (`icons/connect.bmp`), no lugar do menu Bluetooth de Ajustes, que nunca foi implementado. Comunicação direta entre dois Guarás pelo rádio Wi-Fi, sem roteador nem pareamento. Mede cerca de 12 KB.
+- **Rádio** (`src/system/radio_link.c`):
+  - fica ligado só com a tela aberta, no canal 1 fixo, com a rede do roteador suspensa;
+  - anuncia a presença a cada segundo;
+  - a lista mostra os Guarás por perto, com natureza, nome e nível.
+- **Protocolo** (`lib/core/src/link_proto.c`, com testes): cabeçalho de 23 bytes com o perfil de quem envia e uma carga por tipo.
+- **Troca de itens:** Inventário > Compartilhar escolhe a quantidade e quem recebe. Do outro lado aparece "Fulano quer te dar 3 Maçã. Aceitar?".
+  - A oferta tem número único e se repete até a resposta.
+  - Quem recebe soma uma vez por oferta.
+  - Quem envia só desconta depois da aceitação.
+- **Combate entre dois Guarás:** Arena > Combate abre o Conectar, e A desafia o Guará escolhido.
+  - Quem desafia roda o motor; o outro espelha o estado, a cada 100 ms, e os preparos e resultados.
+  - Cada jogador reage na janela no próprio aparelho e usa as próprias poções.
+  - Valem as consequências do treino, e uma conexão perdida encerra o combate sem consequências.
+- **Saiu** o indicador de Bluetooth da barra superior e a opção `bt_on`, que não era gravada.
+
+### Arena
+- O aviso de "não pode lutar" mostra o ícone de dormindo ou desmaiado.
+
 ## v0.15.0 — 2026-10-10
 
 ### Menu Guará

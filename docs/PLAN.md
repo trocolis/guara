@@ -224,7 +224,7 @@ Ordem sugerida, das telas mais simples para as mais dependentes:
 
 - Wi-Fi: busca, conexão, redes salvas.
 - Atualização OTA de firmware pelo SD, depois pelo GitHub (no menu e verificada a cada 24 h). Atualização do `storage.bin` pelo SD.
-- Conectar entre dois Guarás por ESP-NOW em vez de Bluetooth (o Bluetooth não cabia na partição de firmware): presença, troca de itens (Compartilhar) e, depois, combate PvP. Protocolo em `lib/core/src/link_proto.c`.
+- Conectar entre dois Guarás por ESP-NOW em vez de Bluetooth (o Bluetooth não cabia na partição de firmware): presença, troca de itens (Compartilhar) e combate PvP, prontos desde a v0.16.0 (falta testar com dois aparelhos). Protocolo em `lib/core/src/link_proto.c`.
 
 ---
 
