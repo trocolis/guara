@@ -11,6 +11,7 @@ typedef void (*ui_result_fn)(int answer, void *ctx);
 #include <stdint.h>
 
 #include "gfx.h"
+#include "widgets.h"
 
 /* Geometria dos modais, para telas próprias desenhadas em forma de modal (ex.: busca do Conectar). */
 #define UI_MODAL_X 8
@@ -27,6 +28,8 @@ void ui_alert(const char *title, const char *icon, const char *message, const ch
 void ui_confirm(const char *title, const char *icon, const char *message, const char *text_no,
                   const char *text_yes, ui_result_fn fn, void *ctx);
 void ui_choice(const char *title, const char *const *options, int count, ui_result_fn fn, void *ctx);
+/* Como ui_choice, com as linhas preenchidas por `item` (texto e info à direita) e sem limite de opções. */
+void ui_choice_list(const char *title, int count, ui_item_fn item, void *item_ctx, ui_result_fn fn, void *ctx);
 void ui_quantity_picker(const char *title, int minimum, int maximum, int initial, ui_result_fn fn, void *ctx);
 /* Modal sem rodapé com texto rolável (detalhes de item, habilidade, arquivo). */
 void ui_details(const char *title, const char *text);

@@ -1,9 +1,9 @@
 /*
- * Conectar: o sub-menu do menu principal (Buscar Guará, Visível e as conexões
- * aceitas) e a busca, que lista os Guarás por perto (ESP-NOW), troca itens e desafia
+ * Conectar: o sub-menu do menu principal (Visível, Buscar Guará e Conhecidos)
+ * e a busca, que lista os Guarás por perto (ESP-NOW), troca itens e desafia
  * para combates. A busca abre por Conectar > Buscar Guará ou Arena > Combate
- * (A desafia o Guará escolhido), por uma conexão aceita (desafia quando ela
- * aparecer) ou por Inventário > Compartilhar (A envia o item). Enquanto a tela está
+ * (A desafia o Guará escolhido), por um conhecido (desafia ou envia o item
+ * quando ele aparecer) ou por Inventário > Compartilhar (A envia o item). Enquanto a tela está
  * aberta, o rádio fica ligado e o aparelho não entra em modo Ocioso. Com
  * Visível em ON, o rádio também fica ligado fora dela enquanto o aparelho está
  * em uso (app.c), e outros Guarás podem encontrá-lo e mandar ofertas e desafios.
@@ -49,7 +49,7 @@ static struct {
     uint8_t prompt_mac[6];
     link_msg_t prompt;
     link_peer_t challenge_peer; /* escolhido para o desafio, à espera da confirmação */
-    uint32_t target_uid;        /* conexão aceita a desafiar assim que aparecer (0 = nenhuma) */
+    uint32_t target_uid;        /* conhecido a desafiar (ou a quem dar o item) assim que aparecer (0 = nenhum) */
     char target_name[SIZE_NAME + 1];
 } meet;
 
@@ -268,12 +268,12 @@ static void poll(uint32_t now)
     }
     meet.n_peers = radio_link_peers(meet.peers, LINK_MAX_PEERS);
     meet.list.total = meet.n_peers;
-    /* Conexão aceita escolhida no sub-menu: desafia assim que ela aparecer */
+    /* Conhecido escolhido no sub-menu: desafia ou oferece o item assim que ele aparecer */
     if (meet.target_uid && !meet.waiting && !meet.prompt_open) {
         for (int i = 0; i < meet.n_peers; i++) {
             if (meet.peers[i].profile.uid == meet.target_uid) {
                 meet.target_uid = 0;
-                start_waiting(&meet.peers[i], LINK_CHALLENGE);
+                start_waiting(&meet.peers[i], meet.item_id >= 0 ? LINK_OFFER : LINK_CHALLENGE);
                 break;
             }
         }
@@ -496,69 +496,105 @@ void screens_open_meet(int item_id, int count)
 }
 
 /* ------------------------------------------------------------------------- */
-/* Sub-menu Conectar (menu principal): Buscar Guará e as conexões aceitas     */
+/* Sub-menu Conectar (menu principal): Visível, Buscar Guará e Conhecidos     */
 /* ------------------------------------------------------------------------- */
+
+#define MENU_VISIBLE 0
+#define MENU_SEARCH 1
+#define MENU_KNOWN 2
+#define MENU_LINES 3
 
 static struct {
     saved_connection_t connections[CONFIG_MAX_CONNECTIONS];
     int count;
     ui_list_t list;
+    int known;                /* conhecido escolhido: posição na lista salva */
+    int items[COUNT_ITEMS];   /* itens que podem ser dados (id), na ordem do catálogo */
+    int n_items, item_id;
 } menu;
 
-#define MENU_SEARCH 0
-#define MENU_VISIBLE 1
-#define MENU_FIRST_CONNECTION 2
+static void open_known(void);
+static void open_known_actions(void);
 
-/* Relê as conexões aceitas (podem ter mudado numa busca). */
+/* Relê os conhecidos (podem ter mudado numa busca). */
 static void menu_reload(void)
 {
     menu.count = config_connections(menu.connections);
-    menu.list.total = MENU_FIRST_CONNECTION + menu.count;
-    if (menu.list.sel >= menu.list.total) {
-        menu.list.sel = menu.list.total - 1;
-    }
-    ui_list_adjust(&menu.list, UI_LINES_VISIBLE);
+    menu.list.total = MENU_LINES;
 }
 
-/* Buscar Guará, Visível e as conexões, da mais recente para a mais antiga. */
+/* Visível (ON/OFF), Buscar Guará e Conhecidos (com a quantidade). */
 static void menu_item(int i, ui_item_t *it, void *ctx)
 {
     (void)ctx;
-    if (i == MENU_SEARCH) {
-        it->icon = "search";
-        snprintf(it->text, sizeof(it->text), "Buscar Guará");
-        return;
-    }
     if (i == MENU_VISIBLE) {
-        it->icon = "visible";
+        it->icon = "on_off";
         snprintf(it->text, sizeof(it->text), "Visível");
         snprintf(it->info, sizeof(it->info), "%s", g_cfg.link_visible ? "ON" : "OFF");
-        return;
+    } else if (i == MENU_SEARCH) {
+        it->icon = "search";
+        snprintf(it->text, sizeof(it->text), "Buscar Guará");
+    } else {
+        it->icon = "save";
+        snprintf(it->text, sizeof(it->text), "Conhecidos");
+        snprintf(it->info, sizeof(it->info), "%d", menu.count);
     }
-    const saved_connection_t *c = &menu.connections[menu.count + MENU_FIRST_CONNECTION - 1 - i];
-    it->icon = "guara";
+}
+
+/* Conhecido selecionado na lista salva. */
+static const saved_connection_t *known(void)
+{
+    return &menu.connections[menu.known];
+}
+
+/* Linha do modal de conhecidos: nome e nível, do mais recente para o mais antigo. */
+static void known_item(int i, ui_item_t *it, void *ctx)
+{
+    (void)ctx;
+    const saved_connection_t *c = &menu.connections[menu.count - 1 - i];
     snprintf(it->text, sizeof(it->text), "%s", c->name);
     snprintf(it->info, sizeof(it->info), "NV%d", c->level);
 }
 
-/* Posição na lista salva da conexão selecionada. */
-static int menu_connection(void)
-{
-    return menu.count + MENU_FIRST_CONNECTION - 1 - menu.list.sel;
-}
-
-/* Confirmou esquecer a conexão. */
-static void forget_answer(int r, void *ctx)
+/* Escolheu um conhecido: abre as ações dele. */
+static void known_chosen(int r, void *ctx)
 {
     (void)ctx;
-    if (r == 1) {
-        config_forget_connection(menu_connection());
-        menu_reload();
+    if (r < 0) {
+        return;
+    }
+    menu.known = menu.count - 1 - r;
+    open_known_actions();
+}
+
+/* Modal com os conhecidos (sem ícones nem rodapé); vazio, só avisa. */
+static void open_known(void)
+{
+    menu_reload();
+    if (menu.count == 0) {
+        ui_alert("CONHECIDOS", "save", "Troque itens ou lute com alguém para conhecê-lo.", "OK", NULL, NULL);
+        return;
+    }
+    ui_choice_list("CONHECIDOS", menu.count, known_item, NULL, known_chosen, NULL);
+}
+
+/* Confirmou excluir o conhecido: volta à lista (se ainda houver alguém). */
+static void delete_answer(int r, void *ctx)
+{
+    (void)ctx;
+    if (r != 1) {
+        open_known_actions();
+        return;
+    }
+    config_forget_connection(menu.known);
+    menu_reload();
+    if (menu.count > 0) {
+        open_known();
     }
 }
 
-/* Abre a busca e desafia a conexão `c` assim que ela aparecer. */
-static void challenge_connection(const saved_connection_t *c)
+/* Abre a busca e desafia o conhecido assim que ele aparecer. */
+static void challenge_known(void)
 {
     const char *icon, *reason = arena_cannot_fight(&icon);
     if (reason) {
@@ -566,25 +602,86 @@ static void challenge_connection(const saved_connection_t *c)
         return;
     }
     screens_open_meet(-1, 0);
-    meet.target_uid = c->uid;
-    snprintf(meet.target_name, sizeof(meet.target_name), "%s", c->name);
+    meet.target_uid = known()->uid;
+    snprintf(meet.target_name, sizeof(meet.target_name), "%s", known()->name);
 }
 
-/* Ação escolhida para a conexão: desafiar ou esquecer. */
-static void connection_action(int r, void *ctx)
+static void open_share(void);
+
+/* Quantidade escolhida: abre a busca e envia o item ao conhecido assim que ele aparecer; B volta aos itens. */
+static void share_count(int count, void *ctx)
 {
     (void)ctx;
-    const saved_connection_t *c = &menu.connections[menu_connection()];
+    if (count <= 0) {
+        open_share();
+        return;
+    }
+    screens_open_meet(menu.item_id, count);
+    meet.target_uid = known()->uid;
+    snprintf(meet.target_name, sizeof(meet.target_name), "%s", known()->name);
+}
+
+/* Linha da lista de itens: nome e quantidade no inventário. */
+static void share_item(int i, ui_item_t *it, void *ctx)
+{
+    (void)ctx;
+    item_name(menu.items[i], it->text, sizeof(it->text));
+    snprintf(it->info, sizeof(it->info), "%d", g_guara.inventory[menu.items[i]]);
+}
+
+/* Escolheu o item: pergunta a quantidade; B volta às ações do conhecido. */
+static void share_chosen(int r, void *ctx)
+{
+    (void)ctx;
+    if (r < 0) {
+        open_known_actions();
+        return;
+    }
+    menu.item_id = menu.items[r];
+    ui_quantity_picker("COMPARTILHAR", 1, g_guara.inventory[menu.item_id], 1, share_count, NULL);
+}
+
+/* Lista os itens do inventário que podem ser dados ao conhecido. */
+static void open_share(void)
+{
+    menu.n_items = 0;
+    for (int id = 0; id < COUNT_ITEMS; id++) {
+        if (g_guara.inventory[id] > 0) {
+            menu.items[menu.n_items++] = id;
+        }
+    }
+    if (menu.n_items == 0) {
+        ui_alert("COMPARTILHAR", "inventory", "Nenhum item para dar.", "OK", NULL, NULL);
+        return;
+    }
+    ui_choice_list("COMPARTILHAR", menu.n_items, share_item, NULL, share_chosen, NULL);
+}
+
+/* Ação escolhida para o conhecido: desafiar, compartilhar ou excluir; B volta à lista. */
+static void known_action(int r, void *ctx)
+{
+    (void)ctx;
     if (r == 0) {
-        challenge_connection(c);
+        challenge_known();
     } else if (r == 1) {
+        open_share();
+    } else if (r == 2) {
         char msg[48];
-        snprintf(msg, sizeof(msg), "Esquecer %s?", c->name);
-        ui_confirm("CONECTAR", "guara", msg, "NAO", "SIM", forget_answer, NULL);
+        snprintf(msg, sizeof(msg), "Excluir %s?", known()->name);
+        ui_confirm("CONHECIDOS", "save", msg, "NAO", "SIM", delete_answer, NULL);
+    } else {
+        open_known();
     }
 }
 
-/* A abre a busca, alterna Visível (o app liga ou desliga o rádio em até 1 s) ou abre as ações da conexão; B volta. */
+/* Modal com as ações do conhecido escolhido. */
+static void open_known_actions(void)
+{
+    static const char *const options[] = {"Desafiar", "Compartilhar", "Excluir"};
+    ui_choice(known()->name, options, 3, known_action, NULL);
+}
+
+/* A alterna Visível (o app liga ou desliga o rádio em até 1 s), abre a busca ou os conhecidos; B volta. */
 static void menu_key(const key_event_t *ev)
 {
     if (ui_list_key(&menu.list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
@@ -593,14 +690,13 @@ static void menu_key(const key_event_t *ev)
     if (ev->key == KEY_B) {
         ui_back();
     } else if (ev->key == KEY_A) {
-        if (menu.list.sel == MENU_SEARCH) {
-            screens_open_meet(-1, 0);
-        } else if (menu.list.sel == MENU_VISIBLE) {
+        if (menu.list.sel == MENU_VISIBLE) {
             g_cfg.link_visible = !g_cfg.link_visible;
             config_save();
+        } else if (menu.list.sel == MENU_SEARCH) {
+            screens_open_meet(-1, 0);
         } else {
-            static const char *const options[] = {"Desafiar", "Esquecer"};
-            ui_choice(menu.connections[menu_connection()].name, options, 2, connection_action, NULL);
+            open_known();
         }
     }
 }

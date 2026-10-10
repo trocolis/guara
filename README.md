@@ -329,7 +329,7 @@ Implementação: `src/screens/meet.c` (tela), `src/system/radio_link.c` (rádio)
 - **Mensagens:** 30 bytes fixos, little-endian: `GL`, versão (1), tipo, UID, nome (11 bytes), nível, estágio, natureza, cor, cabeça, número da troca (`tx`, u32), item e quantidade. Tipos: `HELLO` (presença), `OFFER`, `ACCEPT` e `DECLINE`. Mensagens de outra versão ou do próprio UID são ignoradas.
 - **Abrir:**
 	- por **Conectar > Buscar Guará** (menu principal) ou **Arena > Combate**: fica visível, recebe itens e desafios, e A num Guará da lista o desafia para um combate;
-	- por uma **conexão aceita** do sub-menu Conectar, com **Desafiar**: mostra "Buscando Fulano..." e envia o desafio assim que esse Guará aparecer;
+	- por um **conhecido** (Conectar > Conhecidos), com **Desafiar** ou **Compartilhar**: mostra "Buscando Fulano..." e envia o desafio ou a oferta assim que esse Guará aparecer;
 	- por **Inventário > Compartilhar**: depois da quantidade, o mesmo modal mostra "Buscando... Dar 3 Maçã" e, com os resultados, DAR (A); A no Guará escolhido envia a oferta e mostra "Aguardando Fulano..." (B cancela a espera).
 - **Troca de itens:**
 	1. Quem envia sorteia um `tx` e repete o `OFFER` a cada 700 ms até a resposta, por até 30 s ("Fulano não respondeu.").
@@ -714,9 +714,12 @@ Gerenciador de arquivos do cartão no padrão de sub-menu, começando em `/sdcar
 
 Sub-menu com a comunicação direta com outros Guarás por perto, sem roteador (ver *Conectar*, em Firmware):
 
-- **Buscar Guará** ![buscar](./bitmaps/icons/search.bmp): abre a busca num modal sobre o sub-menu: o ícone de busca e "Buscando...", com SAIR (B), até algum Guará aparecer. Os resultados aparecem no próprio modal, 2 por vez, com o nome e o nível (`NV7`) e a seleção em retângulo arredondado; ↑/↓ escolhem, A desafia (LUTAR) e B sai (SAIR). Enquanto o modal está aberto, recebe itens e desafios. A espera pela resposta ("Aguardando Fulano...") e a busca de uma conexão aceita ("Buscando Fulano...") usam o mesmo modal.
-- **Visível** ![visível](./bitmaps/ui/visible.bmp) (`ON`/`OFF`, padrão `OFF`): A alterna. Em `ON`, outros Guarás encontram este e podem mandar ofertas e desafios enquanto o aparelho está em uso, fora desta tela (ver *Em segundo plano*, em Conectar no Firmware); a barra superior mostra o ícone. Em `OFF`, o rádio só liga com a busca aberta. Não depende do Wi-Fi.
-- **Conexões aceitas** ![conexão](./bitmaps/icons/guara.bmp): em seguida, da mais recente para a mais antiga, os Guarás com quem uma troca de itens ou um desafio já foi aceito, de qualquer lado, com o nome e o nível (`NV7`) do último encontro. Ficam na NVS (`config_save_connection`, até 8; cheia, sai a mais antiga). A abre um modal com **Desafiar**, que abre a busca e desafia esse Guará assim que ele aparecer, e **Esquecer**, com confirmação.
+- **Visível** ![visível](./bitmaps/icons/on_off.bmp) (`ON`/`OFF`, padrão `OFF`): A alterna. Em `ON`, outros Guarás encontram este e podem mandar ofertas e desafios enquanto o aparelho está em uso, fora desta tela (ver *Em segundo plano*, em Conectar no Firmware); a barra superior mostra ![visível](./bitmaps/ui/visible.bmp). Em `OFF`, o rádio só liga com a busca aberta. Não depende do Wi-Fi.
+- **Buscar Guará** ![buscar](./bitmaps/icons/search.bmp): abre a busca num modal sobre o sub-menu: o ícone de busca e "Buscando...", com SAIR (B), até algum Guará aparecer. Os resultados aparecem no próprio modal, 2 por vez, com o nome e o nível (`NV7`) e a seleção em retângulo arredondado; ↑/↓ escolhem, A desafia (LUTAR) e B sai (SAIR). Enquanto o modal está aberto, recebe itens e desafios. A espera pela resposta ("Aguardando Fulano...") e a busca de um conhecido ("Buscando Fulano...") usam o mesmo modal.
+- **Conhecidos** ![conhecidos](./bitmaps/icons/save.bmp), com a quantidade à direita: abre um modal com a lista (sem ícones nem rodapé), do mais recente para o mais antigo, dos Guarás com quem uma troca de itens ou um desafio já foi aceito, de qualquer lado, com o nome e o nível (`NV7`) do último encontro. Ficam na NVS (`config_save_connection`, até 8; cheia, sai o mais antigo). Sem nenhum, um aviso explica como conhecer alguém. A num conhecido abre um modal com as ações (B volta à lista):
+	- **Desafiar:** abre a busca e desafia esse Guará assim que ele aparecer;
+	- **Compartilhar:** modal com os itens do inventário (nome e quantidade); A pede a quantidade, e a busca envia a oferta assim que esse Guará aparecer. B volta às ações;
+	- **Excluir:** com confirmação; volta à lista.
 
 ### Ajustes ![Ajustes](./bitmaps/icons/adjustments.bmp)
 

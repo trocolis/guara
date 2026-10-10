@@ -32,6 +32,8 @@ typedef struct {
     const char *options[MAX_OPTIONS];
     char options_buf[MAX_OPTIONS][24];
     int n_options;
+    ui_item_fn item_fn; /* lista por callback (ui_choice_list): texto e info de cada linha */
+    void *item_ctx;
     ui_list_t list;
     int minimum, maximum, value;
     int scrollbar, text_line_count;
@@ -134,6 +136,10 @@ void ui_modal_frame(gfx_t *g, const char *title, uint32_t now)
 static void item_option(int i, ui_item_t *it, void *ctx)
 {
     modal_t *m = ctx;
+    if (m->item_fn) {
+        m->item_fn(i, it, m->item_ctx);
+        return;
+    }
     snprintf(it->text, sizeof(it->text), "%s", m->options[i]);
 }
 
@@ -177,13 +183,18 @@ static void on_draw(gfx_t *g, uint32_t now)
             ui_item_t it = {0};
             item_option(idx, &it, m);
             bool sel = idx == m->list.sel;
-            ui_marquee_text(g, MX + 6, y + 2, MW - 16, it.text, GFX_WHITE, sel, &m->list.marquee, now);
+            int info_w = it.info[0] ? gfx_text_width(it.info) + 4 : 0;
+            ui_marquee_text(g, MX + 6, y + 2, MW - 16 - info_w, it.text, GFX_WHITE, sel, &m->list.marquee, now);
+            if (info_w) {
+                gfx_text(g, MX + MW - 8 - gfx_text_width(it.info), y + 2, it.info, GFX_WHITE);
+            }
             if (sel) {
                 gfx_rect_rounded(g, MX + 2, y, MW - 7, 11, 2, GFX_WHITE);
             }
         }
         if (m->n_options > 3) {
             int bar_height = 33, length = bar_height * 3 / m->n_options;
+            length = length < 2 ? 2 : length;
             int y = body_y + (bar_height - length) * m->list.top / (m->n_options - 3);
             gfx_line_v(g, MX + MW - 3, y, length, GFX_WHITE);
         }
@@ -272,6 +283,17 @@ void ui_choice(const char *title, const char *const *options, int count, ui_resu
     for (int i = 0; i < m->n_options; i++) {
         m->options[i] = m->options_buf[i];
     }
+}
+
+/* Lista compacta (sem rodapé) com as linhas preenchidas por `item` (texto e info à direita), sem limite de opções. */
+void ui_choice_list(const char *title, int count, ui_item_fn item, void *item_ctx, ui_result_fn fn, void *ctx)
+{
+    prepare(M_CHOICE, title, fn, ctx);
+    incoming.n_options = count;
+    incoming.item_fn = item;
+    incoming.item_ctx = item_ctx;
+    incoming.list.total = count;
+    ui_open(&SCREEN_MODAL, NULL);
 }
 
 /* Abre a escolha de quantidade entre `minimum` e `maximum`. */
