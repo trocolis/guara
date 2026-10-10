@@ -3,6 +3,44 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.17.0 — 2026-10-10
+
+### Conectar
+- **Menu principal:** o Conectar virou item do menu principal, antes de Ajustes, e saiu de Ajustes.
+  - O sub-menu tem **Buscar Guará** e as **conexões aceitas**: Guarás com quem uma troca ou um desafio foi aceito, guardados na NVS, até 8.
+  - Numa conexão, **Desafiar** procura esse Guará e o desafia assim que ele aparece, e **Esquecer** o tira da lista.
+- **Busca em modal:**
+  - "Buscando", com SAIR, até alguém aparecer. Os resultados aparecem no próprio modal, 2 por vez, com LUTAR (ou DAR, no Compartilhar).
+  - A espera pela resposta usa o mesmo modal.
+- **Presença em segundo plano:**
+  - Com o Wi-Fi em ON, o Guará fica visível e recebendo enquanto o aparelho está em uso, em qualquer tela. O rádio desliga no modo Ocioso e religa sozinho ao interagir.
+  - Convites abrem a busca. Nas telas que seguram o sono, eles esperam.
+  - A internet (NTP, GitHub, redes, jogos Lua) pega o rádio de volta quando precisa (`network_lend`). Logo após o boot, a presença espera o NTP e a verificação de release.
+- **Combate entre dois Guarás:**
+  - Cada lado manda ao outro uma presença direta (unicast, com reenvio) a cada 300 ms, e qualquer mensagem conta como sinal de vida.
+  - "Conexão perdida" só aparece após 6 s sem notícia.
+- **Ao terminar:** o fim do combate e da troca fecham também a busca e voltam à tela de antes.
+
+### Interface
+- **Espera:** reticências animadas nos textos de operação em andamento. Nas operações que seguram o laço principal (Wi-Fi, GitHub, atualização), a tela de espera é redesenhada por um timer (`src/ui/busy.c`).
+- **Rodapé:** com uma legenda só, ela usa a largura toda.
+
+### Firmware
+- **Menor** (82,8% da partição):
+  - O pacote de certificados HTTPS foi para o `storage.bin`, que passou ao formato **v3**. As raízes atuais do GitHub ficam no firmware, como reserva.
+  - O Wi-Fi ficou só como estação: sem softAP, WPA-Enterprise e WPA3. Redes só WPA3 não conectam.
+- **Watchdog:** a tarefa de rede roda no núcleo 1, com a prioridade da ociosa. O aperto de mão do TLS disparava o watchdog.
+
+### Gráficos
+- Novos ícones próprios: `adjustments`, `agility`, `air`, `alarm`, `angry`, `anti_burn`, `anti_confusion`, `anti_paralysis`, `antidote`, `antifreeze`. As fontes `*.bt.png` ficam ao lado.
+- Removidos 29 bitmaps sem uso.
+
+### Licença
+- O nome e o logo BitArt ficam fora da GPL, como marca reservada.
+
+### Ferramentas
+- `tools/console.py` aceita `socket://` (console TCP do emulador).
+
 ## v0.16.0 — 2026-10-10
 
 ### Conectar (ESP-NOW)
