@@ -34,6 +34,7 @@ typedef struct {
 static volatile bool active;
 static volatile bool held;       /* tela Conectar aberta */
 static volatile bool background; /* o app quer presença em segundo plano */
+static volatile bool watching;   /* sub-menu Conectar: só escuta, sem anunciar */
 static SemaphoreHandle_t state_lock; /* liga/desliga: tela, task de fundo e devolução à rede */
 static link_profile_t profile;
 static link_peers_t peers;
@@ -78,10 +79,13 @@ static void on_receive(const esp_now_recv_info_t *info, const uint8_t *data, int
     xQueueSend(inbox, &r, 0);
 }
 
-/* Presença em broadcast a cada RADIO_LINK_HELLO_MS. */
+/* Presença em broadcast a cada RADIO_LINK_HELLO_MS (só escutando, não anuncia). */
 static void send_hello(void *arg)
 {
     (void)arg;
+    if (!held && !background) {
+        return;
+    }
     link_msg_t m = {.type = LINK_HELLO};
     radio_link_send(BROADCAST, &m);
 }
@@ -123,7 +127,7 @@ static bool turn_on(void)
     active = true;
     send_hello(NULL);
     esp_timer_start_periodic(hello_timer, RADIO_LINK_HELLO_MS * 1000);
-    ESP_LOGI(TAG, "Ativo no canal %d%s", RADIO_LINK_CHANNEL, held ? "" : " (segundo plano)");
+    ESP_LOGI(TAG, "Ativo no canal %d%s", RADIO_LINK_CHANNEL, held ? "" : background ? " (segundo plano)" : " (só escuta)");
     return true;
 }
 
@@ -157,9 +161,9 @@ static void job_background(void *arg)
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(RADIO_LINK_BACKGROUND_MS));
         xSemaphoreTake(state_lock, portMAX_DELAY);
-        if (background && !active && !network_busy()) {
+        if ((background || watching) && !active && !network_busy()) {
             turn_on();
-        } else if (!background && !held && active) {
+        } else if (!background && !watching && !held && active) {
             turn_off();
         }
         xSemaphoreGive(state_lock);
@@ -200,10 +204,29 @@ void radio_link_stop(void)
     }
     xSemaphoreTake(state_lock, portMAX_DELAY);
     held = false;
-    if (!background) {
+    if (!background && !watching) {
         turn_off();
     }
     xSemaphoreGive(state_lock);
+}
+
+/* Sub-menu Conectar aberto ou fechado: a task de segundo plano liga ou desliga em até 250 ms. */
+void radio_link_watch(bool want)
+{
+    watching = want;
+}
+
+/* Procura `uid` entre os vizinhos vistos nos últimos LINK_PEER_TIMEOUT_MS (só a interface chama). */
+bool radio_link_seen(uint32_t uid)
+{
+    static link_peer_t seen[LINK_MAX_PEERS];
+    int n = radio_link_peers(seen, LINK_MAX_PEERS);
+    for (int i = 0; i < n; i++) {
+        if (seen[i].profile.uid == uid) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /* Verdadeiro com a tela Conectar aberta. */

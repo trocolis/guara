@@ -20,11 +20,19 @@ bool radio_link_start(const link_profile_t *me);
 /* Tela Conectar fechada: desliga, a menos que o segundo plano esteja pedido. */
 void radio_link_stop(void);
 /*
- * Presença em segundo plano, pedida pelo app a cada segundo (Wi-Fi em ON, Guará
+ * Presença em segundo plano, pedida pelo app a cada segundo (Visível em ON, Guará
  * nascido, fora do modo Ocioso). Uma task liga e desliga sem prender a tela; a
  * rede tem prioridade e pega o rádio de volta quando precisa.
  */
 void radio_link_background(bool want, const link_profile_t *me);
+/*
+ * Só escuta (sub-menu Conectar aberto, para mostrar os conhecidos online): liga
+ * o rádio como o segundo plano, mas sem anunciar a presença; quem está com
+ * Visível em OFF continua invisível.
+ */
+void radio_link_watch(bool want);
+/* Verdadeiro se o Guará `uid` foi visto há pouco (falso com o rádio desligado). */
+bool radio_link_seen(uint32_t uid);
 /* Verdadeiro se chegou uma oferta ou um desafio (para o app abrir a tela Conectar). */
 bool radio_link_has_invite(void);
 /* Verdadeiro com a tela Conectar aberta (ela mesma trata as mensagens). */

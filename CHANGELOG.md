@@ -7,7 +7,7 @@ Cada escopo executado gera um commit e uma entrada aqui.
 
 ### Conectar
 - **Sub-menu:** Visível, Buscar Guará e Conhecidos, nessa ordem.
-  - **Conhecidos** (antes "conexões aceitas", listadas no próprio sub-menu): modal com a lista, sem ícones nem rodapé. Num conhecido, **Desafiar**, **Compartilhar** (lista dos itens do inventário e quantidade; a oferta sai assim que ele aparecer) e **Excluir**.
+  - **Conhecidos** (antes "conexões aceitas", listadas no próprio sub-menu): modal com a lista, sem ícones nem rodapé, com `online`/`offline` no lugar do nível. Com o sub-menu aberto, o rádio só escuta (`radio_link_watch`), sem anunciar a presença. Num conhecido, **Desafiar**, **Compartilhar** (lista dos itens do inventário e quantidade; a oferta sai assim que ele aparecer) e **Excluir**.
   - Novo widget `ui_choice_list`: lista compacta em modal com as linhas por callback (texto e info à direita), sem o limite de 16 opções do `ui_choice`.
 - **Visível:** nova opção no sub-menu do Conectar, com o ícone `on_off` (padrão `OFF`, salva na NVS). Em `ON`, o Guará fica visível e recebendo ofertas e desafios em segundo plano enquanto o aparelho está em uso; o ícone ![visível](bitmaps/ui/visible.bmp) aparece na barra superior.
 - **Wi-Fi volta a ser só sob demanda:** a presença em segundo plano deixou de depender de Ajustes > Wi-Fi. Com Visível em `OFF`, o rádio só liga para uma tarefa (NTP, GitHub, redes) ou com a busca aberta, e desliga ao terminar. O ESP-NOW não precisa do Wi-Fi em `ON`.

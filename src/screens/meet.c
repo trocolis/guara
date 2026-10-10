@@ -547,13 +547,13 @@ static const saved_connection_t *known(void)
     return &menu.connections[menu.known];
 }
 
-/* Linha do modal de conhecidos: nome e nível, do mais recente para o mais antigo. */
+/* Linha do modal de conhecidos: nome e se está por perto agora, do mais recente para o mais antigo. */
 static void known_item(int i, ui_item_t *it, void *ctx)
 {
     (void)ctx;
     const saved_connection_t *c = &menu.connections[menu.count - 1 - i];
     snprintf(it->text, sizeof(it->text), "%s", c->name);
-    snprintf(it->info, sizeof(it->info), "NV%d", c->level);
+    snprintf(it->info, sizeof(it->info), "%s", radio_link_seen(c->uid) ? "online" : "offline");
 }
 
 /* Escolheu um conhecido: abre as ações dele. */
@@ -708,17 +708,25 @@ static void menu_draw(gfx_t *g, uint32_t now)
     ui_list_draw(g, &menu.list, UI_LIST_Y, UI_LINES_VISIBLE, menu_item, NULL, now);
 }
 
-/* Abre com a seleção no topo. */
+/* Abre com a seleção no topo e o rádio escutando (conhecidos online), sem anunciar. */
 static void menu_open(void *param)
 {
     (void)param;
     menu.list = (ui_list_t){0};
     menu_reload();
+    radio_link_watch(true);
+}
+
+/* Fechou o sub-menu: para de escutar (o segundo plano continua, se Visível estiver em ON). */
+static void menu_close(void)
+{
+    radio_link_watch(false);
 }
 
 const screen_t SCREEN_CONNECT = {
     .name = "conectar",
     .on_open = menu_open,
+    .on_close = menu_close,
     .on_resume = menu_reload,
     .on_key = menu_key,
     .on_draw = menu_draw,
