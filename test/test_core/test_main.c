@@ -361,13 +361,46 @@ static void test_combat_ends(void)
         unsigned ready_mask = combat_advance(&c, 100);
         for (int side = 0; side < 2; side++) {
             if (ready_mask & (1u << side)) {
-                combat_execute(&c, side, combat_ai(&c, side), NULL, &r);
+                combat_action_t action = combat_ai(&c, side);
+                catalog_record_t item;
+                bool has_item = combat_action_item(action, &item);
+                combat_execute(&c, side, action, has_item ? &item : NULL, &r);
             }
         }
     }
     TEST_ASSERT_TRUE(c.finished);
     TEST_ASSERT_TRUE(c.winner == 0 || c.winner == 1);
     TEST_ASSERT_EQUAL_INT(0, c.side[1 - c.winner].hp);
+}
+
+/* O oponente gerado leva a poção do catálogo de teste e a usa com HP baixo. */
+static void test_opponent_potion(void)
+{
+    guara_t g;
+    guara_birth(&g, "Pocao", &rng, 1);
+    fighter_t me, op;
+    combat_fighter_from_guara(&g, &me);
+    combat_generate_opponent(&g, &rng, &op);
+    TEST_ASSERT_EQUAL_INT(1, op.item_ids[0]); /* test_potion (HP+30) */
+    TEST_ASSERT_TRUE(op.item_counts[0] >= 1 && op.item_counts[0] <= 2);
+    int count = op.item_counts[0];
+    combat_t c;
+    combat_start(&c, &me, &op, &rng);
+    c.side[1].hp = 1;
+    memset(c.side[1].skills, SLOT_EMPTY, sizeof(c.side[1].skills)); /* sem habilidade de cura */
+    combat_action_t action = combat_ai(&c, 1);
+    TEST_ASSERT_EQUAL_INT(ACTION_ITEM, action.type);
+    catalog_record_t item;
+    TEST_ASSERT_TRUE(combat_action_item(action, &item));
+    combat_result_t r;
+    combat_execute(&c, 1, action, &item, &r);
+    TEST_ASSERT_FALSE(r.failed);
+    TEST_ASSERT_EQUAL_INT(31, c.side[1].hp);
+    TEST_ASSERT_EQUAL_INT(count - 1, c.side[1].item_counts[0]);
+    /* Sem poções, ataca */
+    c.side[1].item_counts[0] = 0;
+    c.side[1].hp = 1;
+    TEST_ASSERT_EQUAL_INT(ACTION_ATTACK, combat_ai(&c, 1).type);
 }
 
 static void test_forfeit(void)
@@ -442,6 +475,7 @@ int main(void)
     RUN_TEST(test_development_version_rule);
     RUN_TEST(test_combat_formulas);
     RUN_TEST(test_combat_ends);
+    RUN_TEST(test_opponent_potion);
     RUN_TEST(test_forfeit);
     RUN_TEST(test_combat_reaction);
     return UNITY_END();

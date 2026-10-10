@@ -102,4 +102,10 @@
 #define GUARD_MISS_X10           150 /* +15% de chance de erro do atacante */
 #define AI_REACTION_PCT          25  /* chance do oponente acertar a janela */
 
+/* --- Itens do oponente gerado (PROVISÓRIO) --- */
+#define AI_LOW_PCT               30  /* HP abaixo disso: cura (habilidade ou poção) */
+#define AI_POTION_MIN_PCT        30  /* a poção escolhida cobre ao menos isso do máximo */
+#define AI_CURE_PCT              60  /* chance de curar veneno, queimadura ou confusão por turno */
+#define AI_TONIC_PCT             50  /* chance de tomar tônico sem MP para as habilidades */
+
 #endif

@@ -83,6 +83,136 @@ void combat_fighter_from_guara(const guara_t *g, fighter_t *l)
     memcpy(l->skills, g->active_skills, sizeof(l->skills));
 }
 
+/* ------------------------------------------------------------------------- */
+/* Poções do oponente                                                        */
+/* ------------------------------------------------------------------------- */
+
+/* Valor do efeito `target` do item (0 se não tiver). */
+static int item_effect(const catalog_record_t *item, effect_target_t target)
+{
+    for (int i = 0; i < item->n_effects; i++) {
+        if (item->effects[i].target == target) {
+            return item->effects[i].value;
+        }
+    }
+    return 0;
+}
+
+/* Verdadeiro se o item cura o estado `e` com certeza (estado -100 ou ALL-100). */
+static bool item_cures(const catalog_record_t *item, state_t e)
+{
+    for (int i = 0; i < item->n_status; i++) {
+        if ((item->status[i].state == e || item->status[i].state == ST_ALL) && item->status[i].value <= -100) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Estados que o oponente tenta curar: os outros impedem usar itens (paralisia, gelo, maldição). */
+static const state_t AI_CURABLE[] = {ST_POISONED, ST_BURNED, ST_CONFUSED};
+
+/*
+ * Escolhe a poção de `target` (HP ou MP) que cobre ao menos 30% do máximo, a
+ * menor que servir; se nenhuma cobrir, a maior. Só poções sem cura de estado.
+ */
+static int pick_restorer(effect_target_t target, int maximum)
+{
+    catalog_record_t it;
+    int best = -1, best_value = 0, largest = -1, largest_value = 0;
+    for (int id = 0; id < catalog_record_count(CAT_ITEMS); id++) {
+        if (!catalog_read(CAT_ITEMS, id, &it) || it.type != ITEM_POTION || it.n_status > 0) {
+            continue;
+        }
+        int v = item_effect(&it, target);
+        if (v <= 0) {
+            continue;
+        }
+        if (v * 100 >= maximum * AI_POTION_MIN_PCT && (best < 0 || v < best_value)) {
+            best = id, best_value = v;
+        }
+        if (v > largest_value) {
+            largest = id, largest_value = v;
+        }
+    }
+    return best >= 0 ? best : largest;
+}
+
+/* Sorteia uma poção que cure um dos estados de AI_CURABLE (-1 se não houver). */
+static int pick_cure(rng_t *rng)
+{
+    catalog_record_t it;
+    int found[16], n = 0;
+    for (int id = 0; id < catalog_record_count(CAT_ITEMS) && n < 16; id++) {
+        if (!catalog_read(CAT_ITEMS, id, &it) || it.type != ITEM_POTION) {
+            continue;
+        }
+        for (size_t k = 0; k < sizeof(AI_CURABLE) / sizeof(AI_CURABLE[0]); k++) {
+            if (item_cures(&it, AI_CURABLE[k])) {
+                found[n++] = id;
+                break;
+            }
+        }
+    }
+    return n ? found[rng_range(rng, 0, n - 1)] : -1;
+}
+
+/* Põe `count` unidades do item `id` no primeiro espaço livre. */
+static void give_item(fighter_t *l, int id, int count)
+{
+    for (int i = 0; i < COMBAT_MAX_ITEMS && id >= 0 && count > 0; i++) {
+        if (l->item_counts[i] == 0) {
+            l->item_ids[i] = (uint8_t)id;
+            l->item_counts[i] = (uint8_t)count;
+            return;
+        }
+    }
+}
+
+/* Poções do oponente gerado: 1 a 2 de HP, 0 a 1 de MP e, com 50%, 1 cura de estado. */
+static void give_opponent_items(fighter_t *l, rng_t *rng)
+{
+    give_item(l, pick_restorer(VITAL_HP, l->hp_max), rng_range(rng, 1, 2));
+    give_item(l, pick_restorer(VITAL_MP, l->mp_max), rng_range(rng, 0, 1));
+    if (rng_chance(rng, 50)) {
+        give_item(l, pick_cure(rng), 1);
+    }
+}
+
+/* Espaço do primeiro item do lutador que satisfaz `fits` (-1 se nenhum). */
+static int find_item(const fighter_t *l, bool (*fits)(const catalog_record_t *, int), int arg)
+{
+    catalog_record_t it;
+    for (int i = 0; i < COMBAT_MAX_ITEMS; i++) {
+        if (l->item_counts[i] && catalog_read(CAT_ITEMS, l->item_ids[i], &it) && fits(&it, arg)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* Critérios de find_item: restaura HP, restaura MP, cura o estado `arg`. */
+static bool fits_hp(const catalog_record_t *it, int arg)
+{
+    (void)arg;
+    return it->n_status == 0 && item_effect(it, VITAL_HP) > 0;
+}
+static bool fits_mp(const catalog_record_t *it, int arg)
+{
+    (void)arg;
+    return it->n_status == 0 && item_effect(it, VITAL_MP) > 0;
+}
+static bool fits_cure(const catalog_record_t *it, int arg)
+{
+    return item_cures(it, (state_t)arg);
+}
+
+/* Lê o item da ação (ACTION_ITEM) do catálogo. */
+bool combat_action_item(combat_action_t action, catalog_record_t *item)
+{
+    return action.type == ACTION_ITEM && catalog_read(CAT_ITEMS, action.position, item);
+}
+
 /* Gera um oponente de treino com o nível do Guará e atributos variando ±10%. */
 void combat_generate_opponent(const guara_t *ref, rng_t *rng, fighter_t *l)
 {
@@ -111,6 +241,7 @@ void combat_generate_opponent(const guara_t *ref, rng_t *rng, fighter_t *l)
             l->skills[n++] = (uint8_t)id;
         }
     }
+    give_opponent_items(l, rng);
 }
 
 /* Inicia o combate: copia os lutadores, limpa estados que não valem em luta e zera as barras. */
@@ -299,6 +430,13 @@ void combat_execute(combat_t *c, int side, combat_action_t action, const catalog
         }
         snprintf(r->icon, sizeof(r->icon), "%s", item->icon);
         r->target = side;
+        /* Oponente gerado: gasta a poção dos seus espaços (o jogador gasta do inventário) */
+        for (int i = 0; i < COMBAT_MAX_ITEMS; i++) {
+            if (me->item_counts[i] && me->item_ids[i] == item->id) {
+                me->item_counts[i]--;
+                break;
+            }
+        }
         for (int i = 0; i < item->n_effects; i++) {
             if (item->effects[i].target == VITAL_HP) {
                 int before = me->hp;
@@ -420,7 +558,23 @@ bool combat_has_window(const combat_t *c, int side, combat_action_t action)
     return id != SLOT_EMPTY && catalog_read(CAT_SKILLS, id, &h) && h.type != SKILL_HEAL && h.target != TARGET_USER;
 }
 
-/* Escolhe a ação do oponente: cura com HP baixo, às vezes uma habilidade, senão ataca. */
+/* Verdadeiro se o lutador tem alguma habilidade de ataque (cabendo ou não no MP). */
+static bool has_attack_skill(const fighter_t *me)
+{
+    catalog_record_t h;
+    for (int i = 0; i < COUNT_SKILL_ACTIVE; i++) {
+        if (me->skills[i] != SLOT_EMPTY && catalog_read(CAT_SKILLS, me->skills[i], &h) && h.type != SKILL_HEAL) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
+ * Escolhe a ação do oponente: com HP baixo, habilidade de cura ou poção; cura
+ * de veneno, queimadura ou confusão se tiver a poção; tônico se faltar MP para
+ * as habilidades; às vezes uma habilidade de ataque; senão ataca.
+ */
 combat_action_t combat_ai(combat_t *c, int side)
 {
     fighter_t *me = &c->side[side];
@@ -441,10 +595,32 @@ combat_action_t combat_ai(combat_t *c, int side)
             attacks[n_attacks++] = i;
         }
     }
-    if (heal >= 0 && me->hp * 100 < me->hp_max * 30) {
+    bool low_hp = me->hp * 100 < me->hp_max * AI_LOW_PCT;
+    int slot;
+    /* Itens falham com paralisia, gelo e maldição: nesses estados, nem tenta */
+    bool can_use_items = !has(me, ST_PARALYZED) && !has(me, ST_FROZEN) && !has(me, ST_CURSED);
+    if (low_hp && heal >= 0) {
         action.type = ACTION_SKILL;
         action.position = heal;
-    } else if (n_attacks && rng_chance(c->rng, 40)) {
+        return action;
+    }
+    /* HP baixo sem habilidade de cura (ou sem MP): poção de HP */
+    if (low_hp && can_use_items && (slot = find_item(me, fits_hp, 0)) >= 0) {
+        return (combat_action_t){ACTION_ITEM, me->item_ids[slot], 0};
+    }
+    /* Estado negativo com a cura no bolso: às vezes cura */
+    for (size_t k = 0; can_use_items && k < sizeof(AI_CURABLE) / sizeof(AI_CURABLE[0]); k++) {
+        if (has(me, AI_CURABLE[k]) && (slot = find_item(me, fits_cure, AI_CURABLE[k])) >= 0 &&
+            rng_chance(c->rng, AI_CURE_PCT)) {
+            return (combat_action_t){ACTION_ITEM, me->item_ids[slot], 0};
+        }
+    }
+    /* Tem habilidades de ataque mas nenhuma cabe no MP: às vezes toma um tônico */
+    if (n_attacks == 0 && has_attack_skill(me) && can_use_items && (slot = find_item(me, fits_mp, 0)) >= 0 &&
+        rng_chance(c->rng, AI_TONIC_PCT)) {
+        return (combat_action_t){ACTION_ITEM, me->item_ids[slot], 0};
+    }
+    if (n_attacks && rng_chance(c->rng, 40)) {
         action.type = ACTION_SKILL;
         action.position = attacks[rng_range(c->rng, 0, n_attacks - 1)];
     }

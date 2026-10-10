@@ -10,6 +10,8 @@
 
 /* Motor de combate por barra de tempo (ATB). Lado 0 = jogador, 1 = oponente. */
 
+#define COMBAT_MAX_ITEMS 3
+
 typedef struct {
     char name[SIZE_NAME + 1];
     uint8_t nature, color, head, stage, level;
@@ -19,6 +21,9 @@ typedef struct {
     uint8_t skills[COUNT_SKILL_ACTIVE];
     int atb_ms;    /* tempo acumulado */
     int atb_total; /* tempo para encher a barra */
+    /* Poções do oponente gerado (o jogador usa o próprio inventário); quantidade 0 = vazio */
+    uint8_t item_ids[COMBAT_MAX_ITEMS];
+    uint8_t item_counts[COMBAT_MAX_ITEMS];
 } fighter_t;
 
 typedef enum { ACTION_ATTACK, ACTION_SKILL, ACTION_ITEM, ACTION_FORFEIT } combat_action_type_t;
@@ -75,6 +80,8 @@ void combat_execute(combat_t *c, int side, combat_action_t action, const catalog
 bool combat_has_window(const combat_t *c, int side, combat_action_t action);
 /* Escolha automática do oponente. */
 combat_action_t combat_ai(combat_t *c, int side);
+/* Lê o item da ação (ACTION_ITEM) do catálogo. Retorna falso se não for item ou não existir. */
+bool combat_action_item(combat_action_t action, catalog_record_t *item);
 
 uint32_t combat_xp(const combat_t *c, int winning_side);
 /* Sorteia um item dropado (id) ou -1. */

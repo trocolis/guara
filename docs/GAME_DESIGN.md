@@ -145,7 +145,13 @@ As fórmulas de ATB, dano físico, crítico, esquiva e multiplicador elemental s
   - O oponente acerta a janela com 25% de chance, tanto para atacar quanto para se defender.
   - Ordem de aplicação: esquiva → erro da defesa → dano base → elemento → crítico → defesa.
 - **Escolha antecipada:** a ação pode ser escolhida com a barra ATB incompleta e só executa quando ela enche. Depois de escolhida, não muda até o próximo ciclo (A não abre a barra de ações). A barra de ações e o ícone do A continuam ativos durante o preparo e a animação dos golpes (no preparo, A é a reação); depois de cada impacto, A só volta a abrir ou confirmar a barra após 600 ms, para um toque atrasado da janela não escolher a ação; desistir vale na hora. O combate segue em tempo real com a barra de ações ou um modal de escolha aberto (o oponente continua agindo); o modal de escolha não some durante os golpes, e o valor do dano é desenhado por cima dele, sobre um fundo preto de cantos arredondados; se o combate terminar, os modais fecham.
-- **IA do oponente:** cura com HP < 30% (se tiver habilidade e MP); senão, 40% de chance de usar uma habilidade de ataque; senão, ataca.
+- **IA do oponente**, em ordem:
+  1. HP < 30%: habilidade de cura (se tiver e houver MP); senão, poção de HP.
+  2. Envenenado, queimado ou confuso com a poção que cura o estado: 60% de chance de usá-la.
+  3. Tem habilidades de ataque, mas nenhuma cabe no MP, e tem tônico: 50% de chance de tomá-lo.
+  4. 40% de chance de usar uma habilidade de ataque; senão, ataca.
+  - Paralisado, congelado ou amaldiçoado, não tenta usar itens (falhariam).
+- **Poções do oponente gerado** (`AI_*` em `rules.h`): 1 a 2 poções de HP e 0 a 1 de MP, cada uma a menor do catálogo que recupere ao menos 30% do máximo (ou a maior, se nenhuma chegar lá), só entre as que não curam estados; e, com 50% de chance, 1 poção que cure veneno, queimadura ou confusão (sorteada). O jogador usa o próprio inventário.
 - **Treino:**
   - Oponente com o mesmo nível e atributos ±10%.
   - O HP e os estados do combate voltam para o Guará, com HP mínimo de 1.

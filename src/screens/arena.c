@@ -108,7 +108,13 @@ static void execute_now(int side, combat_action_t action, const catalog_record_t
 static void begin_action(int side, combat_action_t action, uint32_t now)
 {
     if (!combat_has_window(&combat, side, action)) {
-        execute_now(side, action, action.type == ACTION_ITEM ? &pending_item : NULL, now);
+        /* O jogador escolheu o item na lista; o do oponente vem da ação da IA */
+        static catalog_record_t opponent_item;
+        const catalog_record_t *item = NULL;
+        if (action.type == ACTION_ITEM) {
+            item = side == 0 ? &pending_item : (combat_action_item(action, &opponent_item) ? &opponent_item : NULL);
+        }
+        execute_now(side, action, item, now);
         return;
     }
     winding = true;
