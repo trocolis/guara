@@ -1,6 +1,7 @@
 /*
  * Biblioteca (/sdcard/library): textos .txt e livros (book.ini + book.txt com
- * imagens {{arquivo.bmp}}), com leitor de 20 caracteres por linha.
+ * imagens {{arquivo.bmp}} da pasta ou {{nome}} da VROM), com leitor de 20
+ * caracteres por linha.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,11 +15,13 @@
 #include "ini.h"
 #include "modal.h"
 #include "sdcard.h"
+#include "storage.h"
 #include "screens.h"
 
 /*
  * Biblioteca (/sdcard/library): .txt simples ou livros (pasta com book.ini,
- * book.txt e imagens 1-bit de até 16x16 referenciadas como {{imagem.bmp}}).
+ * book.txt e imagens 1-bit de até 16x16 referenciadas como {{imagem.bmp}},
+ * da pasta do livro, ou {{nome}}, da VROM).
  */
 
 #define FOLDER_LIBRARY SD_ROOT "/library"
@@ -107,8 +110,17 @@ static void paginate(void)
     }
 }
 
+/* Bitmap da VROM de até 16x16 pelo nome (a VROM fica mapeada: sem cópia nem cache). */
+static const gfx_bitmap_t *vrom_image(const char *name)
+{
+    static gfx_bitmap_t bmp; /* desenhado logo em seguida, antes da próxima busca */
+    return vrom_lookup(name, &bmp) && bmp.width <= 16 && bmp.height <= 16 ? &bmp : NULL;
+}
+
 /*
- * Carrega uma imagem do livro de até 16x16, com cache de 4: cheio, a imagem
+ * Imagem do livro de até 16x16. {{nome}} (sem extensão) vem da VROM;
+ * {{arquivo.bmp}} vem da pasta do livro e, se não existir lá, da VROM pelo
+ * nome sem ".bmp". As da pasta ficam num cache de 4: cheio, a imagem
  * usada há mais tempo dá lugar à nova (cabem até 3 linhas de imagem na tela,
  * então as visíveis nunca saem).
  */
@@ -116,12 +128,31 @@ static const gfx_bitmap_t *book_image(const char *name, int n)
 {
     char key[32];
     snprintf(key, sizeof(key), "%.*s", n < 31 ? n : 31, name);
+    char *dot = strrchr(key, '.');
+    if (!dot) {
+        return vrom_image(key);
+    }
     for (int i = 0; i < 4; i++) {
         if (reader.images[i].data && strcmp(reader.image_names[i], key) == 0) {
             reader.image_used[i] = ++reader.use_clock;
             return &reader.images[i];
         }
     }
+    char c[200];
+    gfx_bitmap_t loaded;
+    snprintf(c, sizeof(c), "%s/%s", reader.folder, key);
+    if (!files_load_bmp(c, &loaded)) {
+        if (strcmp(dot, ".bmp") == 0) {
+            *dot = '\0';
+            return vrom_image(key); /* não está na pasta: tenta a VROM */
+        }
+        return NULL;
+    }
+    if (loaded.width > 16 || loaded.height > 16) {
+        files_release_bmp(&loaded); /* README: máximo 16x16 */
+        return NULL;
+    }
+    /* Espaço livre ou, com o cache cheio, o da imagem usada há mais tempo */
     int slot = -1;
     for (int i = 0; i < 4 && slot < 0; i++) {
         if (!reader.images[i].data) {
@@ -137,15 +168,7 @@ static const gfx_bitmap_t *book_image(const char *name, int n)
         }
         files_release_bmp(&reader.images[slot]);
     }
-    char c[200];
-    snprintf(c, sizeof(c), "%s/%s", reader.folder, key);
-    if (!files_load_bmp(c, &reader.images[slot])) {
-        return NULL;
-    }
-    if (reader.images[slot].width > 16 || reader.images[slot].height > 16) {
-        files_release_bmp(&reader.images[slot]); /* README: máximo 16x16 */
-        return NULL;
-    }
+    reader.images[slot] = loaded;
     snprintf(reader.image_names[slot], sizeof(reader.image_names[slot]), "%s", key);
     reader.image_used[slot] = ++reader.use_clock;
     return &reader.images[slot];
