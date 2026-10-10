@@ -966,4 +966,12 @@ ___
 
 - **Código:** o firmware, as bibliotecas em `lib/` (menos `lib/lua`), as ferramentas em `tools/`, os jogos de exemplo e a documentação estão sob a **GNU General Public License v3.0** ([LICENSE](LICENSE)). Quem distribuir uma versão modificada, inclusive gravada num aparelho, precisa publicar o código-fonte sob a mesma licença.
 - **Lua:** `lib/lua` é o Lua 5.4.7 original, sob a licença MIT da PUC-Rio, com o aviso de copyright no próprio código (`lua.h`).
-- **Artes (`bitmaps/`):** só as artes de autoria do projeto estão cobertas pela licença do repositório. Parte das artes atuais tem **origem desconhecida** e **não** está licenciada; elas são usadas provisoriamente durante o desenvolvimento e serão substituídas antes da versão 1.0.0. A origem de cada bitmap está em [bitmaps/ASSETS.md](bitmaps/ASSETS.md). Se você é o autor de alguma dessas artes e quer crédito ou a remoção, abra uma *issue*.
+- **Artes (`bitmaps/`):** só as artes de autoria do projeto estão cobertas pela licença do repositório, exceto o logo BitArt (ver *Marca*). Parte das artes atuais tem **origem desconhecida** e **não** está licenciada; elas são usadas provisoriamente durante o desenvolvimento e serão substituídas antes da versão 1.0.0. A origem de cada bitmap está em [bitmaps/ASSETS.md](bitmaps/ASSETS.md). Se você é o autor de alguma dessas artes e quer crédito ou a remoção, abra uma *issue*.
+
+### Marca
+
+O nome **BitArt** e o logo `bitmaps/bitart/bitart_logo.bmp` ![BitArt](./bitmaps/bitart/bitart_logo.bmp) são de Bruno Trócolis, com **todos os direitos reservados**. Eles **não** estão cobertos pela GPL v3 nem por nenhuma outra licença deste repositório.
+
+- É permitido redistribuir, sem modificação, os binários oficiais publicados nas releases (`firmware.bin` e `storage.bin`), que mostram o logo na tela de boot.
+- Quem distribuir uma versão modificada do firmware ou do storage, inclusive gravada num aparelho, deve remover ou trocar o logo e não pode usar o nome BitArt para identificá-la. O resto do código e das artes continua livre nos termos da GPL v3.
+- Para outros usos do nome ou do logo, peça autorização ao autor.

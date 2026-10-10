@@ -4,7 +4,7 @@ Lista de todos os bitmaps de `bitmaps/`, para registrar a origem e a licença de
 
 **Como preencher a coluna Origem:**
 
-- `Bruno Trócolis`: arte feita para o Guará; fica sob a licença do repositório.
+- `Bruno Trócolis`: arte feita para o Guará; fica sob a licença do repositório, exceto o logo BitArt (`bitart/`), que é marca e não está licenciado.
 - `Terceiro: <autor ou site> (<licença>)`: arte de terceiros com uma licença que permita o uso (ex.: `Terceiro: Kenney (CC0)`). Inclua o link e o crédito que a licença exigir.
 - `Desconhecida`: origem não identificada; **não** está coberta pela licença e deve ser substituída.
 
@@ -36,7 +36,7 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 
 | Arquivo           | Tamanho | Uso                         | Origem         |
 | ----------------- | ------- | --------------------------- | -------------- |
-| `bitart_logo.bmp` | 112x38  | firmware / jogos de exemplo | Bruno Trócolis |
+| `bitart_logo.bmp` | 112x38  | firmware / jogos de exemplo | Bruno Trócolis (marca BitArt, todos os direitos reservados; fora da GPL, ver *Marca* no README) |
 
 ## `exemple/`
 
@@ -131,7 +131,7 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `confusao_confuso_16.bmp`       | 16x16   | **sem uso**                 |                |
 | `confused.bmp`                  | 16x16   | firmware / jogos de exemplo |                |
 | `congelamento_congelado_16.bmp` | 16x16   | **sem uso**                 |                |
-| `connect.bmp`                   | 16x16   | firmware                    |                |
+| `connect.bmp`                   | 16x16   | firmware                    | Bruno Trócolis |
 | `cookie.bmp`                    | 16x16   | catálogo                    |                |
 | `croissant.bmp`                 | 16x16   | catálogo                    |                |
 | `crystal.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
