@@ -35,6 +35,7 @@ static struct {
     uint32_t emotion_at, emotion_until;
     uint32_t wink_until;
     uint32_t bite_happy_until; /* olhar feliz logo após cada mordida */
+    uint32_t angry_until;      /* olhar de raiva ao recusar um item que não faria efeito */
 } anim;
 
 /* Intervalo aleatório em milissegundos. */
@@ -79,6 +80,7 @@ void home_set_wink(uint32_t until)
 static const char *current_eye(uint32_t now)
 {
     const guara_t *g = &g_guara;
+    if (now < anim.angry_until) return EYE_ANGER;
     if (guara_has_state(g, ST_FAINTED)) return EYE_FAINTED;
     if (guara_has_state(g, ST_SLEEPING)) return EYE_CLOSED;
     if (now < anim.bite_happy_until) return EYE_HAPPY;
@@ -180,6 +182,18 @@ static int guara_frame(uint32_t now)
     return still ? 1 : sprite_frame(now);
 }
 
+/* Balão de estados com `icon` dentro (NULL = balão vazio), "respirando". */
+static void draw_balloon(gfx_t *g, uint32_t now, const char *icon)
+{
+    /* "respiração": desce 8 px e volta, suavemente (ciclo de 3 s) */
+    static const uint8_t wave[] = {0, 0, 1, 2, 3, 4, 5, 6, 7, 7, 8, 8, 8, 7, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0};
+    int dy = wave[(now / 125) % sizeof(wave)];
+    ui_icon_mode(g, "speech_balloon", BALLOON_X, BALLOON_Y + dy, GFX_COPY, 0);
+    if (icon) {
+        ui_icon(g, icon, BALLOON_X + 2, BALLOON_Y + dy + 2);
+    }
+}
+
 /* Cena da tela principal, reutilizada pela animação de uso de item. */
 void draw_home_scene(gfx_t *g, uint32_t now, bool with_balloon)
 {
@@ -194,11 +208,7 @@ void draw_home_scene(gfx_t *g, uint32_t now, bool with_balloon)
 
     const char *icon = with_balloon ? balloon_icon(now) : NULL;
     if (icon) {
-        /* "respiração": desce 8 px e volta, suavemente (ciclo de 3 s) */
-        static const uint8_t wave[] = {0, 0, 1, 2, 3, 4, 5, 6, 7, 7, 8, 8, 8, 7, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0};
-        int dy = wave[(now / 125) % sizeof(wave)];
-        ui_icon_mode(g, "speech_balloon", BALLOON_X, BALLOON_Y + dy, GFX_COPY, 0);
-        ui_icon(g, icon, BALLOON_X + 2, BALLOON_Y + dy + 2);
+        draw_balloon(g, now, icon);
     }
 }
 
@@ -243,11 +253,14 @@ static struct {
     uint32_t start;
     int last_frame;
     bool absorbed; /* partículas já lançadas (som tocado) */
+    bool refused;  /* item recusado (não faria efeito): só o ícone, raiva e o balão "não" */
     char texts[FX_MAX_TEXTS][FX_TEXT_SIZE];
     int n_texts;
 } usage;
 
 #define FRAME_BITE_MS 350 /* duração de cada quadro da mordida */
+#define REFUSE_MS 2000     /* recusa: o "não" pisca 1,5 vez por segundo (3 vezes) */
+#define REFUSE_BLINK_MS 333 /* metade do ciclo da piscada */
 #define BITES 5
 #define TEXT_X 22 /* textos do efeito: centro da área livre à esquerda do Guará (onde fica o balão) */
 #define TEXT_Y 44 /* linha de partida; sobe até Y=14 */
@@ -319,6 +332,18 @@ static void item_use_on_draw(gfx_t *g, uint32_t now)
 {
     uint32_t t = now - usage.start;
     draw_home_scene(g, now, false);
+    if (usage.refused) {
+        /* Recusa: o item aparece, o Guará fica com raiva e o balão mostra o "não" piscando (1,5 vez/s) */
+        if (t >= REFUSE_MS) {
+            anim.angry_until = 0;
+            ui_back();
+            return;
+        }
+        anim.angry_until = now + 100;
+        ui_icon_mode(g, usage.item.icon, ITEM_X, ITEM_Y, GFX_COPY, 0);
+        draw_balloon(g, now, (t / REFUSE_BLINK_MS) % 2 == 0 ? "not" : NULL);
+        return;
+    }
     if (t < consume_ms()) {
         draw_consume(g, now, t);
         return;
@@ -369,6 +394,14 @@ void screens_use_item(int item_id)
     static guara_t before; /* estático: o guara_t é grande para a pilha */
     before = g_guara;
     item_use_result_t res = guara_use_item(&g_guara, &r, &g_rng);
+    usage.refused = res == USE_FULL;
+    if (usage.refused) {
+        /* Não faria efeito: o item não é gasto e o Guará recusa na tela principal */
+        audio_error();
+        app_interact();
+        ui_open(&SCREEN_USE_ITEM, (void *)(intptr_t)item_id);
+        return;
+    }
     if (res != USE_OK) {
         static const char *const reasons[] = {"", "Desmaiado! Espere ou use uma cura.", "Amaldiçoado! Não pode usar itens.",
                                               "Sem estoque.", "Item inválido."};

@@ -197,6 +197,7 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `music.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
 | `mute.bmp`                      | 16x16   | firmware / jogos de exemplo |                |
 | `neutral.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
+| `not.bmp`                       | 16x16   | firmware                    |                |
 | `nota_musical_faixa_16.bmp`     | 16x16   | **sem uso**                 |                |
 | `on_off.bmp`                    | 16x16   | firmware / jogos de exemplo |                |
 | `onion.bmp`                     | 16x16   | catálogo                    |                |

@@ -302,6 +302,15 @@ static void test_item_heal_and_blocks(void)
     catalog_read(CAT_ITEMS, 0, &apple);
     g.inventory[potion.id] = 1;
     g.inventory[apple.id] = 1;
+    /* Cheio: a poção (só HP) e a comida não fazem efeito e não são gastas */
+    g.hp = g.hp_max;
+    g.satiety = 10000;
+    TEST_ASSERT_EQUAL_INT(USE_FULL, guara_use_item(&g, &potion, &rng));
+    TEST_ASSERT_EQUAL_INT(USE_FULL, guara_use_item(&g, &apple, &rng));
+    TEST_ASSERT_EQUAL_INT(1, g.inventory[potion.id]);
+    TEST_ASSERT_EQUAL_INT(1, g.inventory[apple.id]);
+    g.satiety = 9000;
+    TEST_ASSERT_EQUAL_INT(USE_OK, guara_can_use_item(&g, &apple));
     g.hp = 1;
     TEST_ASSERT_EQUAL_INT(USE_OK, guara_use_item(&g, &potion, &rng));
     TEST_ASSERT_EQUAL_INT(g.hp_max < 31 ? g.hp_max : 31, g.hp);

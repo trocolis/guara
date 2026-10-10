@@ -64,6 +64,7 @@ typedef enum {
     USE_BLOCKED_CURSE,
     USE_NO_STOCK,
     USE_INVALID,
+    USE_FULL, /* não faria efeito: alimentação cheia (comida/bebida) ou nada a recuperar (poção) */
 } item_use_result_t;
 
 void guara_birth(guara_t *g, const char *name, rng_t *rng, uint32_t now);

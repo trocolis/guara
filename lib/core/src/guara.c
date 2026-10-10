@@ -572,7 +572,43 @@ static bool item_heal_hp(const catalog_record_t *item)
     return false;
 }
 
-/* Verifica se o item pode ser usado agora (estoque, maldição, desmaio). */
+/* Valor do efeito `target` do item (0 se não tiver). */
+static int item_effect_value(const catalog_record_t *item, effect_target_t target)
+{
+    for (int i = 0; i < item->n_effects; i++) {
+        if (item->effects[i].target == target) {
+            return item->effects[i].value;
+        }
+    }
+    return 0;
+}
+
+/*
+ * Verdadeiro se o item não faria efeito agora: comida e bebida com a
+ * alimentação cheia; poção que só recupera HP/MP já cheios e não cura nenhum
+ * estado presente. Poção sem HP, MP nem estados no catálogo nunca está "cheia".
+ */
+static bool item_would_be_wasted(const guara_t *g, const catalog_record_t *item)
+{
+    if (item->type == ITEM_FOOD || item->type == ITEM_DRINK) {
+        return g->satiety >= VITAL_MAX;
+    }
+    int hp = item_effect_value(item, VITAL_HP), mp = item_effect_value(item, VITAL_MP);
+    bool restores = (hp > 0 && g->hp < g->hp_max) || (mp > 0 && g->mp < g->mp_max);
+    for (int i = 0; i < item->n_status; i++) {
+        uint8_t e = item->status[i].state;
+        if (item->status[i].value >= 0) {
+            continue;
+        }
+        if (e == ST_ALL ? (g->states & MASK_PHYSICAL & ~(STATE_BIT(ST_SLEEPING) | STATE_BIT(ST_FAINTED))) != 0
+                        : e < 32 && guara_has_state(g, (state_t)e)) {
+            restores = true;
+        }
+    }
+    return (hp > 0 || mp > 0 || item->n_status > 0) && !restores;
+}
+
+/* Verifica se o item pode ser usado agora (estoque, maldição, desmaio, efeito nulo). */
 item_use_result_t guara_can_use_item(const guara_t *g, const catalog_record_t *item)
 {
     if (item->id >= COUNT_ITEMS) {
@@ -586,6 +622,9 @@ item_use_result_t guara_can_use_item(const guara_t *g, const catalog_record_t *i
     }
     if (guara_has_state(g, ST_FAINTED) && (g->minutes_fainted < FAINT_LOCKOUT_MIN || !item_heal_hp(item))) {
         return USE_BLOCKED_FAINTED;
+    }
+    if (item_would_be_wasted(g, item)) {
+        return USE_FULL;
     }
     return USE_OK;
 }

@@ -381,6 +381,7 @@ Mostra o Guará e suas animações, a barra superior e o balão de estados. A ab
 	- **Absorção** (código comum ao combate em `src/screens/item_fx.c`): o que sobrou do ícone se desfaz em 8 partículas, cruzes de 3x3 em inversão, que voam numa curva por cima até o Guará em 0,35 s, com um arpejo. Na bebida e na poção, elas saem da boca do frasco tombado. Ao chegarem, o Guará pisca invertido 3 vezes, 75 ms cada, só a silhueta e sem o fundo, com o olhar feliz.
 	- **Efeito:** junto com as piscadas sobem, um a cada 200 ms, os textos do que o item mudou de fato (já com os limites), com as abreviações do [CATALOG.md](CATALOG.md): `HP+10`, `MP+80`, `EP+12`, `HU+14`, `FP+4` e, para estados que saíram, `-PSN`, `-BRN`, `-PRL`, `-FRZ`, `-CNF`, `-CRS`, `-FND`, `-HGR` ou `-SLP`. Ficam na área do balão de estados (centralizados em X=22), brancos sobre fundo preto de cantos arredondados (raio 2) como o dano no combate, partindo de Y=44 e subindo 1 px a cada 20 ms por 0,6 s.
 	- Depois do uso, o Guará dá uma piscadela por 1,5 s.
+	- **Recusa** (item que não faria efeito): o ícone aparece parado na área de itens, o Guará fica com o olhar de raiva e o balão de estados mostra ![não](./bitmaps/icons/not.bmp) piscando 1,5 vez por segundo (333 ms aceso, 333 ms apagado), com o som de erro, por 2 s.
 
 ### Menu principal
 
@@ -418,7 +419,7 @@ Sub-menu com as abas TODOS, COMIDAS, BEBIDAS e POCOES. Cada aba lista em ordem a
 
 A abre um modal de escolha com:
 
-- **Comer / Beber / Usar** (conforme o tipo): aplica o item e mostra a animação na tela principal. Se o Guará estiver desmaiado ou amaldiçoado, um alerta explica por que não dá para usar.
+- **Comer / Beber / Usar** (conforme o tipo): aplica o item e mostra a animação na tela principal. Se o Guará estiver desmaiado ou amaldiçoado, um alerta explica por que não dá para usar. Se o item não faria efeito, ele não é gasto e o Guará o recusa na tela principal (ver *Área de itens*): comida e bebida com a alimentação (FP) cheia; poção que só recupera HP e/ou MP já cheios e não cura nenhum estado que ele tenha.
 - **Detalhes:** descrição, efeitos (ex.: `Alimentação +15%`), curas e afinidade.
 - **Descartar:** modal de quantidade e, depois, confirmação ("Descartar 3 Maçã?").
 - **Compartilhar:** ainda não implementado (troca de itens entre Guarás, depende do Bluetooth); mostra um aviso.
