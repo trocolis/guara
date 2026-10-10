@@ -688,7 +688,9 @@ Sub-menu com o estado de cada opção à direita.
 
 4. **Armazenamento** ![Armazenamento](./bitmaps/icons/box.bmp) (`OK` / `--`):
 	1. **Memória interna** ![memória interna](./bitmaps/icons/chip.bmp): bitmaps da VROM, registros do catálogo, saves gravados e memória livre.
-	2. **Micro SD** ![micro SD](./bitmaps/icons/sd_card.bmp): capacidade e espaço livre do cartão.
+	2. **Micro SD** ![micro SD](./bitmaps/icons/sd_card.bmp):
+		1. **Status** ![status](./bitmaps/icons/info.bmp): capacidade e espaço livre do cartão.
+		2. **Remover** ![remover](./bitmaps/icons/sd_card.bmp): remoção segura. Desmonta o cartão, gravando o que estiver pendente, e avisa "O cartão pode ser removido."; sem cartão montado, avisa "Nenhum cartão montado.". Armazenamento passa a mostrar `--`, e o cartão volta a ser montado sozinho quando alguma tela precisar dele.
 5. **Controle** ![Controle](./bitmaps/icons/joystick.bmp): teste dos botões, que acendem na tela enquanto pressionados. Segure B por 1 s para sair.
 6. **Som** ![Som](./bitmaps/icons/sound.bmp) (`MUDO` / vazio):
 	1. **Mudo** ![mudo](./bitmaps/icons/mute.bmp): liga ou desliga o som. Os alarmes tocam mesmo no mudo.

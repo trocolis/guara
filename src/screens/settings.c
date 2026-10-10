@@ -318,9 +318,30 @@ static void show_sd_card_info(void)
     ui_details("MICRO SD", text);
 }
 
+/*
+ * Remoção segura: desmonta o cartão (o FAT grava o que estiver pendente) e
+ * avisa que ele pode ser tirado. Quem precisar do cartão depois o monta de novo.
+ */
+static void eject_sd_card(void)
+{
+    if (!sd_mounted()) {
+        ui_alert("MICRO SD", "sd_card", "Nenhum cartão montado.", "OK", NULL, NULL);
+        return;
+    }
+    sd_unmount();
+    ui_alert("MICRO SD", "sd_card", "O cartão pode ser removido.", "OK", NULL, NULL);
+}
+
+static const submenu_item_t ITEMS_SD_CARD[] = {
+    {"info", "Status", NULL, show_sd_card_info},
+    {"sd_card", "Remover", NULL, eject_sd_card},
+};
+static const submenu_t MENU_SD_CARD = {"MICRO SD", ITEMS_SD_CARD, 2};
+static void open_sd_card(void) { submenu_open(&MENU_SD_CARD); }
+
 static const submenu_item_t ITEMS_STORAGE[] = {
     {"chip", "Memória interna", NULL, show_internal_memory},
-    {"sd_card", "Micro SD", info_storage, show_sd_card_info},
+    {"sd_card", "Micro SD", info_storage, open_sd_card},
 };
 static const submenu_t MENU_STORAGE = {"ARMAZENAMENTO", ITEMS_STORAGE, 2};
 
