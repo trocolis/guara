@@ -4,6 +4,7 @@ tools/console.py
 Console de depuração do Guará pela serial: envia teclas e captura a tela.
 
     python3 tools/console.py [-p /dev/ttyACM0] keys "jjsk"          # envia teclas (w s a d j k)
+    python3 tools/console.py -p socket://127.0.0.1:4444 state       # o mesmo no emulador (--console-port 4444)
     python3 tools/console.py screen saida.png [--scale 4]          # captura o framebuffer
     python3 tools/console.py state                                 # estado do Guará
     python3 tools/console.py log [segundos]                        # mostra o log
@@ -30,7 +31,13 @@ DARK_RGB = b"\x0a\x0c\x14"
 
 
 def open_port(port_name):
-    """Abre a porta serial sem segurar o ESP32 em modo de gravação."""
+    """
+    Abre a porta serial sem segurar o ESP32 em modo de gravação. Um endereço
+    como socket://127.0.0.1:4444 abre o console TCP do emulador (guara-emulator
+    --console-port 4444), com os mesmos comandos e a mesma saída.
+    """
+    if "://" in port_name:
+        return serial.serial_for_url(port_name, timeout=0.2)
     port = serial.Serial()
     port.port = port_name
     port.baudrate = 115200
