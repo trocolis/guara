@@ -29,3 +29,15 @@ CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
 CONFIG_ULP_COPROC_ENABLED=y
 CONFIG_ULP_COPROC_TYPE_FSM=y
 CONFIG_ULP_COPROC_RESERVE_MEM=128
+
+# Certificados HTTPS (atualização pelo GitHub): o pacote completo (~66 KB) vai no
+# storage.bin e é carregado em cada conexão; no firmware ficam só as raízes que o
+# GitHub usa hoje, como reserva para um storage corrompido (README > Atualização pelo GitHub)
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_NONE=y
+CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE_PATH="certs/github_roots.pem"
+
+# Wi-Fi só como estação (roteador e ESP-NOW): sem ponto de acesso, WPA-Enterprise e WPA3
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n

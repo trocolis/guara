@@ -8,7 +8,7 @@
 
 #include "crc32.h"
 
-#define VERSION_STORAGE 2
+#define VERSION_STORAGE 3
 #define SIZE_ENTRY_VROM 44
 #define SIZE_NAME_VROM 32
 #define SIZE_RECORD 176
@@ -22,6 +22,8 @@ static struct {
     uint32_t vrom_data_size;
     const uint8_t *records[COUNT_CATALOGS];
     uint16_t amount[COUNT_CATALOGS];
+    const uint8_t *certs; /* pacote de certificados HTTPS (NULL = não há) */
+    uint32_t certs_size;
 } st;
 
 static uint16_t le16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
@@ -42,7 +44,9 @@ storage_status_t storage_open(const uint8_t *image, size_t size)
     }
     uint32_t off_vrom = le32(image + 8), vrom_size = le32(image + 12);
     uint32_t off_cat = le32(image + 16), catalog_size = le32(image + 20);
-    if ((uint64_t)off_vrom + vrom_size > size || (uint64_t)off_cat + catalog_size > size || vrom_size < 16 || catalog_size < 16) {
+    uint32_t off_certs = le32(image + 24), certs_size = le32(image + 28);
+    if ((uint64_t)off_vrom + vrom_size > size || (uint64_t)off_cat + catalog_size > size || vrom_size < 16 || catalog_size < 16 ||
+        (uint64_t)off_certs + certs_size > size) {
         return STORAGE_ERROR_BOUNDS;
     }
 
@@ -73,9 +77,18 @@ storage_status_t storage_open(const uint8_t *image, size_t size)
         return STORAGE_ERROR_BOUNDS;
     }
 
+    st.certs = certs_size ? image + off_certs : NULL;
+    st.certs_size = certs_size;
     st.image = image;
     st.size = size;
     return STORAGE_OK;
+}
+
+/* Pacote de certificados HTTPS do storage (formato esp_crt_bundle), ou NULL. */
+const uint8_t *storage_certs(size_t *size)
+{
+    *size = st.certs_size;
+    return st.certs;
 }
 
 /* Verdadeiro se uma imagem válida foi aberta. */

@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
 tools/storage-packer/pack_storage.py
-Empacotador da partição 'storage' (1024 KB, subtipo 0x99) do Guará — formato v2.
+Empacotador da partição 'storage' (1024 KB, subtipo 0x99) do Guará — formato v3.
 
 Gera 'storage.bin', somente leitura no aparelho, contendo:
-1. Cabeçalho (64 bytes): magic 'GSTR', versão, offsets/tamanhos da VROM e do
-   catálogo, CRC32 dos 60 bytes anteriores.
+1. Cabeçalho (64 bytes): magic 'GSTR', versão, offsets/tamanhos da VROM, do
+   catálogo e do pacote de certificados, CRC32 dos 60 bytes anteriores.
 2. VROM 'GVRO': índice ordenado por nome (busca binária) + bitmaps 1-bit em
    linhas (row-major, MSB primeiro, bit 1 = pixel aceso), sem cabeçalho BMP.
 3. Catálogo 'GCAT': registros de 176 bytes de itens, equipamentos e habilidades,
    lidos de catalog/*.csv.
+4. Certificados (opcional): o pacote de raízes HTTPS no formato do ESP-IDF
+   (esp_crt_bundle), gerado por tools/pio_storage.py com o gen_crt_bundle.py do
+   próprio ESP-IDF. Sem ele (offset e tamanho 0), o firmware usa as raízes
+   embutidas (certs/github_roots.pem).
 
 Os saves ficam na partição 'save' e as configurações na NVS: gravar esta
 imagem nunca apaga o Guará.
@@ -30,7 +34,7 @@ PARTITION_SIZE = 1024 * 1024
 # A imagem é arredondada para setores de 4 KB (unidade de apagamento da Flash)
 FLASH_SECTOR = 4096
 # Versões dos formatos binários; o firmware recusa versões diferentes
-STORAGE_FORMAT_VERSION = 2
+STORAGE_FORMAT_VERSION = 3
 CATALOG_FORMAT_VERSION = 1
 
 # Pastas de bitmaps que não vão para a VROM (mockups de documentação)
@@ -248,21 +252,27 @@ def align(value: int, step: int) -> int:
     return (value + step - 1) // step * step
 
 
-def build_image(bitmaps_folder: Path, catalog_folder: Path, full_size: bool) -> bytes:
-    """Monta a imagem completa: cabeçalho + VROM + catálogo, com o restante em 0xFF."""
+def build_image(bitmaps_folder: Path, catalog_folder: Path, full_size: bool, cert_bundle: Path = None) -> bytes:
+    """Monta a imagem completa: cabeçalho + VROM + catálogo + certificados, com o restante em 0xFF."""
     bitmaps = collect_bitmaps(bitmaps_folder)
     vrom = build_vrom(bitmaps)
     print(f"[VROM] {len(bitmaps)} bitmaps, {len(vrom)} bytes")
     catalog = build_catalog(catalog_folder, bitmaps)
+    certs = cert_bundle.read_bytes() if cert_bundle else b""
+    if cert_bundle:
+        # O pacote começa com a lista de offsets (4 bytes por raiz); o primeiro offset é o tamanho dela
+        print(f"[CERT] {struct.unpack_from('<I', certs, 0)[0] // 4} raízes, {len(certs)} bytes")
 
     vrom_offset = 64
     catalog_offset = align(vrom_offset + len(vrom), 4)
-    data_end = catalog_offset + len(catalog)
+    certs_offset = align(catalog_offset + len(catalog), 4) if certs else 0
+    data_end = (certs_offset + len(certs)) if certs else catalog_offset + len(catalog)
     if data_end > PARTITION_SIZE:
         raise PackError(f"Dados ({data_end} bytes) excedem a partição de {PARTITION_SIZE} bytes")
 
-    header = struct.pack("<4sHHIIII36s", b"GSTR", STORAGE_FORMAT_VERSION, 0,
-                         vrom_offset, len(vrom), catalog_offset, len(catalog), b"\x00" * 36)
+    header = struct.pack("<4sHHIIIIII28s", b"GSTR", STORAGE_FORMAT_VERSION, 0,
+                         vrom_offset, len(vrom), catalog_offset, len(catalog),
+                         certs_offset, len(certs), b"\x00" * 28)
     header += struct.pack("<I", zlib.crc32(header) & 0xFFFFFFFF)
 
     # 0xFF é o valor da Flash apagada: gravar menos bytes acelera o upload
@@ -271,6 +281,8 @@ def build_image(bitmaps_folder: Path, catalog_folder: Path, full_size: bool) -> 
     image[0:64] = header
     image[vrom_offset:vrom_offset + len(vrom)] = vrom
     image[catalog_offset:catalog_offset + len(catalog)] = catalog
+    if certs:
+        image[certs_offset:certs_offset + len(certs)] = certs
     return bytes(image)
 
 
@@ -281,10 +293,11 @@ def main():
     parser.add_argument("-c", "--catalog", default=root / "catalog", type=Path, help="Pasta dos CSVs do catálogo")
     parser.add_argument("-o", "--output", default=root / ".pio" / "storage.bin", type=Path, help="Arquivo de saída")
     parser.add_argument("--full", action="store_true", help="Gera a imagem com os 1024 KB completos")
+    parser.add_argument("--cert-bundle", type=Path, help="Pacote de certificados do ESP-IDF (x509_crt_bundle)")
     args = parser.parse_args()
 
     try:
-        image = build_image(args.bitmaps, args.catalog, args.full)
+        image = build_image(args.bitmaps, args.catalog, args.full, args.cert_bundle)
     except PackError as error:
         print(f"ERRO: {error}", file=sys.stderr)
         sys.exit(1)

@@ -162,9 +162,10 @@ Gerado por `tools/storage-packer/pack_storage.py` e lido por `lib/core/src/stora
 
 | Offset | Bloco | Conteúdo |
 |---|---|---|
-| 0x00 | Cabeçalho (64 bytes) | `GSTR` (4), versão do formato = 2 (u16), flags (u16), offset da VROM (u32), tamanho da VROM (u32), offset do catálogo (u32), tamanho do catálogo (u32), 36 bytes reservados, CRC32 dos 60 bytes anteriores (u32) |
+| 0x00 | Cabeçalho (64 bytes) | `GSTR` (4), versão do formato = 3 (u16), flags (u16), offset da VROM (u32), tamanho da VROM (u32), offset do catálogo (u32), tamanho do catálogo (u32), offset dos certificados (u32), tamanho dos certificados (u32), 28 bytes reservados, CRC32 dos 60 bytes anteriores (u32) |
 | 0x40 | VROM | Cabeçalho `GVRO` (4), número de bitmaps (u32), tamanho de cada entrada do índice = 44 (u32), tamanho dos dados (u32); índice; dados dos bitmaps |
 | alinhado a 4 bytes | Catálogo | Cabeçalho `GCAT` (4), versão = 1 (u16), tamanho do registro = 176 (u16), número de itens, de equipamentos e de habilidades (u16 cada), reservado (u16); registros |
+| alinhado a 4 bytes | Certificados (opcional) | Pacote de raízes HTTPS no formato `esp_crt_bundle` do ESP-IDF, gerado por `tools/pio_storage.py` com o `gen_crt_bundle.py` do próprio ESP-IDF (as raízes da Mozilla, 147 hoje, ~66 KB). Offset e tamanho 0 quando não há (como no storage dos testes) |
 
 **Índice da VROM:** uma entrada de 44 bytes por bitmap, ordenada pelo nome em bytes UTF-8, para busca binária: nome (32 bytes, terminado em zero), largura (u16), altura (u16), offset dos pixels a partir do início dos dados (u32) e tamanho em bytes (u32). Os pixels ficam em linhas (*row-major*), cada linha com `ceil(largura / 8)` bytes, bit mais significativo primeiro, 1 = pixel aceso.
 
@@ -306,6 +307,7 @@ Implementação: `src/system/network.c`. O rádio só liga quando alguma tarefa 
 	- No primeiro pedido, o serviço liga o rádio e conecta à última rede salva disponível.
 	- Quando o contador volta a zero, o rádio desliga após **30 s** ocioso, para tarefas próximas aproveitarem a mesma conexão.
 	- Tarefas em segundo plano usam `network_run()`. As telas nunca chamam o driver `wifi_*` direto.
+- **Redes aceitas:** abertas, WEP, WPA e WPA2 pessoais (com senha), incluindo roteadores em modo de transição WPA2/WPA3. Redes só WPA3 e WPA-Enterprise (usuário e senha) não conectam: o suporte foi tirado do firmware para economizar espaço, junto com o modo ponto de acesso, que o Guará não usa.
 - **Reconexão rápida:** o canal e o BSSID do último roteador ficam na NVS, e a conexão leva de 1 a 2 s em vez de 3 a 5 s com busca completa.
 - **Relógio (NTP):** no boot, em segundo plano, se a hora for inválida ou a última sincronização tiver mais de **6 h**; depois, a cada 6 h com o aparelho acordado (`NETWORK_NTP_INTERVAL_S`). O fuso horário fica fixo em UTC−3 (`<-03>3`), sem menu para trocar por enquanto.
 - **Deep sleep:** o rádio é sempre desligado antes de dormir, e o comportamento é o mesmo no boot frio e ao acordar.
@@ -938,6 +940,7 @@ Implementação: `src/system/ota.c` (`ota_github_latest`, `ota_is_newer`, `ota_g
 - **Última versão:** `https://github.com/trocolis/guara/releases/latest` redireciona para `/releases/tag/<tag>`; o aparelho lê a tag do cabeçalho `Location`, sem usar a API do GitHub (sem limite de requisições nem JSON). A tag `v#.#.#` é comparada com `GUARA_VERSION`; só uma versão maior é oferecida.
 - **Verificação automática:** com o Wi-Fi ligado e a hora válida, a task da rede busca a última release em segundo plano a cada **24 h** (`NETWORK_UPDATE_INTERVAL_S`), logo após o NTP no boot; após uma falha, tenta de novo em 1 h. A hora da última verificação fica na RTC RAM e sobrevive ao deep sleep. Se achar uma versão mais nova, o aparelho apita e, na tela principal e fora do modo Ocioso, pergunta "Nova versão v0.13.0. Atualizar?". SIM segue o mesmo caminho do menu; NAO descarta o aviso até a próxima verificação.
 - **Arquivos:** `/releases/download/<tag>/firmware.bin` e `/releases/download/<tag>/storage.bin`. O GitHub redireciona para outro servidor, e o download segue até 5 redirecionamentos, lendo em blocos de 4 KB.
+- **Certificados:** o HTTPS confere o GitHub com as raízes da seção de certificados do storage, escolhidas de novo em cada conexão (o ESP-IDF as esquece ao fim de cada uma). Se o storage não tiver a seção ou ela estiver inválida (por exemplo, apagada no meio de uma atualização), valem as 5 raízes embutidas no firmware (`certs/github_roots.pem`: USERTrust RSA e ECC e Sectigo E46 para github.com, ISRG X1 e X2 para os downloads), suficientes para baixar um storage novo. Se o GitHub trocar de autoridade certificadora, o arquivo precisa ser atualizado.
 - **Ordem segura:** o firmware é gravado na partição OTA livre e validado (o cabeçalho precisa ser de um app com nome de projeto `guara`, e `esp_ota_end` confere a imagem), mas ainda não vira a de boot. Depois vem o storage: o primeiro bloco precisa começar com `GSTR`, e só então a partição é apagada e regravada. Uma release sem `storage.bin` (404) atualiza só o firmware. Só no fim a partição nova é marcada para o boot. Se o novo firmware não confirmar o boot, o *rollback* volta ao anterior.
 - **Publicação:** o workflow `.github/workflows/release.yml` roda a cada tag `v#.#.#` enviada ao GitHub. Ele confere se a tag bate com `GUARA_VERSION`, compila o firmware, empacota o storage e cria a release com `firmware.bin`, `storage.bin` e a seção da versão no CHANGELOG como notas. Para publicar: `git tag v0.12.0 && git push origin v0.12.0`.
 

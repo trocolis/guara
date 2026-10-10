@@ -17,6 +17,7 @@
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
+#include "storage.h"
 
 static const char *TAG = "ota";
 #define BLOCK 4096
@@ -144,12 +145,30 @@ static const esp_partition_t *storage_partition(void)
     return esp_partition_find_first(ESP_PARTITION_TYPE_DATA, (esp_partition_subtype_t)0x99, "storage");
 }
 
-/* Configuração comum das requisições HTTPS (certificados do bundle do IDF). */
+/*
+ * Certificados de cada conexão HTTPS: o pacote completo do storage, se houver
+ * um válido; senão, as raízes do GitHub embutidas no firmware
+ * (certs/github_roots.pem). O ESP-IDF esquece o pacote ao fim de cada conexão
+ * (esp_crt_bundle_detach), por isso ele é escolhido de novo a cada uma. O
+ * pacote é validado aqui: durante a atualização, o storage é apagado e
+ * regravado, e uma conexão aberta nesse meio-tempo usa as raízes embutidas.
+ */
+static esp_err_t attach_certificates(void *conf)
+{
+    size_t size;
+    const uint8_t *bundle = storage_certs(&size);
+    if (bundle && esp_crt_bundle_set(bundle, size) != ESP_OK) {
+        ESP_LOGW(TAG, "Certificados do storage inválidos: usando os do firmware");
+    }
+    return esp_crt_bundle_attach(conf);
+}
+
+/* Configuração comum das requisições HTTPS. */
 static esp_http_client_config_t http_config(const char *url)
 {
     return (esp_http_client_config_t){
         .url = url,
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .crt_bundle_attach = attach_certificates,
         .timeout_ms = HTTP_TIMEOUT_MS,
         .buffer_size = BLOCK,
         .buffer_size_tx = 2048, /* as URLs assinadas dos arquivos são longas */

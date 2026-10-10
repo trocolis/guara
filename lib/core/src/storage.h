@@ -53,6 +53,8 @@ typedef enum {
 
 storage_status_t storage_open(const uint8_t *image, size_t size);
 bool storage_is_open(void);
+/* Pacote de certificados HTTPS (formato esp_crt_bundle do ESP-IDF), ou NULL se o storage não tiver. */
+const uint8_t *storage_certs(size_t *size);
 
 /* Busca um bitmap pelo nome (sem extensão). Retorna false se não existir. */
 bool vrom_lookup(const char *name, gfx_bitmap_t *output);
