@@ -845,7 +845,7 @@ O Guará é composto de três partes, desenhadas em modo opaco (`copy`): corpo, 
 | 8 | ![preta 8](./bitmaps/sprites/sprite_head_black_variant_8.bmp) | ![branca 8](./bitmaps/sprites/sprite_head_white_variant_8.bmp) |
 | 9 | ![preta 9](./bitmaps/sprites/sprite_head_black_variant_9.bmp) | ![branca 9](./bitmaps/sprites/sprite_head_white_variant_9.bmp) |
 
-**Corpos:** variam só com a cor e o estágio. A animação tem 3 quadros a 3 FPS, na sequência dos bitmaps 1, 2, 2. O corpo do quadro 2 é 1 px mais alto.
+**Corpos:** variam só com a cor e o estágio. A animação tem 3 quadros a 3 FPS, na sequência dos bitmaps 1, 2, 2. O corpo do quadro 2 é 1 px mais alto. Na tela principal, desmaiado ou dormindo, o Guará fica parado no quadro 1.
 
 | Estágio | Preto | Branco |
 |---|---|---|

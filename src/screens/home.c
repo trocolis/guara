@@ -180,7 +180,9 @@ void draw_home_scene(gfx_t *g, uint32_t now, bool with_balloon)
     if (!g_has_guara) {
         return;
     }
-    int frame = guara_has_state(&g_guara, ST_FAINTED) ? 1 : sprite_frame(now);
+    /* Desmaiado ou dormindo: parado no quadro 1 */
+    bool still = guara_has_state(&g_guara, ST_FAINTED) || guara_has_state(&g_guara, ST_SLEEPING);
+    int frame = still ? 1 : sprite_frame(now);
     sprite_guara(g, g_guara.color, g_guara.head, g_guara.stage, current_eye(now), GUARA_X, GUARA_BASE, frame,
                  GFX_SCALE2X);
 
