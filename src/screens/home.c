@@ -113,7 +113,7 @@ static const char *balloon_icon(uint32_t now)
     return NULL;
 }
 
-/* Relógio à esquerda do usuário e indicadores à direita (bateria, Wi-Fi, etc.). */
+/* Relógio à esquerda do usuário e indicadores à direita (bateria, Wi-Fi, Visível, etc.). */
 static void draw_top_bar(gfx_t *g, uint32_t now)
 {
     char hour[8];
@@ -156,6 +156,10 @@ static void draw_top_bar(gfx_t *g, uint32_t now)
                 }
             }
         }
+        x -= 10;
+    }
+    if (g_cfg.link_visible) {
+        ui_icon(g, "visible", x, 1); /* Conectar > Visível: outros Guarás podem encontrá-lo */
         x -= 10;
     }
     if (alarms_count() > 0) {

@@ -13,7 +13,8 @@ typedef struct {
     uint16_t wake_minute;
     char timezone[32];         /* POSIX TZ */
     bool wifi_on;
-} config_t;
+    bool link_visible; /* Conectar: presença em segundo plano (ESP-NOW), independente do Wi-Fi */
+} config_t; /* campos novos sempre no fim (o byte de alinhamento das versões antigas é zero) */
 
 #define CONFIG_COUNT_POWER_SAVE 5
 extern const uint8_t CONFIG_POWER_SAVE_MIN[CONFIG_COUNT_POWER_SAVE]; /* 0 = desativado */

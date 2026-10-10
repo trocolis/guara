@@ -316,6 +316,7 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `status_bateria_ausente_8x8.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
 | `status_mute.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
 | `status_timer.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
+| `visible.bmp` | 8x8 | barra superior, Conectar > Visível | Bruno Trócolis |
 | `wifi_1.bmp` | 8x8 | barra superior | Bruno Trócolis |
 | `wifi_2.bmp` | 8x8 | barra superior | Bruno Trócolis |
 | `wifi_3.bmp` | 8x8 | barra superior | Bruno Trócolis |

@@ -1,10 +1,12 @@
 /*
- * Conectar: o sub-menu do menu principal (Buscar Guará e as conexões aceitas)
- * e a busca, que lista os Guarás por perto (ESP-NOW), troca itens e desafia
+ * Conectar: o sub-menu do menu principal (Buscar Guará, Visível e as conexões
+ * aceitas) e a busca, que lista os Guarás por perto (ESP-NOW), troca itens e desafia
  * para combates. A busca abre por Conectar > Buscar Guará ou Arena > Combate
  * (A desafia o Guará escolhido), por uma conexão aceita (desafia quando ela
  * aparecer) ou por Inventário > Compartilhar (A envia o item). Enquanto a tela está
- * aberta, o rádio fica ligado e o aparelho não entra em modo Ocioso.
+ * aberta, o rádio fica ligado e o aparelho não entra em modo Ocioso. Com
+ * Visível em ON, o rádio também fica ligado fora dela enquanto o aparelho está
+ * em uso (app.c), e outros Guarás podem encontrá-lo e mandar ofertas e desafios.
  *
  * Troca segura: quem envia repete a oferta até a resposta e só desconta o
  * item ao receber a aceitação; quem recebe soma uma vez por oferta (UID + tx)
@@ -503,27 +505,37 @@ static struct {
     ui_list_t list;
 } menu;
 
+#define MENU_SEARCH 0
+#define MENU_VISIBLE 1
+#define MENU_FIRST_CONNECTION 2
+
 /* Relê as conexões aceitas (podem ter mudado numa busca). */
 static void menu_reload(void)
 {
     menu.count = config_connections(menu.connections);
-    menu.list.total = 1 + menu.count;
+    menu.list.total = MENU_FIRST_CONNECTION + menu.count;
     if (menu.list.sel >= menu.list.total) {
         menu.list.sel = menu.list.total - 1;
     }
     ui_list_adjust(&menu.list, UI_LINES_VISIBLE);
 }
 
-/* Linha 0: Buscar Guará; as outras: as conexões, da mais recente para a mais antiga. */
+/* Buscar Guará, Visível e as conexões, da mais recente para a mais antiga. */
 static void menu_item(int i, ui_item_t *it, void *ctx)
 {
     (void)ctx;
-    if (i == 0) {
+    if (i == MENU_SEARCH) {
         it->icon = "search";
         snprintf(it->text, sizeof(it->text), "Buscar Guará");
         return;
     }
-    const saved_connection_t *c = &menu.connections[menu.count - i];
+    if (i == MENU_VISIBLE) {
+        it->icon = "visible";
+        snprintf(it->text, sizeof(it->text), "Visível");
+        snprintf(it->info, sizeof(it->info), "%s", g_cfg.link_visible ? "ON" : "OFF");
+        return;
+    }
+    const saved_connection_t *c = &menu.connections[menu.count + MENU_FIRST_CONNECTION - 1 - i];
     it->icon = "guara";
     snprintf(it->text, sizeof(it->text), "%s", c->name);
     snprintf(it->info, sizeof(it->info), "NV%d", c->level);
@@ -532,7 +544,7 @@ static void menu_item(int i, ui_item_t *it, void *ctx)
 /* Posição na lista salva da conexão selecionada. */
 static int menu_connection(void)
 {
-    return menu.count - menu.list.sel;
+    return menu.count + MENU_FIRST_CONNECTION - 1 - menu.list.sel;
 }
 
 /* Confirmou esquecer a conexão. */
@@ -572,7 +584,7 @@ static void connection_action(int r, void *ctx)
     }
 }
 
-/* A abre a busca ou as ações da conexão; B volta ao menu principal. */
+/* A abre a busca, alterna Visível (o app liga ou desliga o rádio em até 1 s) ou abre as ações da conexão; B volta. */
 static void menu_key(const key_event_t *ev)
 {
     if (ui_list_key(&menu.list, ev, UI_LINES_VISIBLE) || ev->type != KEY_PRESSED) {
@@ -581,8 +593,11 @@ static void menu_key(const key_event_t *ev)
     if (ev->key == KEY_B) {
         ui_back();
     } else if (ev->key == KEY_A) {
-        if (menu.list.sel == 0) {
+        if (menu.list.sel == MENU_SEARCH) {
             screens_open_meet(-1, 0);
+        } else if (menu.list.sel == MENU_VISIBLE) {
+            g_cfg.link_visible = !g_cfg.link_visible;
+            config_save();
         } else {
             static const char *const options[] = {"Desafiar", "Esquecer"};
             ui_choice(menu.connections[menu_connection()].name, options, 2, connection_action, NULL);

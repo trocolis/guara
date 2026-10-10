@@ -18,6 +18,9 @@ const uint8_t CONFIG_POWER_SAVE_MIN[CONFIG_COUNT_POWER_SAVE] = {1, 2, 5, 10, 0};
 
 config_t g_cfg;
 
+/* link_visible ocupou o byte de alinhamento: o blob gravado pelas versões anteriores continua válido */
+_Static_assert(sizeof(config_t) == 42, "config_t mudou de tamanho: suba VERSION_CONFIG ou migre o blob");
+
 /* Valores padrão das configurações. */
 static void fallback(config_t *c)
 {

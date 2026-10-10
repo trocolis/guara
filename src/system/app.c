@@ -290,9 +290,10 @@ static void stop_link(void)
 }
 
 /*
- * Conectar em segundo plano (a cada segundo): com o Wi-Fi em ON, o Guará fica
- * visível para outros enquanto o aparelho está em uso; o rádio desliga no modo
- * Ocioso e religa sozinho ao interagir. Uma oferta ou um desafio que chegar
+ * Conectar em segundo plano (a cada segundo): com Conectar > Visível em ON, o
+ * Guará fica visível para outros enquanto o aparelho está em uso (o ESP-NOW não
+ * depende da opção Wi-Fi); o rádio desliga no modo Ocioso e religa sozinho ao
+ * interagir. Uma oferta ou um desafio que chegar
  * abre a busca do Conectar, menos nas telas que seguram o sono (jogos,
  * combate, cronômetro), onde espera.
  */
@@ -300,7 +301,7 @@ static void update_link(void)
 {
     link_profile_t me;
     link_profile_from_guara(&g_guara, &me);
-    radio_link_background(g_cfg.wifi_on && g_has_guara && !power_is_idle(), &me);
+    radio_link_background(g_cfg.link_visible && g_has_guara && !power_is_idle(), &me);
     if (!radio_link_held() && !sleep_blocked && radio_link_has_invite()) {
         screens_open_meet(-1, 0);
     }

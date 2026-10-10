@@ -3,6 +3,16 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.18.0 — 2026-10-10
+
+### Conectar
+- **Visível:** nova opção no sub-menu do Conectar (padrão `OFF`, salva na NVS). Em `ON`, o Guará fica visível e recebendo ofertas e desafios em segundo plano enquanto o aparelho está em uso; o ícone ![visível](bitmaps/ui/visible.bmp) aparece na barra superior.
+- **Wi-Fi volta a ser só sob demanda:** a presença em segundo plano deixou de depender de Ajustes > Wi-Fi. Com Visível em `OFF`, o rádio só liga para uma tarefa (NTP, GitHub, redes) ou com a busca aberta, e desliga ao terminar. O ESP-NOW não precisa do Wi-Fi em `ON`.
+- **Config:** o campo novo ocupa o byte de alinhamento de `config_t`, e as configurações salvas pelas versões anteriores continuam valendo.
+
+### Gráficos
+- Novo ícone `ui/visible` (fonte `visible.bt.png` ao lado).
+
 ## v0.17.0 — 2026-10-10
 
 ### Conectar
