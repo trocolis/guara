@@ -10,7 +10,7 @@ Guará is a virtual-pet / RPG handheld built on an ESP32 (NodeMCU-32S) with a 12
 - `docs/GAME_DESIGN.md` — numbers and behaviours the README leaves open (decay rates, XP curve, stage levels, extra combat formulas, unspecified controls). Values live in `lib/core/src/rules.h`; keep both in sync.
 - `docs/PLAN.md` — phase plan, hardware decisions (D1–D10) and the README fix backlog (H/I/L/A/C items). Mark items there when you resolve them.
 - `catalog/items.csv`, `equipment.csv`, `skills.csv` — packer input. They hold **only** what the author defined in `CATALOG.md`, converted from it (today: 64 items, the first 63 converted from the Petnator catalog; icons in `bitmaps/icons` named after the item in English). Never invent catalog entries; fields missing in `CATALOG.md` use the neutral default and must be pointed out to the author. Adding catalog items is a MINOR version bump. Tests use `test/fixtures/catalog/`.
-- `bitmaps/` — 1-bit VROM assets. `examples/sdcard/games/` — sample Lua games: `apple_catch` (short API demo) and `boitata` (the reference game, evolved together with the author). `examples/sdcard/library/manual_de_batalha/` — sample book (battle manual) illustrated with VROM icons (`{{name}}` in `book.txt`). `sdcard/` — the author's own SD card content (games, music, saves).
+- `bitmaps/` — 1-bit VROM assets. `examples/sdcard/games/` — sample Lua games: `apple_catch` (short API demo) and `boitata` (the reference game, evolved together with the author). `examples/sdcard/library/` — sample books: `manual_de_batalha` (battle manual illustrated with VROM icons, `{{name}}` in `book.txt`) and `como_criar_livros` (how to write books, showing every style). `sdcard/` — the author's own SD card content (games, music, saves).
 
 ## Project rules (README > Implementação)
 
@@ -70,7 +70,7 @@ python3 tools/bmp-builder/bmp_builder.py in.png -o bitmaps/icons/x.bmp --preset 
   - Lua API: `games.c` holds the VM runtime and the base modules (`oled`, `btn`, `audio`, `guara`, `storage`); `game_api.c` adds VROM drawing options, `guara.draw`, `catalog` and the `ui` widgets/modals. Keep the README API table in sync when changing either.
 - `lib/` — pure C11, **no IDF includes**, compiled for both `esp32` and `native`:
   - `crc32`;
-  - `gfx`: page-format framebuffer, primitives, UTF-8 text, draw modes, BMP decoder;
+  - `gfx`: page-format framebuffer, primitives, UTF-8 text, draw modes, BMP decoder, `rich_text` (bold/italic/underline/mark markup used by the library reader);
   - `core`: types, storage/VROM/catalog reader, save format and ring, pet life cycle, combat;
   - `midi`: SMF → monophonic;
   - `ini`;

@@ -1,0 +1,105 @@
+==COMO CRIAR LIVROS==
+
+Escreva seus próprios livros para a Biblioteca do Guará.
+
+{{library}}
+
+1. TEXTO OU LIVRO
+
+{{txt}}
+
+O jeito mais simples é um arquivo **.txt** solto na pasta /library do cartão. O nome do arquivo vira o título: o _ vira espaço e a extensão some.
+
+{{book}}
+
+Um **livro** é uma pasta dentro de /library com dois arquivos:
+
+book.ini: o título.
+
+book.txt: o texto.
+
+2. O BOOK.INI
+
+Ele tem só duas linhas:
+
+[BOOK]
+
+title=Meu Livro
+
+Sem o title, o título é o nome da pasta.
+
+3. ESCREVENDO
+
+Salve o texto em UTF-8, com acentos e ç à vontade. Cada linha do arquivo vira um parágrafo, e o leitor quebra o texto sozinho em linhas de até 20 letras, preferindo os espaços.
+
+Uma linha vazia no arquivo vira uma linha vazia na tela. Use para separar os assuntos.
+
+O arquivo pode ter até 64 KB.
+
+4. ESTILOS
+
+Marque um trecho com os sinais abaixo, antes e depois dele:
+
+\*\*negrito\*\* fica **negrito**.
+
+\*itálico\* fica *itálico*.
+
+\_\_sublinhado\_\_ fica __sublinhado__.
+
+\=\=marcado\=\= fica ==marcado==.
+
+Dá para juntar: \*\*\_\_isto\_\_\*\* fica **__isto__**.
+
+O negrito é mais largo: numa linha toda em negrito cabem 17 letras.
+
+Um estilo vale até ser fechado ou até o fim do parágrafo. Se esquecer de fechar, só aquele parágrafo fica estranho.
+
+Para mostrar um sinal sem virar estilo, ponha uma barra antes: \\\* mostra \*. Para mostrar a barra, use duas: \\\\.
+
+5. IMAGENS
+
+Uma imagem fica numa linha própria, centralizada. Escreva o nome entre chaves duplas, sozinho na linha:
+
+\{{attack}}
+
+{{attack}}
+
+Sem extensão, a imagem vem da memória do Guará, a VROM: os mesmos ícones do jogo, sem copiar nada para o cartão. O nome é o do arquivo, sem o .bmp:
+
+\{{fire}} \{{potion}} \{{hp}}
+
+{{fire}}
+
+{{potion}}
+
+{{hp}}
+
+Com extensão, a imagem vem da pasta do livro:
+
+\{{mapa.bmp}}
+
+Se o arquivo não estiver na pasta, o leitor procura na VROM o mesmo nome sem o .bmp.
+
+{{images}}
+
+As imagens têm de ser **BMP de 1 bit**, de até **16x16**. Para converter um PNG, use a ferramenta do projeto:
+
+bmp_builder.py desenho.png -o mapa.bmp --preset icon
+
+Não há limite de imagens por livro.
+
+6. NO APARELHO
+
+{{sd_card}}
+
+Copie o .txt ou a pasta do livro para /library no cartão SD. Abra Biblioteca no menu: os livros aparecem com o ícone de livro.
+
+No leitor, cima e baixo rolam uma linha, esquerda e direita uma página, e B fecha.
+
+Um .txt também abre pelo menu Cartão SD.
+
+{{info}}
+
+Dica: o Manual de Batalha, na mesma pasta de exemplos, é um livro completo com imagens da VROM. Abra o book.txt dele para ver como foi feito.
+
+Boa escrita!

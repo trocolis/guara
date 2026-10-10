@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include "gfx.h"
+#include "rich_text.h"
 
 static gfx_t g;
 
@@ -68,6 +69,46 @@ static void test_bitmap_modes(void)
     TEST_ASSERT_FALSE(gfx_read_pixel(&g, 2, 0));
 }
 
+/* Marcações alternam o estilo e não viram caracteres; "\" mostra o próximo literal. */
+static void test_rich_markers(void)
+{
+    const char *text = "a**b**\\*c*__d__==e==";
+    const char *p = text, *end = text + strlen(text);
+    uint8_t style = 0;
+    TEST_ASSERT_EQUAL_UINT32('a', rich_next(&p, end, &style));
+    TEST_ASSERT_EQUAL_UINT8(0, style);
+    TEST_ASSERT_EQUAL_UINT32('b', rich_next(&p, end, &style));
+    TEST_ASSERT_EQUAL_UINT8(RICH_BOLD, style);
+    TEST_ASSERT_EQUAL_UINT32('*', rich_next(&p, end, &style)); /* \* literal, depois de fechar o negrito */
+    TEST_ASSERT_EQUAL_UINT8(0, style);
+    TEST_ASSERT_EQUAL_UINT32('c', rich_next(&p, end, &style));
+    TEST_ASSERT_EQUAL_UINT8(0, style); /* o * literal não abriu itálico; o *c* abre e fecha depois */
+    TEST_ASSERT_EQUAL_UINT32('d', rich_next(&p, end, &style));
+    TEST_ASSERT_EQUAL_UINT8(RICH_ITALIC | RICH_UNDERLINE, style);
+    TEST_ASSERT_EQUAL_UINT32('e', rich_next(&p, end, &style));
+    TEST_ASSERT_EQUAL_UINT8(RICH_ITALIC | RICH_MARK, style);
+    TEST_ASSERT_EQUAL_UINT32(0, rich_next(&p, end, &style));
+}
+
+/* Negrito avança 7 px; marcado inverte; sublinhado desenha a linha y + 8. */
+static void test_rich_draw(void)
+{
+    const char *t = "**ab**";
+    gfx_init(&g);
+    TEST_ASSERT_EQUAL_INT(14, rich_draw(&g, 0, 0, t, t + strlen(t), 0));
+    t = "==a==";
+    gfx_init(&g);
+    rich_draw(&g, 1, 1, t, t + strlen(t), 0);
+    TEST_ASSERT_TRUE(gfx_read_pixel(&g, 0, 0)); /* fundo branco com 1 px de folga */
+    t = "__a__";
+    gfx_init(&g);
+    rich_draw(&g, 0, 0, t, t + strlen(t), 0);
+    for (int x = 0; x < 6; x++) {
+        TEST_ASSERT_TRUE(gfx_read_pixel(&g, x, 8));
+    }
+}
+
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -76,5 +117,7 @@ int main(void)
     RUN_TEST(test_utf8);
     RUN_TEST(test_glyph_accented_exists);
     RUN_TEST(test_bitmap_modes);
+    RUN_TEST(test_rich_markers);
+    RUN_TEST(test_rich_draw);
     return UNITY_END();
 }

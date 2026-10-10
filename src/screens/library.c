@@ -13,6 +13,7 @@
 #include "audio.h"
 #include "widgets.h"
 #include "ini.h"
+#include "rich_text.h"
 #include "modal.h"
 #include "sdcard.h"
 #include "storage.h"
@@ -27,7 +28,7 @@
 #define FOLDER_LIBRARY SD_ROOT "/library"
 #define TEXT_MAX (64 * 1024)
 #define MAX_LINES 4000
-#define CHARS_LINE 20
+#define LINE_PX 120 /* 20 caracteres normais de 6 px; em negrito cabem menos */
 
 /* ---------------- Leitor ---------------- */
 
@@ -35,6 +36,7 @@ typedef struct {
     uint32_t start;
     uint16_t bytes;
     uint8_t image; /* 1 = linha de imagem {{...}} */
+    uint8_t style; /* estilos RICH_* ativos no começo da linha */
 } text_line_t;
 
 static struct {
@@ -52,14 +54,18 @@ static struct {
 } reader;
 
 /* Acrescenta uma linha ao índice do leitor. */
-static void add_line(uint32_t ini, int bytes, bool image)
+static void add_line(uint32_t ini, int bytes, bool image, uint8_t style)
 {
     if (reader.n_lines < MAX_LINES) {
-        reader.lines[reader.n_lines++] = (text_line_t){ini, (uint16_t)bytes, image};
+        reader.lines[reader.n_lines++] = (text_line_t){ini, (uint16_t)bytes, image, style};
     }
 }
 
-/* Quebra o texto em linhas de até 20 caracteres, preferindo espaços. */
+/*
+ * Quebra o texto em linhas de até LINE_PX pixels (20 caracteres normais),
+ * preferindo espaços. As marcações de estilo não ocupam espaço, o negrito
+ * ocupa 1 px a mais por caractere, e os estilos valem até o fim do parágrafo.
+ */
 static void paginate(void)
 {
     const char *t = reader.text;
@@ -70,10 +76,13 @@ static void paginate(void)
             paragraph_end = p + strlen(p);
         }
         const char *opening = strstr(p, "{{");
+        while (opening && opening < paragraph_end && opening > p && opening[-1] == '\\') {
+            opening = strstr(opening + 2, "{{"); /* \{{ é texto: mostra as chaves */
+        }
         if (opening && opening < paragraph_end) {
             const char *closing = strstr(opening, "}}");
             if (closing && closing < paragraph_end) {
-                add_line((uint32_t)(opening + 2 - t), (int)(closing - opening - 2), true);
+                add_line((uint32_t)(opening + 2 - t), (int)(closing - opening - 2), true, 0);
                 p = closing + 2;
                 while (*p == ' ' || *p == '\r') {
                     p++;
@@ -85,22 +94,46 @@ static void paginate(void)
             }
         }
         if (p == paragraph_end || (p + 1 == paragraph_end && *p == '\r')) {
-            add_line((uint32_t)(p - t), 0, false);
+            add_line((uint32_t)(p - t), 0, false, 0);
         }
-        while (p < paragraph_end && *p != '\r') {
+        const char *text_end = paragraph_end;
+        if (text_end > p && text_end[-1] == '\r') {
+            text_end--;
+        }
+        uint8_t style = 0; /* cada parágrafo começa sem estilo */
+        while (p < text_end) {
+            /* Avança caractere a caractere enquanto couber; guarda o último espaço e o estilo nele */
             const char *q = p, *line_break = NULL;
-            int n = 0;
-            while (q < paragraph_end && *q != '\r' && n < CHARS_LINE) {
-                if (*q == ' ') {
-                    line_break = q;
+            uint8_t line_style = style, s = style, style_at_break = style;
+            int px = 0, visible = 0;
+            while (q < text_end) {
+                const char *before = q;
+                uint8_t s_before = s;
+                uint32_t c = rich_next(&q, text_end, &s);
+                if (!c) {
+                    break;
                 }
-                utf8_next(&q);
-                n++;
+                if (px + rich_advance(s) > LINE_PX + 1) { /* +1: o espaço depois da última letra */
+                    q = before;
+                    s = s_before;
+                    break;
+                }
+                px += rich_advance(s);
+                visible++;
+                if (c == ' ') {
+                    line_break = q - 1; /* o próprio espaço: as marcações antes dele ficam nesta linha */
+                    style_at_break = s;
+                }
             }
-            if (q < paragraph_end && *q != ' ' && *q != '\r' && line_break) {
+            if (q < text_end && *q != ' ' && line_break) {
                 q = line_break;
+                s = style_at_break;
             }
-            add_line((uint32_t)(p - t), (int)(q - p), false);
+            if (!visible) {
+                break; /* só marcações sem texto: nada mais a mostrar */
+            }
+            add_line((uint32_t)(p - t), (int)(q - p), false, line_style);
+            style = s;
             p = q;
             while (p < paragraph_end && *p == ' ') {
                 p++;
@@ -174,13 +207,17 @@ static const gfx_bitmap_t *book_image(const char *name, int n)
     return &reader.images[slot];
 }
 
-#define HEIGHT_LINE 9
-#define HEIGHT_IMG 18
+#define HEIGHT_LINE 9 /* 8 px da fonte + 1 px entre linhas */
 
 /* Altura em pixels da linha (texto ou imagem). */
 static int height(int i)
 {
-    return reader.lines[i].image ? HEIGHT_IMG : HEIGHT_LINE;
+    /* Imagem: a altura dela + 1 px, o mesmo espaço que separa duas linhas de texto */
+    if (reader.lines[i].image) {
+        const gfx_bitmap_t *b = book_image(reader.text + reader.lines[i].start, reader.lines[i].bytes);
+        return b ? b->height + 1 : HEIGHT_LINE;
+    }
+    return HEIGHT_LINE;
 }
 
 /* Rolagem por linha (↑/↓) ou por página (←/→); B fecha. */
@@ -228,14 +265,11 @@ static void reader_draw(gfx_t *g, uint32_t now)
         if (l->image) {
             const gfx_bitmap_t *b = book_image(reader.text + l->start, l->bytes);
             if (b) {
-                gfx_bitmap(g, b, (GFX_WIDTH - b->width) / 2, y + 1, GFX_COPY, 0);
+                gfx_bitmap(g, b, (GFX_WIDTH - b->width) / 2, y, GFX_COPY, 0);
             }
         } else if (l->bytes) {
-            char buf[96];
-            int n = l->bytes < (int)sizeof(buf) - 1 ? l->bytes : (int)sizeof(buf) - 1;
-            memcpy(buf, reader.text + l->start, (size_t)n);
-            buf[n] = '\0';
-            gfx_text(g, 2, y, buf, GFX_WHITE);
+            const char *start = reader.text + l->start;
+            rich_draw(g, 2, y, start, start + l->bytes, l->style);
         }
         y += height(i);
     }

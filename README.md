@@ -504,9 +504,17 @@ Sub-menu com as obras da pasta `/sdcard/library`, montando o cartão se for prec
 	- `{{nome}}` (sem extensão): um bitmap da VROM pelo nome, como nos jogos (`{{attack}}`, `{{action_atk}}`, `{{hit_4}}`), sem copiar nada para o cartão;
 	- `{{imagem.bmp}}`: um arquivo da pasta do livro; se ele não existir, vale o bitmap da VROM com o mesmo nome, sem `.bmp`.
 	- Não há limite de imagens por livro: as da pasta ficam num cache das 4 usadas mais recentemente, e as da VROM não ocupam memória.
-	- Exemplo: `examples/sdcard/library/manual_de_batalha/`, um manual de batalha ilustrado com os ícones da VROM.
+	- A imagem ocupa a altura dela mais 1 px, o mesmo espaço que separa duas linhas de texto.
+	- `\{{` mostra as chaves em vez de abrir uma imagem.
+	- Exemplos em `examples/sdcard/library/`: `manual_de_batalha/`, um manual de batalha ilustrado com os ícones da VROM, e `como_criar_livros/`, que ensina a fazer livros e usa todos os estilos.
+- **Estilos** (`lib/gfx/src/rich_text.c`), em `.txt` e livros, abertos e fechados pela mesma marcação; valem até ser fechados ou até o fim do parágrafo, e não ocupam espaço na linha:
+	- `**negrito**`: cada letra desenhada duas vezes, com 1 px de deslocamento, e 1 px a mais de avanço (7 px), para as letras não colarem; numa linha toda em negrito cabem 17 caracteres;
+	- `*itálico*`: as 4 linhas de cima de cada letra deslocadas 1 px para a direita;
+	- `__sublinhado__`: um traço na linha de 1 px logo abaixo do texto;
+	- `==marcado==`: fundo branco com o texto em preto, com 1 px de folga em volta;
+	- `\` antes de um caractere o mostra literalmente (`\*`, `\\`).
 
-O leitor quebra o texto em linhas de até 20 caracteres, preferindo os espaços, e aceita arquivos de até 64 KB. ↑/↓ rolam uma linha e ←/→ uma página; a barra de título some suavemente ao rolar para baixo. B fecha o leitor. Arquivos `.txt` abertos pelo Cartão SD usam o mesmo leitor.
+O leitor quebra o texto em linhas de até 120 px (20 caracteres sem negrito), preferindo os espaços, e aceita arquivos de até 64 KB. ↑/↓ rolam uma linha e ←/→ uma página; a barra de título some suavemente ao rolar para baixo. B fecha o leitor. Arquivos `.txt` abertos pelo Cartão SD usam o mesmo leitor.
 
 ### Jogos ![Jogos](./bitmaps/icons/games.bmp)
 
