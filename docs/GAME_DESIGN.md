@@ -152,6 +152,7 @@ As fórmulas de ATB, dano físico, crítico, esquiva e multiplicador elemental s
   4. 40% de chance de usar uma habilidade de ataque; senão, ataca.
   - Paralisado, congelado ou amaldiçoado, não tenta usar itens (falhariam).
 - **Poções do oponente gerado** (`AI_*` em `rules.h`): 1 a 2 poções de HP e 0 a 1 de MP, cada uma a menor do catálogo que recupere ao menos 30% do máximo (ou a maior, se nenhuma chegar lá), só entre as que não curam estados; e, com 50% de chance, 1 poção que cure veneno, queimadura ou confusão (sorteada). O jogador usa o próprio inventário.
+- **Combate entre dois Guarás (Conectar):** quem desafia roda o motor (anfitrião) e o outro espelha; as fórmulas, a janela de reação e as consequências são as do treino, e a reação de cada lado vem do A apertado no próprio aparelho. Uma conexão perdida antes do fim encerra o combate sem consequências.
 - **Treino:**
   - Oponente com o mesmo nível e atributos ±10%.
   - O HP e os estados do combate voltam para o Guará, com HP mínimo de 1.

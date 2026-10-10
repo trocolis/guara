@@ -1,7 +1,7 @@
 /*
- * Conectar: lista os Guarás por perto (ESP-NOW) e troca itens entre eles.
- * Aberto por Ajustes > Conectar (só recebe) ou por Inventário > Compartilhar
- * (envia o item escolhido para quem for selecionado). Enquanto a tela está
+ * Conectar: lista os Guarás por perto (ESP-NOW), troca itens e desafia para
+ * combates. Aberto por Ajustes > Conectar ou Arena > Combate (A desafia o
+ * Guará escolhido) ou por Inventário > Compartilhar (A envia o item). Enquanto a tela está
  * aberta, o rádio fica ligado e o aparelho não entra em modo Ocioso.
  *
  * Troca segura: quem envia repete a oferta até a resposta e só desconta o
@@ -32,6 +32,7 @@ static struct {
     /* Envio (Inventário > Compartilhar); item -1 = só recebe */
     int item_id, count;
     bool waiting, applied;
+    link_type_t waiting_for; /* LINK_OFFER (item) ou LINK_CHALLENGE (combate) */
     uint8_t to_mac[6];
     uint32_t to_uid, tx, sent_at, last_try;
     char to_name[SIZE_NAME + 1];
@@ -39,6 +40,7 @@ static struct {
     bool prompt_open;
     uint8_t prompt_mac[6];
     link_msg_t prompt;
+    link_peer_t challenge_peer; /* escolhido para o desafio, à espera da confirmação */
 } meet;
 
 /* Ofertas respondidas: repetidas, recebem a mesma resposta (sobrevivem entre aberturas). */
@@ -113,6 +115,50 @@ static void handle_offer(const uint8_t mac[6], const link_msg_t *m)
     ui_confirm("CONECTAR", r.icon, msg, "NAO", "SIM", offer_answer, NULL);
 }
 
+/* Resposta do usuário ao desafio recebido: aceitar abre o combate como convidado. */
+static void challenge_answer(int r, void *ctx)
+{
+    (void)ctx;
+    meet.prompt_open = false;
+    link_msg_t *c = &meet.prompt;
+    if (r != 1) {
+        link_tx_log_add(&declined, c->from.uid, c->tx);
+        reply(meet.prompt_mac, LINK_DECLINE, c->tx);
+        return;
+    }
+    link_tx_log_add(&accepted, c->from.uid, c->tx);
+    reply(meet.prompt_mac, LINK_ACCEPT, c->tx);
+    arena_open_versus(meet.prompt_mac, c->from.uid, c->from.name, false);
+}
+
+/* Desafio recebido: sem condições de lutar, recusa sozinho; senão pergunta. */
+static void handle_challenge(const uint8_t mac[6], const link_msg_t *m)
+{
+    if (link_tx_log_has(&declined, m->from.uid, m->tx)) {
+        reply(mac, LINK_DECLINE, m->tx);
+        return;
+    }
+    if (link_tx_log_has(&accepted, m->from.uid, m->tx)) {
+        return; /* já está no combate (a tela de combate responde as repetições) */
+    }
+    if (meet.prompt_open || meet.waiting) {
+        return;
+    }
+    const char *icon;
+    if (arena_cannot_fight(&icon)) {
+        link_tx_log_add(&declined, m->from.uid, m->tx);
+        reply(mac, LINK_DECLINE, m->tx);
+        return;
+    }
+    meet.prompt_open = true;
+    meet.prompt = *m;
+    memcpy(meet.prompt_mac, mac, 6);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "%s (NV%d) te desafiou! Aceitar?", m->from.name, m->from.level);
+    audio_beep();
+    ui_confirm("COMBATE", "fight", msg, "NAO", "SIM", challenge_answer, NULL);
+}
+
 /* Fecha o Conectar depois do envio concluído (volta ao Inventário). */
 static void sent_done(int r, void *ctx)
 {
@@ -122,9 +168,24 @@ static void sent_done(int r, void *ctx)
 }
 
 /* Resposta à oferta enviada: aceita desconta o item uma única vez. */
-static void handle_answer(const link_msg_t *m)
+static void handle_answer(const uint8_t mac[6], const link_msg_t *m)
 {
-    if (meet.item_id < 0 || m->tx != meet.tx || m->from.uid != meet.to_uid) {
+    if (m->tx != meet.tx || m->from.uid != meet.to_uid) {
+        return;
+    }
+    if (meet.waiting_for == LINK_CHALLENGE) {
+        if (!meet.waiting) {
+            return;
+        }
+        meet.waiting = false;
+        if (m->type == LINK_ACCEPT) {
+            arena_open_versus(mac, meet.to_uid, meet.to_name, true); /* quem desafiou é o anfitrião */
+        } else {
+            char msg[48];
+            audio_error();
+            snprintf(msg, sizeof(msg), "%s recusou o desafio.", meet.to_name);
+            ui_alert("CONECTAR", "fight", msg, "OK", NULL, NULL);
+        }
         return;
     }
     char name[32], msg[64];
@@ -150,7 +211,11 @@ static void handle_answer(const link_msg_t *m)
 /* Envia a oferta (ou a repete) para o Guará escolhido. */
 static void send_offer(uint32_t now)
 {
-    link_msg_t m = {.type = LINK_OFFER, .tx = meet.tx, .item_id = (uint8_t)meet.item_id, .count = (uint8_t)meet.count};
+    link_msg_t m = {.type = meet.waiting_for, .tx = meet.tx};
+    if (meet.waiting_for == LINK_OFFER) {
+        m.item_id = (uint8_t)meet.item_id;
+        m.count = (uint8_t)meet.count;
+    }
     radio_link_send(meet.to_mac, &m);
     meet.last_try = now;
 }
@@ -163,8 +228,10 @@ static void poll(uint32_t now)
     while (radio_link_receive(mac, &m)) {
         if (m.type == LINK_OFFER) {
             handle_offer(mac, &m);
-        } else {
-            handle_answer(&m);
+        } else if (m.type == LINK_CHALLENGE) {
+            handle_challenge(mac, &m);
+        } else if (m.type == LINK_ACCEPT || m.type == LINK_DECLINE) {
+            handle_answer(mac, &m);
         }
     }
     meet.n_peers = radio_link_peers(meet.peers, LINK_MAX_PEERS);
@@ -195,7 +262,29 @@ static void peer_item(int i, ui_item_t *it, void *ctx)
     snprintf(it->info, sizeof(it->info), "NV%d", p->level);
 }
 
-/* A envia a oferta ao Guará selecionado (no modo envio); B volta ou cancela a espera. */
+/* Começa a repetir a oferta ou o desafio para `p` até a resposta. */
+static void start_waiting(const link_peer_t *p, link_type_t what)
+{
+    memcpy(meet.to_mac, p->mac, 6);
+    meet.to_uid = p->profile.uid;
+    snprintf(meet.to_name, sizeof(meet.to_name), "%s", p->profile.name);
+    meet.tx = esp_random() | 1u; /* 0 fica reservado para "sem troca" */
+    meet.waiting_for = what;
+    meet.waiting = true;
+    meet.sent_at = app_ms();
+    send_offer(meet.sent_at);
+}
+
+/* Confirmou o desafio: envia e espera a resposta. */
+static void challenge_confirmed(int r, void *ctx)
+{
+    (void)ctx;
+    if (r == 1) {
+        start_waiting(&meet.challenge_peer, LINK_CHALLENGE);
+    }
+}
+
+/* A envia a oferta (modo envio) ou desafia o Guará selecionado; B volta ou cancela a espera. */
 static void on_key(const key_event_t *ev)
 {
     if (!meet.waiting && ui_list_key(&meet.list, ev, UI_LINES_VISIBLE)) {
@@ -215,22 +304,24 @@ static void on_key(const key_event_t *ev)
     if (ev->key != KEY_A || meet.waiting || meet.n_peers == 0) {
         return;
     }
+    const link_peer_t *p = &meet.peers[meet.list.sel];
     if (meet.item_id < 0) {
-        ui_alert("CONECTAR", "inventory", "Para dar um item, use Inventário > Compartilhar.", "OK", NULL, NULL);
+        const char *icon, *reason = arena_cannot_fight(&icon);
+        if (reason) {
+            ui_alert("COMBATE", icon, reason, "OK", NULL, NULL);
+            return;
+        }
+        meet.challenge_peer = *p;
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Desafiar %s (NV%d) para um combate?", p->profile.name, p->profile.level);
+        ui_confirm("COMBATE", "fight", msg, "NAO", "SIM", challenge_confirmed, NULL);
         return;
     }
     if (meet.applied || g_guara.inventory[meet.item_id] < meet.count) {
         ui_alert("CONECTAR", "inventory", "Sem estoque.", "OK", NULL, NULL);
         return;
     }
-    const link_peer_t *p = &meet.peers[meet.list.sel];
-    memcpy(meet.to_mac, p->mac, 6);
-    meet.to_uid = p->profile.uid;
-    snprintf(meet.to_name, sizeof(meet.to_name), "%s", p->profile.name);
-    meet.tx = esp_random() | 1u; /* 0 fica reservado para "sem troca" */
-    meet.waiting = true;
-    meet.sent_at = app_ms();
-    send_offer(meet.sent_at);
+    start_waiting(p, LINK_OFFER);
 }
 
 /* Lista dos Guarás por perto, ou a busca, ou a espera pela resposta. */

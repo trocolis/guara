@@ -38,5 +38,8 @@ void screens_trigger_alarm(const char *title);
 bool screens_alarm_ringing(void);
 void screens_offer_update(const char *tag); /* confirma a release achada no GitHub */
 void screens_open_meet(int item_id, int count); /* Conectar: -1 só recebe; senão envia o item */
+/* Combate contra outro Guará pelo Conectar (quem desafiou é o anfitrião) e o motivo de não poder lutar */
+void arena_open_versus(const uint8_t mac[6], uint32_t uid, const char *name, bool host);
+const char *arena_cannot_fight(const char **icon);
 
 #endif

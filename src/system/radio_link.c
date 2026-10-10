@@ -135,8 +135,11 @@ bool radio_link_send(const uint8_t mac[6], link_msg_t *m)
         return false;
     }
     m->from = profile;
-    uint8_t buf[LINK_MESSAGE_SIZE];
+    uint8_t buf[LINK_MAX_SIZE];
     int n = link_encode(m, buf);
+    if (n == 0) {
+        return false;
+    }
     add_peer(mac);
     return esp_now_send(mac, buf, (size_t)n) == ESP_OK;
 }

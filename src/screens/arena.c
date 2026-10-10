@@ -1,6 +1,9 @@
 /*
- * Arena: menu (Treino e Combate) e a tela de combate de treino, com barras ATB,
- * barra de ações, animações e a ficha de vitória.
+ * Arena: menu (Treino e Combate) e a tela de combate, com barras ATB, barra de
+ * ações, animações e a ficha de vitória. O combate roda em três modos: treino
+ * (oponente gerado, com IA), anfitrião (contra outro Guará pelo Conectar: o
+ * motor roda aqui e o lado 1 segue as escolhas do outro aparelho) e convidado
+ * (sem motor: espelha o que o anfitrião envia, com o próprio Guará à esquerda).
  */
 #include <stdio.h>
 #include <string.h>
@@ -9,6 +12,8 @@
 #include "audio.h"
 #include "combat.h"
 #include "item_fx.h"
+#include "link_proto.h"
+#include "radio_link.h"
 #include "widgets.h"
 #include "modal.h"
 #include "rules.h"
@@ -16,7 +21,6 @@
 #include "submenu.h"
 #include "screens.h"
 
-/* Arena: Treino contra um Guará gerado e Combate (online, futuro). */
 
 #define X_PLAYER 30   /* esquerda do usuário */
 #define X_OPPONENT 98 /* direita do usuário: espelhado para os dois se olharem */
@@ -35,6 +39,9 @@
 #define ACTION_BAR_X 10 /* barra de ações: no lugar do ícone do A, ao lado da barra ATB */
 #define ACTION_BAR_Y 53
 #define ACTION_COUNT 3
+#define VERSUS_STATE_MS 100   /* anfitrião: estado das barras para o convidado */
+#define VERSUS_RESEND_MS 300  /* repete o que ainda não teve resposta (START, ação do convidado) */
+#define VERSUS_STUCK_MS 3000  /* convidado: preparo sem resultado (mensagem perdida) é abandonado */
 
 static combat_t combat;
 static fighter_t player, opponent;
@@ -53,6 +60,25 @@ static uint32_t end_at;
 static uint32_t intro_until;
 static uint32_t menu_free_at; /* A só abre o menu de ações a partir daqui */
 static char notice[24];
+
+/* Combate entre dois Guarás (Conectar) */
+typedef enum { MODE_TRAINING, MODE_HOST, MODE_GUEST } combat_mode_t;
+static combat_mode_t mode;
+static uint8_t peer_mac[6];
+static uint32_t peer_uid;
+static char peer_name[SIZE_NAME + 1];
+static bool versus_started;   /* os dois lutadores trocados (START) */
+static bool connection_lost;
+static uint16_t send_seq, last_seq; /* mensagens enviadas e a última recebida do anfitrião */
+static uint32_t last_state_at, last_resend_at;
+/* Anfitrião: ação escolhida e reação do convidado */
+static bool remote_pending;
+static combat_action_t remote_action;
+static uint16_t remote_input_seq;
+static int remote_reaction; /* 0 sem apertar, 1 no tempo, -1 fora do tempo */
+/* Convidado: a ação escolhida já chegou ao anfitrião */
+static bool input_acked;
+static uint16_t input_seq;
 
 /* Ação escolhida pelo jogador, executada quando a barra ATB encher. */
 static bool pending;
@@ -78,29 +104,63 @@ static const screen_t SCREEN_COMBAT;
 
 /* ---------------- Ações ---------------- */
 
+/* Inicia a animação do resultado em `last`; `before` são os vitais de quem agiu antes da ação. */
+static void start_animation(int side, const fx_values_t *before, uint32_t now)
+{
+    const fighter_t *f = &combat.side[side];
+    item_fx = last.type == ACTION_ITEM && !last.failed;
+    anim_ms = ANIM_MS;
+    if (item_fx) {
+        fx_values_t after = {f->hp, f->mp, 0, 0, 0, f->states};
+        item_n_texts = fx_build_texts(before, &after, item_texts, FX_MAX_TEXTS);
+        item_absorbed = false;
+        uint32_t tail = fx_texts_ms(item_n_texts);
+        anim_ms = FX_SIP_MS + FX_FLY_TOTAL_MS + (tail > FX_FLASH_MS ? tail : FX_FLASH_MS);
+    }
+    animating = true;
+    anim_start = now;
+    if (side == 1) {
+        audio_tone(last.damage ? 220 : 660, 60);
+    }
+}
+
+/* Envia ao outro aparelho. */
+static void versus_send(link_msg_t *m)
+{
+    radio_link_send(peer_mac, m);
+}
+
+/* Anfitrião: vitais dos dois lados e o fim do combate. */
+static void fill_vitals(link_msg_t *m)
+{
+    link_vitals_from(&combat.side[0], &m->vitals[0]);
+    link_vitals_from(&combat.side[1], &m->vitals[1]);
+    m->finished = combat.finished;
+    m->winner = (int8_t)combat.winner;
+}
+
+/* Anfitrião: resultado de uma ação (enviado duas vezes; o convidado descarta a repetida). */
+static void host_send_result(void)
+{
+    link_msg_t m = {.type = LINK_RESULT, .seq = ++send_seq, .result = last};
+    fill_vitals(&m);
+    versus_send(&m);
+    versus_send(&m);
+}
+
 /* Executa a ação de um lado e inicia a animação do resultado. */
 static void execute_now(int side, combat_action_t action, const catalog_record_t *item, uint32_t now)
 {
     const fighter_t *f = &combat.side[side];
     fx_values_t before = {f->hp, f->mp, 0, 0, 0, f->states};
     combat_execute(&combat, side, action, item, &last);
-    item_fx = action.type == ACTION_ITEM && item && !last.failed;
-    anim_ms = ANIM_MS;
-    if (item_fx) {
-        fx_values_t after = {f->hp, f->mp, 0, 0, 0, f->states};
-        item_n_texts = fx_build_texts(&before, &after, item_texts, FX_MAX_TEXTS);
-        item_absorbed = false;
-        uint32_t tail = fx_texts_ms(item_n_texts);
-        anim_ms = FX_SIP_MS + FX_FLY_TOTAL_MS + (tail > FX_FLASH_MS ? tail : FX_FLASH_MS);
-    }
     if (side == 0 && action.type == ACTION_ITEM && item && !last.failed) {
         g_guara.inventory[item->id]--;
         app_mark_changed();
     }
-    animating = true;
-    anim_start = now;
-    if (side == 1) {
-        audio_tone(last.damage ? 220 : 660, 60);
+    start_animation(side, &before, now);
+    if (mode == MODE_HOST) {
+        host_send_result();
     }
 }
 
@@ -122,6 +182,12 @@ static void begin_action(int side, combat_action_t action, uint32_t now)
     windup_side = side;
     windup_action = action;
     player_reaction = 0;
+    remote_reaction = 0;
+    if (mode == MODE_HOST) {
+        link_msg_t m = {.type = LINK_WINDUP, .seq = ++send_seq, .side = (uint8_t)side, .action = action};
+        versus_send(&m);
+        versus_send(&m);
+    }
 }
 
 /* Fim do preparo: junta a reação do jogador e a do oponente e resolve o golpe. */
@@ -131,7 +197,8 @@ static void impact(uint32_t now)
     menu_free_at = now + MENU_GRACE_MS;
     combat_action_t action = windup_action;
     bool player_hit = player_reaction > 0;
-    bool opponent_hit = rng_chance(&g_rng, AI_REACTION_PCT);
+    /* No treino a IA acerta a janela por sorte; contra outro Guará vale o A dele */
+    bool opponent_hit = mode == MODE_HOST ? remote_reaction > 0 : rng_chance(&g_rng, AI_REACTION_PCT);
     if (windup_side == 0) {
         action.reaction = (player_hit ? COMBAT_TIMED_STRIKE : 0) | (opponent_hit ? COMBAT_GUARD : 0);
     } else {
@@ -154,6 +221,14 @@ static void choose(combat_action_t action, const catalog_record_t *item)
     pending_action = action;
     if (item) {
         pending_item = *item;
+    }
+    if (mode == MODE_GUEST) {
+        /* Vai para o anfitrião e se repete até ele confirmar que recebeu */
+        input_seq++;
+        input_acked = false;
+        link_msg_t m = {.type = LINK_INPUT, .seq = input_seq, .action = action};
+        versus_send(&m);
+        last_resend_at = app_ms();
     }
 }
 
@@ -188,6 +263,10 @@ static void forfeit_answer(int r, void *ctx)
     (void)ctx;
     at_modal = false;
     if (r == 1) {
+        if (mode == MODE_GUEST) {
+            choose((combat_action_t){ACTION_FORFEIT, 0, 0}, NULL); /* o anfitrião encerra na hora */
+            return;
+        }
         pending = false;
         execute_now(0, (combat_action_t){ACTION_FORFEIT, 0, 0}, NULL, app_ms());
     }
@@ -264,25 +343,60 @@ static void pick_confirm(int index)
 
 /* ---------------- Tela de combate ---------------- */
 
-/* Prepara o combate contra um oponente gerado. */
+/* Começa a abertura e libera o combate (treino na hora; contra outro Guará, após o START). */
+static void start_intro(void)
+{
+    player = combat.side[0];
+    versus_started = true;
+    intro_until = menu_free_at = app_ms() + INTRO_MS;
+}
+
+/* Convidado: envia o próprio lutador até o anfitrião responder com os dois. */
+static void guest_send_start(void)
+{
+    link_msg_t m = {.type = LINK_START, .seq = 0};
+    m.fighters[0] = player;
+    versus_send(&m);
+    last_resend_at = app_ms();
+}
+
+/* Anfitrião: os dois lutadores do combate (lado 0 = anfitrião). */
+static void host_send_start(void)
+{
+    link_msg_t m = {.type = LINK_START, .seq = ++send_seq};
+    m.fighters[0] = combat.side[0];
+    m.fighters[1] = combat.side[1];
+    versus_send(&m);
+}
+
+/* Prepara o combate: oponente gerado no treino; contra outro Guará, espera os lutadores. */
 static void on_open(void *param)
 {
     (void)param;
-    combat_fighter_from_guara(&g_guara, &player);
-    combat_generate_opponent(&g_guara, &g_rng, &opponent);
-    combat_start(&combat, &player, &opponent, &g_rng);
-    player = combat.side[0];
     memset(&last, 0, sizeof(last));
     animating = at_modal = picking = end_shown = pending = winding = item_fx = false;
+    versus_started = connection_lost = remote_pending = input_acked = false;
+    send_seq = last_seq = remote_input_seq = input_seq = 0;
     notice[0] = '\0';
-    intro_until = menu_free_at = app_ms() + INTRO_MS;
+    combat_fighter_from_guara(&g_guara, &player);
     app_block_sleep(true);
+    if (mode == MODE_TRAINING) {
+        combat_generate_opponent(&g_guara, &g_rng, &opponent);
+        combat_start(&combat, &player, &opponent, &g_rng);
+        start_intro();
+    } else if (mode == MODE_GUEST) {
+        guest_send_start();
+    }
 }
 
-/* Libera o deep sleep ao sair. */
+/* Avisa o outro aparelho ao sair; o Conectar continua aberto embaixo e segura o sono. */
 static void on_close(void)
 {
-    app_block_sleep(false);
+    if (mode != MODE_TRAINING) {
+        link_msg_t m = {.type = LINK_BYE};
+        versus_send(&m);
+    }
+    app_block_sleep(mode != MODE_TRAINING);
 }
 
 /* A abre a barra de ações uma vez por ciclo (ou reage na janela do golpe); B oferece desistir. */
@@ -309,6 +423,12 @@ static void on_key(const key_event_t *ev)
     if (winding && ev->key == KEY_A) {
         if (player_reaction == 0) {
             player_reaction = in_window(now) ? 1 : -1;
+            if (mode == MODE_GUEST) {
+                /* A reação é decidida aqui (pelo preparo visto neste aparelho) e vale no anfitrião */
+                link_msg_t m = {.type = LINK_REACT, .hit = player_reaction > 0};
+                versus_send(&m);
+                versus_send(&m);
+            }
         }
         return;
     }
@@ -383,6 +503,192 @@ static void finish(void)
     ui_alert("VITORIA", drop >= 0 ? NULL : "level", summary, "OK", card_closed, NULL);
 }
 
+/* Fim do combate: fecha os modais, toca a melodia e espera para mostrar o resultado. */
+static void combat_ended(uint32_t now)
+{
+    if (at_modal) {
+        /* O combate acabou com um modal aberto: fecha os modais */
+        ui_back_until(&SCREEN_COMBAT);
+    }
+    at_modal = picking = pending = false;
+    end_at = now;
+    if (combat.winner == 0) {
+        audio_victory();
+    } else {
+        audio_defeat();
+    }
+}
+
+/* Conexão perdida: avisa e volta ao Conectar, sem consequências para o Guará. */
+static void lost_closed(int r, void *ctx)
+{
+    (void)r;
+    (void)ctx;
+    ui_back();
+}
+static void versus_lost(void)
+{
+    if (connection_lost || (combat.finished && !animating)) {
+        return;
+    }
+    connection_lost = true;
+    if (at_modal) {
+        ui_back_until(&SCREEN_COMBAT);
+        at_modal = false;
+    }
+    audio_error();
+    char msg[48];
+    snprintf(msg, sizeof(msg), "Conexão com %s perdida.", peer_name);
+    ui_alert("COMBATE", "connect", msg, "OK", lost_closed, NULL);
+}
+
+/* Lado visto pelo convidado: o anfitrião manda o lado 0 como ele mesmo. */
+static int mirror(int side)
+{
+    return side < 0 ? side : 1 - side;
+}
+
+/* Convidado: aplica os vitais enviados pelo anfitrião (espelhados). */
+static void guest_apply_vitals(const link_msg_t *m, uint32_t now)
+{
+    bool was_finished = combat.finished;
+    link_vitals_apply(&m->vitals[1], &combat.side[0]);
+    link_vitals_apply(&m->vitals[0], &combat.side[1]);
+    combat.finished = m->finished;
+    combat.winner = mirror(m->winner);
+    if (combat.finished && !was_finished && !animating) {
+        combat_ended(now); /* o fim chegou sem o resultado (mensagem perdida) */
+    }
+}
+
+/* Convidado: uma ação resolvida pelo anfitrião vira a animação daqui. */
+static void guest_apply_result(const link_msg_t *m, uint32_t now)
+{
+    winding = false;
+    menu_free_at = now + MENU_GRACE_MS;
+    last = m->result;
+    last.actor = mirror(last.actor);
+    last.target = mirror(last.target);
+    const fighter_t *f = &combat.side[last.actor];
+    fx_values_t before = {f->hp, f->mp, 0, 0, 0, f->states};
+    bool was_finished = combat.finished;
+    link_vitals_apply(&m->vitals[1], &combat.side[0]);
+    link_vitals_apply(&m->vitals[0], &combat.side[1]);
+    combat.finished = m->finished;
+    combat.winner = mirror(m->winner);
+    if (last.actor == 0) {
+        /* A ação deste Guará foi executada: a poção sai do inventário daqui */
+        if (last.type == ACTION_ITEM && !last.failed && pending_action.type == ACTION_ITEM &&
+            g_guara.inventory[pending_item.id] > 0) {
+            g_guara.inventory[pending_item.id]--;
+            app_mark_changed();
+        }
+        pending = false;
+        input_acked = true;
+    }
+    start_animation(last.actor, &before, now);
+    (void)was_finished;
+}
+
+/* Verdadeiro se o outro Guará ainda dá sinal de presença. */
+static bool peer_present(void)
+{
+    link_peer_t peers[LINK_MAX_PEERS];
+    int n = radio_link_peers(peers, LINK_MAX_PEERS);
+    for (int i = 0; i < n; i++) {
+        if (peers[i].profile.uid == peer_uid) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Mensagens do outro aparelho, repetições pendentes, estado periódico e queda da conexão. */
+static void versus_poll(uint32_t now)
+{
+    uint8_t mac[6];
+    link_msg_t m;
+    while (radio_link_receive(mac, &m)) {
+        if (m.from.uid != peer_uid) {
+            continue; /* outros Guarás por perto: ofertas e desafios ficam sem resposta */
+        }
+        if (m.type == LINK_BYE) {
+            versus_lost();
+        } else if (m.type == LINK_CHALLENGE) {
+            link_msg_t a = {.type = LINK_ACCEPT, .tx = m.tx}; /* o aceite se perdeu: responde de novo */
+            versus_send(&a);
+        } else if (mode == MODE_HOST) {
+            if (m.type == LINK_START) {
+                if (!versus_started) {
+                    combat_start(&combat, &player, &m.fighters[0], &g_rng);
+                    start_intro();
+                }
+                host_send_start(); /* também responde a um START repetido (o nosso se perdeu) */
+            } else if (m.type == LINK_INPUT && m.seq != remote_input_seq && versus_started) {
+                remote_input_seq = m.seq;
+                if (m.action.type == ACTION_FORFEIT) {
+                    if (!combat.finished) {
+                        execute_now(1, m.action, NULL, now);
+                    }
+                } else {
+                    remote_pending = true;
+                    remote_action = (combat_action_t){m.action.type, m.action.position, 0};
+                }
+            } else if (m.type == LINK_REACT && winding && remote_reaction == 0) {
+                remote_reaction = m.hit ? 1 : -1;
+            }
+        } else {
+            if (m.type == LINK_START && m.seq != 0) {
+                if (!versus_started) {
+                    combat.side[0] = m.fighters[1];
+                    combat.side[1] = m.fighters[0];
+                    combat.finished = false;
+                    combat.winner = -1;
+                    combat.rng = &g_rng;
+                    start_intro();
+                }
+                continue;
+            }
+            if (!versus_started || (int16_t)(m.seq - last_seq) <= 0) {
+                continue; /* repetida ou atrasada */
+            }
+            last_seq = m.seq;
+            if (m.type == LINK_STATE) {
+                guest_apply_vitals(&m, now);
+                if (m.guest_pending) {
+                    input_acked = true;
+                }
+            } else if (m.type == LINK_WINDUP) {
+                winding = true;
+                windup_start = now;
+                windup_side = mirror(m.side);
+                windup_action = m.action;
+                player_reaction = 0;
+            } else if (m.type == LINK_RESULT) {
+                guest_apply_result(&m, now);
+            }
+        }
+    }
+    if (mode == MODE_HOST && versus_started && now - last_state_at >= VERSUS_STATE_MS) {
+        last_state_at = now;
+        link_msg_t st = {.type = LINK_STATE, .seq = ++send_seq, .guest_pending = remote_pending};
+        fill_vitals(&st);
+        versus_send(&st);
+    }
+    if (mode == MODE_GUEST && now - last_resend_at >= VERSUS_RESEND_MS) {
+        if (!versus_started) {
+            guest_send_start();
+        } else if (pending && !input_acked) {
+            link_msg_t in = {.type = LINK_INPUT, .seq = input_seq, .action = pending_action};
+            versus_send(&in);
+            last_resend_at = now;
+        }
+    }
+    if (!peer_present()) {
+        versus_lost();
+    }
+}
+
 /* Avança o combate: abertura, preparo dos golpes, animações, barras e ações. */
 static void step(uint32_t now)
 {
@@ -392,11 +698,22 @@ static void step(uint32_t now)
     if (dt > 100) {
         dt = 100;
     }
+    if (mode != MODE_TRAINING) {
+        versus_poll(now);
+        if (connection_lost || !versus_started) {
+            return;
+        }
+    }
     if ((int32_t)(intro_until - now) > 0) {
         return;
     }
     if (winding) {
-        if (now - windup_start >= REACTION_WINDUP_MS) {
+        /* O convidado espera o resultado do anfitrião (desiste se a mensagem se perdeu) */
+        if (mode == MODE_GUEST) {
+            if (now - windup_start >= VERSUS_STUCK_MS) {
+                winding = false;
+            }
+        } else if (now - windup_start >= REACTION_WINDUP_MS) {
             impact(now);
         }
         return;
@@ -405,17 +722,7 @@ static void step(uint32_t now)
         if (now - anim_start >= anim_ms) {
             animating = false;
             if (combat.finished) {
-                if (at_modal) {
-                    /* O combate acabou com um modal aberto: fecha os modais */
-                    ui_back_until(&SCREEN_COMBAT);
-                }
-                at_modal = picking = pending = false;
-                end_at = now;
-                if (combat.winner == 0) {
-                    audio_victory();
-                } else {
-                    audio_defeat();
-                }
+                combat_ended(now);
             }
         }
         return;
@@ -428,8 +735,14 @@ static void step(uint32_t now)
     }
     /* Tempo real: as barras continuam enchendo e o oponente age com o menu aberto */
     unsigned ready_mask = combat_advance(&combat, (int)dt);
-    if (ready_mask & 2u) {
-        begin_action(1, combat_ai(&combat, 1), now);
+    if (mode == MODE_GUEST) {
+        return; /* as barras só andam para a tela; quem age é decidido no anfitrião */
+    }
+    if ((ready_mask & 2u) && (mode == MODE_TRAINING || remote_pending)) {
+        /* Treino: a IA escolhe; contra outro Guará, vale a ação que ele já escolheu */
+        combat_action_t a = mode == MODE_TRAINING ? combat_ai(&combat, 1) : remote_action;
+        remote_pending = false;
+        begin_action(1, a, now);
     } else if ((ready_mask & 1u) && pending) {
         pending = false;
         begin_action(0, pending_action, now);
@@ -616,6 +929,12 @@ static void draw_intro(gfx_t *g)
 static void on_draw(gfx_t *g, uint32_t now)
 {
     step(now);
+    if (mode != MODE_TRAINING && !versus_started) {
+        char line[40];
+        snprintf(line, sizeof(line), "Conectando com %s...", peer_name);
+        ui_paragraph(g, 4, 24, GFX_WIDTH - 8, 2, line, true);
+        return;
+    }
     const fighter_t *me = &combat.side[0], *op = &combat.side[1];
 
     if ((int32_t)(intro_until - now) > 0) {
@@ -714,30 +1033,51 @@ static const screen_t SCREEN_COMBAT = {
 
 /* ---------------- Menu da Arena ---------------- */
 
+/* Motivo para o Guará não poder lutar agora (desmaiado, dormindo, HP < 20%), ou NULL; `icon` recebe o ícone do aviso. */
+const char *arena_cannot_fight(const char **icon)
+{
+    if (guara_has_state(&g_guara, ST_FAINTED) || guara_has_state(&g_guara, ST_SLEEPING)) {
+        *icon = guara_has_state(&g_guara, ST_FAINTED) ? "fainted" : "sleeping";
+        return "O Guará não pode lutar agora.";
+    }
+    if (g_guara.hp == 0 || g_guara.hp * 5 < g_guara.hp_max) {
+        *icon = "hp";
+        return "HP muito baixo para lutar.";
+    }
+    return NULL;
+}
+
 /* Abre o treino se o Guará estiver em condições de lutar. */
 static void training(void)
 {
-    if (guara_has_state(&g_guara, ST_FAINTED) || guara_has_state(&g_guara, ST_SLEEPING)) {
-        ui_alert("TREINO", "sleeping", "O Guará não pode lutar agora.", "OK", NULL, NULL);
+    const char *icon, *reason = arena_cannot_fight(&icon);
+    if (reason) {
+        ui_alert("TREINO", icon, reason, "OK", NULL, NULL);
         return;
     }
-    if (g_guara.hp == 0 || g_guara.hp * 5 < g_guara.hp_max) {
-        ui_alert("TREINO", "hp", "HP muito baixo para treinar.", "OK", NULL, NULL);
-        return;
-    }
+    mode = MODE_TRAINING;
     ui_open(&SCREEN_COMBAT, NULL);
 }
 
-/* Combate entre Guarás (ainda não implementado). */
-static void combat_online(void)
+/* Combate contra outro Guará: abre a tela Conectar, onde se desafia quem estiver por perto. */
+static void combat_versus(void)
 {
-    /* README: "o combate com outro guará será implementado no futuro" */
-    ui_alert("COMBATE", "fight", "Em breve: combate entre Guarás.", "OK", NULL, NULL);
+    screens_open_meet(-1, 0);
+}
+
+/* Abre o combate contra o Guará `uid` em `mac` (quem desafiou é o anfitrião). */
+void arena_open_versus(const uint8_t mac[6], uint32_t uid, const char *name, bool host)
+{
+    mode = host ? MODE_HOST : MODE_GUEST;
+    memcpy(peer_mac, mac, 6);
+    peer_uid = uid;
+    snprintf(peer_name, sizeof(peer_name), "%s", name);
+    ui_open(&SCREEN_COMBAT, NULL);
 }
 
 static const submenu_item_t ITEMS_ARENA[] = {
     {"training", "Treino", NULL, training},
-    {"fight", "Combate", NULL, combat_online},
+    {"fight", "Combate", NULL, combat_versus},
 };
 static const submenu_t MENU_ARENA = {"ARENA", ITEMS_ARENA, 2};
 

@@ -322,7 +322,7 @@ Implementação: `src/screens/meet.c` (tela), `src/system/radio_link.c` (rádio)
 - **Presença:** a cada 1 s, cada aparelho envia em broadcast uma mensagem com UID, nome, nível, estágio, natureza, cor e cabeça. A lista mostra quem foi visto nos últimos 3,5 s (até 8), com o ícone da natureza, o nome e o nível (`NV7`).
 - **Mensagens:** 30 bytes fixos, little-endian: `GL`, versão (1), tipo, UID, nome (11 bytes), nível, estágio, natureza, cor, cabeça, número da troca (`tx`, u32), item e quantidade. Tipos: `HELLO` (presença), `OFFER`, `ACCEPT` e `DECLINE`. Mensagens de outra versão ou do próprio UID são ignoradas.
 - **Abrir:**
-	- por **Ajustes > Conectar**: fica visível e recebe; A num Guará da lista explica que para dar um item é preciso usar Inventário > Compartilhar;
+	- por **Ajustes > Conectar** ou **Arena > Combate**: fica visível, recebe itens e desafios, e A num Guará da lista o desafia para um combate;
 	- por **Inventário > Compartilhar**: depois da quantidade, mostra "Procurando Guarás..." e "Dar 3 Maçã"; A no Guará escolhido envia a oferta e mostra "Aguardando Fulano..." (B cancela a espera).
 - **Troca de itens:**
 	1. Quem envia sorteia um `tx` e repete o `OFFER` a cada 700 ms até a resposta, por até 30 s ("Fulano não respondeu.").
@@ -330,7 +330,7 @@ Implementação: `src/screens/meet.c` (tela), `src/system/radio_link.c` (rádio)
 	3. Quem envia só desconta os itens ao receber o `ACCEPT`, uma vez por `tx`, grava o save e mostra "Fulano recebeu 3 Maçã!"; o OK volta ao Inventário. Um `ACCEPT` que chegar depois de cancelar a espera ainda desconta.
 	4. As respostas ficam registradas pelo par (UID, `tx`) nas 8 últimas ofertas aceitas e recusadas: uma oferta repetida porque a resposta se perdeu recebe a mesma resposta, sem somar de novo.
 	- Limite conhecido: se quem envia fechar a tela antes de o `ACCEPT` chegar, quem recebeu fica com os itens e quem enviou também.
-- **Combate pela tela Conectar:** previsto; o protocolo já tem versão para crescer.
+- **Desafio:** em Ajustes > Conectar ou Arena > Combate, A num Guará da lista pergunta "Desafiar Fulano (NV7) para um combate?" e envia o `CHALLENGE`, repetido como a oferta. Do outro lado aparece "Fulano (NV7) te desafiou! Aceitar?"; quem não pode lutar (desmaiado, dormindo ou com HP abaixo de 20%) recusa sozinho. Aceito, os dois abrem a tela de combate; ver *Combate entre dois Guarás*.
 ___
 
 ## Interface
@@ -464,7 +464,7 @@ Sub-menu com as habilidades possuídas. As até 4 habilidades ativas, usadas no 
 Sub-menu com duas opções:
 
 - **Treino** ![Treino](./bitmaps/icons/training.bmp): luta contra um Guará gerado com o mesmo nível e atributos de ±10%, que leva algumas poções (ver *Combate > Poções*). Não abre se o Guará estiver desmaiado, dormindo ou com HP abaixo de 20%.
-- **Combate** ![Combate](./bitmaps/icons/fight.bmp): combate contra outro Guará pela tela *Conectar* (ESP-NOW). Ainda não implementado; mostra um aviso.
+- **Combate** ![Combate](./bitmaps/icons/fight.bmp): abre a tela *Conectar* para desafiar um Guará por perto (ver *Combate entre dois Guarás*). As mesmas condições do treino valem para quem desafia e para quem aceita.
 
 ![Arena](./bitmaps/exemple/screen_arena.bmp)
 
@@ -497,6 +497,22 @@ Roda a 30 FPS e não deixa o aparelho entrar no modo Ocioso nem no deep sleep.
 - **Poções:** o mesmo efeito da tela principal (*Área de itens*): o frasco aparece ao lado de quem bebe, voltado para o centro, sobe 8 px e tomba 45° na direção dele em 0,3 s; as partículas voam da boca do frasco até ele, que pisca invertido 3 vezes, e os textos do que mudou (`HP+150`, `MP+80`, `-PSN`…) sobem sobre ele a partir de Y=40, por cima dos modais. A animação dura até o último texto subir (as barras ATB esperam, como em qualquer animação). O oponente do treino também leva poções (de HP, de MP e às vezes uma cura de estado) e as usa com HP baixo, sem MP ou envenenado, queimado ou confuso; as regras estão em [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
 - **Fim do combate:** o vencedor fica com o olhar feliz e o perdedor com o olhar desmaiado, parado no quadro 1. Tocam a melodia de vitória ou de derrota, e a tela mostra "VITORIA!" ou "DERROTA". Depois de 2,5 s, A ou B continuam: na vitória aparece uma ficha com o XP ganho, o item obtido (se houver) e o novo nível; na derrota, a tela volta à Arena.
 - **Consequências do treino:** o HP (mínimo de 1), o MP e os estados persistentes do combate voltam para o Guará, e cada luta custa 5% de energia. A vitória dá XP, pode dar um item e cura a maldição; os medidores ocultos também mudam (ver [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md)).
+
+#### Combate entre dois Guarás
+
+A tela de combate é a mesma do treino, com o próprio Guará sempre à esquerda. A comunicação usa a tela *Conectar* (ESP-NOW), que fica aberta por baixo.
+
+- **Anfitrião e convidado:** quem desafiou é o anfitrião. Só ele roda o motor do combate, com o próprio Guará no lado 0; o lado 1 segue as escolhas do outro aparelho em vez da IA, e a reação dele na janela é o A apertado lá. O convidado não calcula nada: mostra o que o anfitrião envia, espelhado.
+- **Início:** o convidado envia o seu lutador (`START`) a cada 300 ms; o anfitrião começa o combate e responde com os dois lutadores, e os dois mostram a abertura. Até lá, a tela mostra "Conectando com Fulano...".
+- **Durante o combate:**
+	- `STATE`, a cada 100 ms: barras ATB, HP, MP e estados dos dois lados, o fim do combate e se a ação do convidado já chegou;
+	- `WINDUP`: um lado começou o preparo de um golpe; o convidado anima o preparo e decide a própria reação pela janela vista na tela dele (`REACT`);
+	- `RESULT`: cada ação resolvida, com os vitais depois dela; vira a animação, o dano e o efeito da poção no convidado.
+	- O convidado envia a ação escolhida (`INPUT`) e a repete a cada 300 ms até o anfitrião confirmar. Ela só é executada quando a barra ATB dele enche no anfitrião, como no treino. Desistir também vai pelo `INPUT` e vale na hora.
+	- As mensagens do anfitrião têm número de sequência; o convidado descarta as repetidas e as atrasadas, e `WINDUP` e `RESULT` saem duas vezes. Um preparo sem resultado por 3 s é abandonado.
+	- As poções saem do inventário de cada um, no próprio aparelho.
+- **Fim:** cada aparelho aplica no próprio Guará as mesmas consequências do treino (HP, MP, estados, energia, XP, item e medidores).
+- **Conexão perdida:** se o outro Guará sair da tela ou deixar de dar sinal de presença por 3,5 s antes do fim, aparece "Conexão com Fulano perdida." e a tela volta ao Conectar, sem consequências para o Guará.
 
 #### Fórmulas do combate
 

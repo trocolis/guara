@@ -420,24 +420,65 @@ static void test_link_roundtrip(void)
 {
     guara_t g;
     guara_birth(&g, "Aline", &rng, 1);
-    link_msg_t m = {LINK_OFFER, {0}, 0xA1B2C3D4u, 42, 3};
+    link_msg_t m = {.type = LINK_OFFER, .tx = 0xA1B2C3D4u, .item_id = 42, .count = 3};
     link_profile_from_guara(&g, &m.from);
-    uint8_t buf[LINK_MESSAGE_SIZE];
-    TEST_ASSERT_EQUAL_INT(LINK_MESSAGE_SIZE, link_encode(&m, buf));
+    uint8_t buf[LINK_MAX_SIZE];
+    int size = link_encode(&m, buf);
+    TEST_ASSERT_EQUAL_INT(LINK_HEADER_SIZE + 6, size);
     link_msg_t d;
-    TEST_ASSERT_TRUE(link_decode(buf, sizeof(buf), &d));
+    TEST_ASSERT_TRUE(link_decode(buf, size, &d));
     TEST_ASSERT_EQUAL_INT(LINK_OFFER, d.type);
     TEST_ASSERT_EQUAL_STRING("Aline", d.from.name);
     TEST_ASSERT_EQUAL_UINT32(g.uid, d.from.uid);
     TEST_ASSERT_EQUAL_UINT32(0xA1B2C3D4u, d.tx);
     TEST_ASSERT_EQUAL_INT(42, d.item_id);
     TEST_ASSERT_EQUAL_INT(3, d.count);
-    TEST_ASSERT_FALSE(link_decode(buf, LINK_MESSAGE_SIZE - 1, &d));
+    TEST_ASSERT_FALSE(link_decode(buf, size - 1, &d));
     buf[2] = LINK_VERSION + 1;
-    TEST_ASSERT_FALSE(link_decode(buf, sizeof(buf), &d));
+    TEST_ASSERT_FALSE(link_decode(buf, size, &d));
     buf[2] = LINK_VERSION;
     buf[0] = 'X';
-    TEST_ASSERT_FALSE(link_decode(buf, sizeof(buf), &d));
+    TEST_ASSERT_FALSE(link_decode(buf, size, &d));
+}
+
+/* Mensagens do combate: lutadores no START e resultado com os vitais no RESULT. */
+static void test_link_combat_messages(void)
+{
+    guara_t g;
+    guara_birth(&g, "Luta", &rng, 1);
+    fighter_t me, op;
+    combat_fighter_from_guara(&g, &me);
+    combat_generate_opponent(&g, &rng, &op);
+    combat_t c;
+    combat_start(&c, &me, &op, &rng);
+    link_msg_t m = {.type = LINK_START, .seq = 7};
+    m.fighters[0] = c.side[0];
+    m.fighters[1] = c.side[1];
+    uint8_t buf[LINK_MAX_SIZE];
+    int size = link_encode(&m, buf);
+    TEST_ASSERT_TRUE(size > 0 && size <= LINK_MAX_SIZE);
+    link_msg_t d;
+    TEST_ASSERT_TRUE(link_decode(buf, size, &d));
+    TEST_ASSERT_EQUAL_UINT16(7, d.seq);
+    TEST_ASSERT_EQUAL_STRING(c.side[1].name, d.fighters[1].name);
+    TEST_ASSERT_EQUAL_INT(c.side[1].hp_max, d.fighters[1].hp_max);
+    TEST_ASSERT_EQUAL_INT(c.side[0].atb_total, d.fighters[0].atb_total);
+    TEST_ASSERT_EQUAL_INT_ARRAY(c.side[1].attributes, d.fighters[1].attributes, ATTRIBUTE_COUNT);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(c.side[0].skills, d.fighters[0].skills, COUNT_SKILL_ACTIVE);
+
+    combat_result_t r;
+    combat_execute(&c, 0, (combat_action_t){ACTION_ATTACK, 0, 0}, NULL, &r);
+    m = (link_msg_t){.type = LINK_RESULT, .seq = 8, .result = r, .finished = c.finished, .winner = (int8_t)c.winner};
+    link_vitals_from(&c.side[0], &m.vitals[0]);
+    link_vitals_from(&c.side[1], &m.vitals[1]);
+    size = link_encode(&m, buf);
+    TEST_ASSERT_TRUE(link_decode(buf, size, &d));
+    TEST_ASSERT_EQUAL_INT(r.damage, d.result.damage);
+    TEST_ASSERT_EQUAL_INT(r.dodged, d.result.dodged);
+    TEST_ASSERT_EQUAL_INT(r.critical, d.result.critical);
+    TEST_ASSERT_EQUAL_INT(c.side[1].hp, d.vitals[1].hp);
+    TEST_ASSERT_EQUAL_INT(c.winner, d.winner);
+    TEST_ASSERT_FALSE(link_decode(buf, size - 1, &d)); /* carga cortada */
 }
 
 /* Vizinhos entram na ordem, atualizam sem duplicar e expiram sem sinal. */
@@ -545,6 +586,7 @@ int main(void)
     RUN_TEST(test_opponent_potion);
     RUN_TEST(test_forfeit);
     RUN_TEST(test_link_roundtrip);
+    RUN_TEST(test_link_combat_messages);
     RUN_TEST(test_link_peers);
     RUN_TEST(test_link_tx_log);
     RUN_TEST(test_combat_reaction);
