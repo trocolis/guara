@@ -8,6 +8,7 @@
 #include "app.h"
 #include "audio.h"
 #include "combat.h"
+#include "item_fx.h"
 #include "widgets.h"
 #include "modal.h"
 #include "rules.h"
@@ -21,6 +22,9 @@
 #define X_OPPONENT 98 /* direita do usuário: espelhado para os dois se olharem */
 #define BASE_Y 50
 #define ANIM_MS 900
+#define ITEM_ICON_DX 14 /* poção: ícone ao lado de quem bebe, voltado para o centro */
+#define ITEM_ICON_Y (BASE_Y - 20)
+#define ITEM_TEXT_Y 40 /* textos do efeito sobem a partir daqui, sobre quem bebeu */
 #define INTRO_MS 1800 /* abertura "Fulano  VS  Siclano" */
 #define WINDUP_RECOIL_MS 120 /* recuo rápido no início do preparo do golpe */
 #define HIT_FRAMES 7
@@ -37,6 +41,12 @@ static fighter_t player, opponent;
 static combat_result_t last;
 static bool animating;
 static uint32_t anim_start;
+static uint32_t anim_ms = ANIM_MS; /* duração da animação atual (a da poção é mais longa) */
+
+/* Efeito da poção (como na tela principal): tomba, partículas, piscada e textos abreviados. */
+static bool item_fx, item_absorbed;
+static char item_texts[FX_MAX_TEXTS][FX_TEXT_SIZE];
+static int item_n_texts;
 static bool at_modal;
 static bool end_shown;
 static uint32_t end_at;
@@ -71,7 +81,18 @@ static const screen_t SCREEN_COMBAT;
 /* Executa a ação de um lado e inicia a animação do resultado. */
 static void execute_now(int side, combat_action_t action, const catalog_record_t *item, uint32_t now)
 {
+    const fighter_t *f = &combat.side[side];
+    fx_values_t before = {f->hp, f->mp, 0, 0, 0, f->states};
     combat_execute(&combat, side, action, item, &last);
+    item_fx = action.type == ACTION_ITEM && item && !last.failed;
+    anim_ms = ANIM_MS;
+    if (item_fx) {
+        fx_values_t after = {f->hp, f->mp, 0, 0, 0, f->states};
+        item_n_texts = fx_build_texts(&before, &after, item_texts, FX_MAX_TEXTS);
+        item_absorbed = false;
+        uint32_t tail = fx_texts_ms(item_n_texts);
+        anim_ms = FX_SIP_MS + FX_FLY_TOTAL_MS + (tail > FX_FLASH_MS ? tail : FX_FLASH_MS);
+    }
     if (side == 0 && action.type == ACTION_ITEM && item && !last.failed) {
         g_guara.inventory[item->id]--;
         app_mark_changed();
@@ -246,7 +267,7 @@ static void on_open(void *param)
     combat_start(&combat, &player, &opponent, &g_rng);
     player = combat.side[0];
     memset(&last, 0, sizeof(last));
-    animating = at_modal = picking = end_shown = pending = winding = false;
+    animating = at_modal = picking = end_shown = pending = winding = item_fx = false;
     notice[0] = '\0';
     intro_until = menu_free_at = app_ms() + INTRO_MS;
     app_block_sleep(true);
@@ -375,7 +396,7 @@ static void step(uint32_t now)
         return;
     }
     if (animating) {
-        if (now - anim_start >= ANIM_MS) {
+        if (now - anim_start >= anim_ms) {
             animating = false;
             if (combat.finished) {
                 if (at_modal) {
@@ -459,6 +480,43 @@ static void draw_fighter(gfx_t *g, int side, uint32_t now)
         fighter_height[side] = sprite_guara(g, l->color, l->head, l->stage, eye_fighter(side, now), x, BASE_Y,
                                             frame, side == 1 ? GFX_MIRROR : 0);
     }
+    /* Poção absorvida: quem bebeu pisca invertido (só a silhueta) */
+    uint32_t flash_at = FX_SIP_MS + FX_FLY_TOTAL_MS;
+    if (animating && item_fx && last.actor == side && t >= flash_at && fx_flash_on(t - flash_at)) {
+        static gfx_t sprite;
+        gfx_init(&sprite);
+        sprite_guara(&sprite, l->color, l->head, l->stage, eye_fighter(side, now), x, BASE_Y, frame,
+                     side == 1 ? GFX_MIRROR : 0);
+        fx_invert_silhouette(g, &sprite);
+    }
+}
+
+/*
+ * Poção: o frasco aparece ao lado de quem bebe, sobe e tomba 45° na direção
+ * dele, e as partículas voam da boca do frasco até ele.
+ */
+static void draw_item_fx(gfx_t *g, uint32_t now)
+{
+    if (!animating || !item_fx) {
+        return;
+    }
+    uint32_t t = now - anim_start;
+    int side = last.actor;
+    int fx = side == 0 ? X_PLAYER : X_OPPONENT;
+    int ix = side == 0 ? fx + ITEM_ICON_DX : fx - ITEM_ICON_DX - 16;
+    float degrees = side == 0 ? FX_POUR_DEGREES : -FX_POUR_DEGREES; /* o topo vai na direção de quem bebe */
+    if (t < FX_SIP_MS) {
+        int y = ITEM_ICON_Y - (int)(t * FX_RISE_PX / FX_SIP_MS);
+        fx_icon_rotated(g, last.icon, ix, y, degrees * (float)t / FX_SIP_MS);
+        return;
+    }
+    if (!item_absorbed) {
+        item_absorbed = true;
+        audio_magic();
+    }
+    int mx, my;
+    fx_icon_mouth(ix, ITEM_ICON_Y - FX_RISE_PX, degrees, &mx, &my);
+    fx_particles(g, mx, my, fx, BASE_Y - fighter_height[side] / 2, t - FX_SIP_MS);
 }
 
 /*
@@ -566,6 +624,7 @@ static void on_draw(gfx_t *g, uint32_t now)
     draw_fighter(g, 0, now);
     draw_fighter(g, 1, now);
     draw_hit(g, now);
+    draw_item_fx(g, now);
 
     if (!combat.finished) {
         draw_atb(g, 2, me);
@@ -583,7 +642,7 @@ static void on_draw(gfx_t *g, uint32_t now)
     uint32_t t = now - anim_start;
     if (animating) {
         /* Ícone da habilidade/item no centro, piscando cada vez mais rápido */
-        if (last.icon[0] && last.type != ACTION_ATTACK && t < 800) {
+        if (last.icon[0] && last.type != ACTION_ATTACK && !item_fx && t < 800) {
             uint32_t period = 200 - t * 160 / 800;
             if ((t / period) % 2 == 0) {
                 ui_icon_mode(g, last.icon, 56, 24, GFX_COPY, 0);
@@ -604,6 +663,15 @@ static void draw_over(gfx_t *g, uint32_t now)
 {
     uint32_t t = now - anim_start;
     if (!animating || t <= 150 || (int32_t)(intro_until - now) > 0) {
+        return;
+    }
+    if (item_fx) {
+        /* Textos do efeito da poção, junto com as piscadas, sobre quem bebeu */
+        uint32_t texts_at = FX_SIP_MS + FX_FLY_TOTAL_MS;
+        if (t >= texts_at) {
+            fx_texts(g, item_texts, item_n_texts, t - texts_at, last.actor == 0 ? X_PLAYER : X_OPPONENT,
+                     ITEM_TEXT_Y);
+        }
         return;
     }
     char msg[16] = "";

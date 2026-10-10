@@ -2,7 +2,6 @@
  * Tela principal: barra superior, Guará animado em 2x, balão de estado, animação
  * de uso de itens e o alarme dos despertadores/temporizador.
  */
-#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -13,6 +12,7 @@
 #include "battery.h"
 #include "widgets.h"
 #include "config.h"
+#include "item_fx.h"
 #include "modal.h"
 #include "persistence.h"
 #include "rtc_clock.h"
@@ -238,35 +238,18 @@ const screen_t SCREEN_HOME = {
 /* Uso de item: a tela principal aparece com a animação e depois volta       */
 /* ------------------------------------------------------------------------- */
 
-#define USE_MAX_TEXTS 8
-
 static struct {
     catalog_record_t item;
     uint32_t start;
     int last_frame;
-    uint32_t texts_at; /* início dos textos de efeito (0 = ainda não) */
-    bool absorbed;     /* partículas já lançadas (som tocado) */
-    bool new_mask;     /* refazer a máscara da silhueta na primeira piscada */
-    char texts[USE_MAX_TEXTS][20];
+    bool absorbed; /* partículas já lançadas (som tocado) */
+    char texts[FX_MAX_TEXTS][FX_TEXT_SIZE];
     int n_texts;
 } usage;
 
 #define FRAME_BITE_MS 350 /* duração de cada quadro da mordida */
 #define BITES 5
-#define RISE_PX 8 /* a bebida e a poção sobem enquanto tombam */
-/* Bebida e poção: sobem e tombam até 45° na direção do Guará, como se ele as entornasse */
-#define SIP_MS 300
-#define POUR_DEGREES 45
-/* Partículas que voam do ícone até o Guará; depois ele pisca invertido */
-#define FLY_MS 350
-#define PARTICLES 8
-#define PARTICLE_DELAY_MS 20
-#define FLASH_AT (FLY_MS + PARTICLES * PARTICLE_DELAY_MS) /* contado do fim do consumo */
-#define FLASH_MS 450
-/* Textos de efeito: cada um sobe por TEXT_MS, um a cada TEXT_STEP_MS, na área do balão de estados */
-#define TEXT_MS 600
-#define TEXT_STEP_MS 200
-#define TEXT_X 22 /* centro da área livre à esquerda do Guará (onde fica o balão) */
+#define TEXT_X 22 /* textos do efeito: centro da área livre à esquerda do Guará (onde fica o balão) */
 #define TEXT_Y 44 /* linha de partida; sobe até Y=14 */
 #define GUARA_CENTER_Y 36 /* centro aproximado do Guará 2x, alvo das partículas */
 
@@ -277,9 +260,7 @@ static void item_use_on_open(void *param)
     catalog_read(CAT_ITEMS, id, &usage.item);
     usage.start = app_ms();
     usage.last_frame = -1;
-    usage.texts_at = 0;
     usage.absorbed = false;
-    usage.new_mask = true;
 }
 
 /* A animação não pode ser interrompida. */
@@ -288,48 +269,10 @@ static void item_use_on_key(const key_event_t *ev)
     (void)ev; /* a animação não pode ser interrompida */
 }
 
-/* Encerra a animação: piscadela e volta para onde estava. */
-static void item_use_finish(uint32_t now)
-{
-    home_set_wink(now + 1500);
-    ui_back();
-}
-
 /* Duração do consumo: as mordidas da comida ou o gole rápido da bebida e da poção. */
 static uint32_t consume_ms(void)
 {
-    return usage.item.type == ITEM_FOOD ? (BITES + 1) * FRAME_BITE_MS : SIP_MS;
-}
-
-/*
- * Desenha um ícone 16x16 girado `degrees` no sentido anti-horário (o topo
- * vai para a esquerda da tela, na direção do Guará), em torno do centro.
- * Amostra o pixel de origem de cada pixel de destino (vizinho mais próximo),
- * opaco como GFX_COPY dentro do quadrado girado.
- */
-static void draw_icon_rotated(gfx_t *g, const char *name, int x, int y, float degrees)
-{
-    gfx_bitmap_t bmp;
-    if (!vrom_lookup(name, &bmp)) {
-        return;
-    }
-    float a = degrees * (float)M_PI / 180.0f, c = cosf(a), s = sinf(a);
-    float cx = bmp.width / 2.0f, cy = bmp.height / 2.0f;
-    int stride = (bmp.width + 7) / 8;
-    int reach = (bmp.width > bmp.height ? bmp.width : bmp.height) * 3 / 4 + 1; /* meia diagonal */
-    for (int dy = -reach; dy <= reach; dy++) {
-        for (int dx = -reach; dx <= reach; dx++) {
-            /* rotação inversa: destino -> origem */
-            float px = dx + 0.5f, py = dy + 0.5f;
-            int sx = (int)floorf(px * c - py * s + cx);
-            int sy = (int)floorf(px * s + py * c + cy);
-            if (sx < 0 || sy < 0 || sx >= bmp.width || sy >= bmp.height) {
-                continue;
-            }
-            bool lit = bmp.data[sy * stride + sx / 8] & (0x80 >> (sx % 8));
-            gfx_pixel(g, x + (int)cx + dx, y + (int)cy + dy, lit ? GFX_WHITE : GFX_BLACK);
-        }
-    }
+    return usage.item.type == ITEM_FOOD ? (BITES + 1) * FRAME_BITE_MS : FX_SIP_MS;
 }
 
 /*
@@ -339,8 +282,8 @@ static void draw_icon_rotated(gfx_t *g, const char *name, int x, int y, float de
 static void draw_consume(gfx_t *g, uint32_t now, uint32_t t)
 {
     if (usage.item.type != ITEM_FOOD) {
-        int y = ITEM_Y - (int)(t * RISE_PX / SIP_MS);
-        draw_icon_rotated(g, usage.item.icon, ITEM_X, y, (float)t * POUR_DEGREES / SIP_MS);
+        int y = ITEM_Y - (int)(t * FX_RISE_PX / FX_SIP_MS);
+        fx_icon_rotated(g, usage.item.icon, ITEM_X, y, (float)t * FX_POUR_DEGREES / FX_SIP_MS);
         return;
     }
     ui_icon_mode(g, usage.item.icon, ITEM_X, ITEM_Y, GFX_COPY, 0);
@@ -358,135 +301,19 @@ static void draw_consume(gfx_t *g, uint32_t now, uint32_t t)
     usage.last_frame = frame;
 }
 
-/*
- * Inverte só o Guará (a silhueta, sem o fundo): compõe o sprite num quadro à
- * parte, marca o fundo externo por inundação a partir das bordas e inverte na
- * tela os pixels que não são fundo externo. A máscara é refeita só quando o
- * quadro muda.
- */
-static void invert_guara(gfx_t *g, int frame)
+/* Inverte só a silhueta do Guará: compõe o sprite num quadro à parte, igual ao da cena. */
+static void invert_guara(gfx_t *g, uint32_t now)
 {
-    static gfx_t sprite, outside;
-    static int mask_frame;
-    if (usage.new_mask) {
-        mask_frame = 0; /* primeira piscada deste item: máscara nova */
-        usage.new_mask = false;
-    }
-    if (frame == mask_frame) {
-        goto apply;
-    }
-    mask_frame = frame;
+    static gfx_t sprite;
     gfx_init(&sprite);
-    gfx_init(&outside);
-    sprite_guara(&sprite, g_guara.color, g_guara.head, g_guara.stage, EYE_HAPPY, GUARA_X, GUARA_BASE, frame,
-                 GFX_SCALE2X);
-    /* Sementes: pixels apagados da borda da tela */
-    for (int x = 0; x < GFX_WIDTH; x++) {
-        for (int y = 0; y < GFX_HEIGHT; y += GFX_HEIGHT - 1) {
-            if (!gfx_read_pixel(&sprite, x, y)) {
-                gfx_pixel(&outside, x, y, GFX_WHITE);
-            }
-        }
-    }
-    for (int y = 0; y < GFX_HEIGHT; y++) {
-        for (int x = 0; x < GFX_WIDTH; x += GFX_WIDTH - 1) {
-            if (!gfx_read_pixel(&sprite, x, y)) {
-                gfx_pixel(&outside, x, y, GFX_WHITE);
-            }
-        }
-    }
-    /* Varreduras de ida e volta até estabilizar (a silhueta é simples, bastam poucas) */
-    for (bool changed = true; changed;) {
-        changed = false;
-        for (int pass = 0; pass < 2; pass++) {
-            for (int i = 0; i < GFX_WIDTH * GFX_HEIGHT; i++) {
-                int k = pass == 0 ? i : GFX_WIDTH * GFX_HEIGHT - 1 - i;
-                int x = k % GFX_WIDTH, y = k / GFX_WIDTH;
-                if (gfx_read_pixel(&outside, x, y) || gfx_read_pixel(&sprite, x, y)) {
-                    continue;
-                }
-                if ((x > 0 && gfx_read_pixel(&outside, x - 1, y)) ||
-                    (x < GFX_WIDTH - 1 && gfx_read_pixel(&outside, x + 1, y)) ||
-                    (y > 0 && gfx_read_pixel(&outside, x, y - 1)) ||
-                    (y < GFX_HEIGHT - 1 && gfx_read_pixel(&outside, x, y + 1))) {
-                    gfx_pixel(&outside, x, y, GFX_WHITE);
-                    changed = true;
-                }
-            }
-        }
-    }
-apply:
-    for (int y = 0; y < GFX_HEIGHT; y++) {
-        for (int x = 0; x < GFX_WIDTH; x++) {
-            if (!gfx_read_pixel(&outside, x, y)) {
-                gfx_pixel(g, x, y, GFX_INVERT);
-            }
-        }
-    }
-}
-
-/* Partículas do ícone até o Guará (`t` contado do fim do consumo). */
-static void draw_particles(gfx_t *g, uint32_t t)
-{
-    /* Curva quadrática do ícone até o Guará, passando por cima; cada partícula com seu desvio.
-       Na bebida e na poção, saem da boca do frasco tombado (borda voltada ao Guará) */
-    int x0 = ITEM_X + 8, y0 = ITEM_Y + 8;
-    if (usage.item.type != ITEM_FOOD) {
-        y0 -= RISE_PX;
-        /* topo do ícone (8 px acima do centro) girado POUR_DEGREES */
-        float a = POUR_DEGREES * (float)M_PI / 180.0f;
-        x0 -= (int)lroundf(8 * sinf(a));
-        y0 -= (int)lroundf(8 * cosf(a));
-    }
-    const int x2 = GUARA_X, y2 = GUARA_CENTER_Y;
-    for (int i = 0; i < PARTICLES; i++) {
-        int32_t pt = (int32_t)t - i * PARTICLE_DELAY_MS;
-        if (pt < 0 || pt >= FLY_MS) {
-            continue;
-        }
-        int dx = (i % 4 - 2) * 4, dy = (i / 4) * 6 - 3;
-        int x1 = (x0 + x2) / 2 + dx, y1 = 4 + dy;
-        int u = pt * 64 / FLY_MS, v = 64 - u; /* parâmetro em 1/64 */
-        int x = (v * v * x0 + 2 * u * v * x1 + u * u * (x2 + dx)) / 4096;
-        int y = (v * v * y0 + 2 * u * v * y1 + u * u * (y2 + dy)) / 4096;
-        gfx_pixel(g, x, y, GFX_INVERT);
-        gfx_pixel(g, x - 1, y, GFX_INVERT);
-        gfx_pixel(g, x + 1, y, GFX_INVERT);
-        gfx_pixel(g, x, y - 1, GFX_INVERT);
-        gfx_pixel(g, x, y + 1, GFX_INVERT);
-    }
+    sprite_guara(&sprite, g_guara.color, g_guara.head, g_guara.stage, EYE_HAPPY, GUARA_X, GUARA_BASE,
+                 guara_frame(now), GFX_SCALE2X);
+    fx_invert_silhouette(g, &sprite);
 }
 
 /*
- * Textos do efeito com as abreviações do catálogo ("HP+150", "EP+12", "-PSN")
- * subindo um após o outro, como o dano no combate. Retorna se todos terminaram.
- */
-static bool draw_effect_texts(gfx_t *g, uint32_t now)
-{
-    if (usage.texts_at == 0) {
-        usage.texts_at = now;
-    }
-    uint32_t t = now - usage.texts_at;
-    bool running = false;
-    for (int i = 0; i < usage.n_texts; i++) {
-        int32_t st = (int32_t)t - i * TEXT_STEP_MS;
-        if (st < 0 || st >= TEXT_MS) {
-            running |= st < 0;
-            continue;
-        }
-        running = true;
-        /* 1 px a cada 20 ms: textos seguidos ficam 10 px (uma linha) um do outro */
-        int y = TEXT_Y - st / 20;
-        int w = gfx_text_width(usage.texts[i]);
-        gfx_rect_rounded_filled(g, TEXT_X - w / 2 - 2, y - 1, w + 4, 10, 2, GFX_BLACK);
-        gfx_text(g, TEXT_X - w / 2, y, usage.texts[i], GFX_WHITE);
-    }
-    return !running;
-}
-
-/*
- * Consumo (mordidas ou gole) com o ícone subindo; depois as partículas voam
- * até o Guará, ele pisca invertido e os textos do efeito sobem ao mesmo tempo.
+ * Consumo (mordidas ou gole) e, depois, as partículas voam até o Guará, ele
+ * pisca invertido e os textos do efeito sobem ao mesmo tempo.
  */
 static void item_use_on_draw(gfx_t *g, uint32_t now)
 {
@@ -501,55 +328,26 @@ static void item_use_on_draw(gfx_t *g, uint32_t now)
         usage.absorbed = true;
         audio_magic();
     }
-    draw_particles(g, ta);
-    if (ta < FLASH_AT) {
+    /* Partículas da boca do frasco tombado (bebida e poção) ou do centro da comida */
+    int x0 = ITEM_X + 8, y0 = ITEM_Y + 8;
+    if (usage.item.type != ITEM_FOOD) {
+        fx_icon_mouth(ITEM_X, ITEM_Y - FX_RISE_PX, FX_POUR_DEGREES, &x0, &y0);
+    }
+    fx_particles(g, x0, y0, GUARA_X, GUARA_CENTER_Y, ta);
+    if (ta < FX_FLY_TOTAL_MS) {
         return;
     }
-    bool flashing = ta < FLASH_AT + FLASH_MS;
-    if (flashing) {
-        anim.bite_happy_until = now + 75;
-        /* 3 piscadas invertidas de 75 ms */
-        if (((ta - FLASH_AT) / 75) % 2 == 0) {
-            invert_guara(g, guara_frame(now));
+    uint32_t tf = ta - FX_FLY_TOTAL_MS;
+    if (tf < FX_FLASH_MS) {
+        anim.bite_happy_until = now + FX_FLASH_STEP_MS;
+        if (fx_flash_on(tf)) {
+            invert_guara(g, now);
         }
     }
-    if (draw_effect_texts(g, now) && !flashing) {
-        item_use_finish(now);
-    }
-}
-
-/* Adiciona um texto de efeito no formato do catálogo ("HP+10"), se mudou e houver espaço. */
-static void add_effect_text(const char *code, int delta)
-{
-    if (delta != 0 && usage.n_texts < USE_MAX_TEXTS) {
-        snprintf(usage.texts[usage.n_texts++], sizeof(usage.texts[0]), "%s%+d", code, delta);
-    }
-}
-
-/*
- * Monta os textos com o que o item mudou de fato (antes x depois, já com os
- * limites), com as abreviações do CATALOG.md: HP, MP, EP, HU e FP em pontos
- * (energia, humor e alimentação em %), e "-PSN" etc. para estados curados.
- */
-static void build_effect_texts(const guara_t *before, const guara_t *after)
-{
-    static const struct {
-        state_t state;
-        const char *code;
-    } CURES[] = {{ST_POISONED, "PSN"}, {ST_BURNED, "BRN"},  {ST_PARALYZED, "PRL"}, {ST_FROZEN, "FRZ"},
-                 {ST_CONFUSED, "CNF"}, {ST_CURSED, "CRS"}, {ST_TIRED, "FND"},     {ST_HUNGRY, "HGR"},
-                 {ST_SLEEPING, "SLP"}};
-    usage.n_texts = 0;
-    add_effect_text("HP", after->hp - before->hp);
-    add_effect_text("MP", after->mp - before->mp);
-    add_effect_text("EP", (after->energy - before->energy) / 100);
-    add_effect_text("HU", (after->mood - before->mood) / 100);
-    add_effect_text("FP", (after->satiety - before->satiety) / 100);
-    uint32_t cured = before->states & ~after->states;
-    for (size_t i = 0; i < sizeof(CURES) / sizeof(CURES[0]) && usage.n_texts < USE_MAX_TEXTS; i++) {
-        if (cured & STATE_BIT(CURES[i].state)) {
-            snprintf(usage.texts[usage.n_texts++], sizeof(usage.texts[0]), "-%s", CURES[i].code);
-        }
+    bool texts = fx_texts(g, usage.texts, usage.n_texts, tf, TEXT_X, TEXT_Y);
+    if (!texts && tf >= FX_FLASH_MS) {
+        home_set_wink(now + 1500); /* depois do uso, piscadela e volta para onde estava */
+        ui_back();
     }
 }
 
@@ -578,7 +376,9 @@ void screens_use_item(int item_id)
         ui_alert(r.name, r.icon, reasons[res], "OK", NULL, NULL);
         return;
     }
-    build_effect_texts(&before, &g_guara);
+    fx_values_t from = {before.hp, before.mp, before.energy, before.mood, before.satiety, before.states};
+    fx_values_t to = {g_guara.hp, g_guara.mp, g_guara.energy, g_guara.mood, g_guara.satiety, g_guara.states};
+    usage.n_texts = fx_build_texts(&from, &to, usage.texts, FX_MAX_TEXTS);
     app_interact();
     app_mark_changed();
     ui_open(&SCREEN_USE_ITEM, (void *)(intptr_t)item_id);
