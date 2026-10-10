@@ -2,6 +2,7 @@
  * Tela principal: barra superior, Guará animado em 2x, balão de estado, animação
  * de uso de itens e o alarme dos despertadores/temporizador.
  */
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -253,8 +254,9 @@ static struct {
 #define FRAME_BITE_MS 450 /* duração de cada quadro da mordida */
 #define BITES 5
 #define RISE_PX 8 /* o ícone sobe enquanto é consumido */
-/* Bebida e poção: só sobem antes de virar partículas */
-#define SIP_MS 500
+/* Bebida e poção: sobem e tombam até 60° na direção do Guará, como se ele as entornasse */
+#define SIP_MS 900
+#define POUR_DEGREES 60
 /* Partículas que voam do ícone até o Guará; depois ele pisca invertido */
 #define FLY_MS 450
 #define PARTICLES 8
@@ -299,14 +301,49 @@ static uint32_t consume_ms(void)
     return usage.item.type == ITEM_FOOD ? (BITES + 1) * FRAME_BITE_MS : SIP_MS;
 }
 
-/* Ícone subindo enquanto é consumido; na comida, coberto pelas mordidas, uma a cada FRAME_BITE_MS. */
+/*
+ * Desenha um ícone 16x16 girado `degrees` no sentido anti-horário (o topo
+ * vai para a esquerda da tela, na direção do Guará), em torno do centro.
+ * Amostra o pixel de origem de cada pixel de destino (vizinho mais próximo),
+ * opaco como GFX_COPY dentro do quadrado girado.
+ */
+static void draw_icon_rotated(gfx_t *g, const char *name, int x, int y, float degrees)
+{
+    gfx_bitmap_t bmp;
+    if (!vrom_lookup(name, &bmp)) {
+        return;
+    }
+    float a = degrees * (float)M_PI / 180.0f, c = cosf(a), s = sinf(a);
+    float cx = bmp.width / 2.0f, cy = bmp.height / 2.0f;
+    int stride = (bmp.width + 7) / 8;
+    int reach = (bmp.width > bmp.height ? bmp.width : bmp.height) * 3 / 4 + 1; /* meia diagonal */
+    for (int dy = -reach; dy <= reach; dy++) {
+        for (int dx = -reach; dx <= reach; dx++) {
+            /* rotação inversa: destino -> origem */
+            float px = dx + 0.5f, py = dy + 0.5f;
+            int sx = (int)floorf(px * c - py * s + cx);
+            int sy = (int)floorf(px * s + py * c + cy);
+            if (sx < 0 || sy < 0 || sx >= bmp.width || sy >= bmp.height) {
+                continue;
+            }
+            bool lit = bmp.data[sy * stride + sx / 8] & (0x80 >> (sx % 8));
+            gfx_pixel(g, x + (int)cx + dx, y + (int)cy + dy, lit ? GFX_WHITE : GFX_BLACK);
+        }
+    }
+}
+
+/*
+ * Ícone subindo enquanto é consumido: a comida é coberta pelas mordidas, uma a
+ * cada FRAME_BITE_MS; a bebida e a poção tombam na direção do Guará.
+ */
 static void draw_consume(gfx_t *g, uint32_t now, uint32_t t)
 {
     int y = ITEM_Y - (int)(t * RISE_PX / consume_ms());
-    ui_icon_mode(g, usage.item.icon, ITEM_X, y, GFX_COPY, 0);
     if (usage.item.type != ITEM_FOOD) {
+        draw_icon_rotated(g, usage.item.icon, ITEM_X, y, (float)t * POUR_DEGREES / SIP_MS);
         return;
     }
+    ui_icon_mode(g, usage.item.icon, ITEM_X, y, GFX_COPY, 0);
     int frame = (int)(t / FRAME_BITE_MS);
     if (frame >= 1) {
         char name[12];
@@ -391,8 +428,16 @@ apply:
 /* Partículas do ícone até o Guará (`t` contado do fim do consumo). */
 static void draw_particles(gfx_t *g, uint32_t t)
 {
-    /* Curva quadrática do ícone até o Guará, passando por cima; cada partícula com seu desvio */
-    const int x0 = ITEM_X + 8, y0 = ITEM_Y - RISE_PX + 8, x2 = GUARA_X, y2 = GUARA_CENTER_Y;
+    /* Curva quadrática do ícone até o Guará, passando por cima; cada partícula com seu desvio.
+       Na bebida e na poção, saem da boca do frasco tombado (borda voltada ao Guará) */
+    int x0 = ITEM_X + 8, y0 = ITEM_Y - RISE_PX + 8;
+    if (usage.item.type != ITEM_FOOD) {
+        /* topo do ícone (8 px acima do centro) girado POUR_DEGREES */
+        float a = POUR_DEGREES * (float)M_PI / 180.0f;
+        x0 -= (int)lroundf(8 * sinf(a));
+        y0 -= (int)lroundf(8 * cosf(a));
+    }
+    const int x2 = GUARA_X, y2 = GUARA_CENTER_Y;
     for (int i = 0; i < PARTICLES; i++) {
         int32_t pt = (int32_t)t - i * PARTICLE_DELAY_MS;
         if (pt < 0 || pt >= FLY_MS) {
