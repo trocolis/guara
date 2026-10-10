@@ -83,25 +83,19 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 
 | Arquivo                         | Tamanho | Uso                         | Origem         |
 | ------------------------------- | ------- | --------------------------- | -------------- |
-| `INSTRUMENTO_22.bmp`            | 16x16   | **sem uso**                 |                |
 | `add.bmp`                       | 16x16   | firmware / jogos de exemplo | Bruno Trócolis |
-| `adjustments.bmp`               | 16x16   | firmware / jogos de exemplo |                |
-| `agility.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
-| `air.bmp`                       | 16x16   | firmware / jogos de exemplo |                |
-| `alarm.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
-| `anel.bmp`                      | 16x16   | **sem uso**                 |                |
-| `angry.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
-| `anti_burn.bmp`                 | 16x16   | catálogo                    |                |
-| `anti_confusion.bmp`            | 16x16   | catálogo                    |                |
-| `anti_paralysis.bmp`            | 16x16   | catálogo                    |                |
-| `antidote.bmp`                  | 16x16   | catálogo                    |                |
-| `antifreeze.bmp`                | 16x16   | catálogo                    |                |
+| `adjustments.bmp`               | 16x16   | firmware / jogos de exemplo | Bruno Trócolis |
+| `agility.bmp`                   | 16x16   | firmware / jogos de exemplo | Bruno Trócolis |
+| `air.bmp`                       | 16x16   | firmware / jogos de exemplo | Bruno Trócolis |
+| `alarm.bmp`                     | 16x16   | firmware / jogos de exemplo | Bruno Trócolis |
+| `angry.bmp`                     | 16x16   | firmware / jogos de exemplo | Bruno Trócolis |
+| `anti_burn.bmp`                 | 16x16   | catálogo                    | Bruno Trócolis |
+| `anti_confusion.bmp`            | 16x16   | catálogo                    | Bruno Trócolis |
+| `anti_paralysis.bmp`            | 16x16   | catálogo                    | Bruno Trócolis |
+| `antidote.bmp`                  | 16x16   | catálogo                    | Bruno Trócolis |
+| `antifreeze.bmp`                | 16x16   | catálogo                    | Bruno Trócolis |
 | `apple.bmp`                     | 16x16   | catálogo                    |                |
 | `arena.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
-| `arquivo_gravacao_audio_16.bmp` | 16x16   | **sem uso**                 |                |
-| `arquivo_mensagem_carta_16.bmp` | 16x16   | **sem uso**                 |                |
-| `arquivo_pacote_pkg_16.bmp`     | 16x16   | **sem uso**                 |                |
-| `arquivo_script_lua_16.bmp`     | 16x16   | **sem uso**                 |                |
 | `attack.bmp`                    | 16x16   | firmware / jogos de exemplo |                |
 | `avocado.bmp`                   | 16x16   | catálogo                    |                |
 | `awakening.bmp`                 | 16x16   | catálogo                    |                |
@@ -109,7 +103,6 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `banana_smoothie.bmp`           | 16x16   | catálogo                    |                |
 | `battery.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
 | `beans.bmp`                     | 16x16   | catálogo                    |                |
-| `bluetooth.bmp`                 | 16x16   | **sem uso**                 |                |
 | `book.bmp`                      | 16x16   | firmware / jogos de exemplo |                |
 | `boom_box.bmp`                  | 16x16   | firmware / jogos de exemplo |                |
 | `bored.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
@@ -120,26 +113,20 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `burning.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
 | `cake.bmp`                      | 16x16   | catálogo                    |                |
 | `calendar.bmp`                  | 16x16   | firmware / jogos de exemplo |                |
-| `cansaco_sono_16.bmp`           | 16x16   | **sem uso**                 |                |
 | `carrot.bmp`                    | 16x16   | catálogo                    |                |
-| `chave_inglesa.bmp`             | 16x16   | **sem uso**                 |                |
 | `cherry.bmp`                    | 16x16   | catálogo                    |                |
 | `chicken.bmp`                   | 16x16   | catálogo                    |                |
 | `chip.bmp`                      | 16x16   | firmware / jogos de exemplo |                |
 | `clock.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
 | `coffee.bmp`                    | 16x16   | catálogo                    |                |
-| `confusao_confuso_16.bmp`       | 16x16   | **sem uso**                 |                |
 | `confused.bmp`                  | 16x16   | firmware / jogos de exemplo |                |
-| `congelamento_congelado_16.bmp` | 16x16   | **sem uso**                 |                |
 | `connect.bmp`                   | 16x16   | firmware                    | Bruno Trócolis |
 | `cookie.bmp`                    | 16x16   | catálogo                    |                |
 | `croissant.bmp`                 | 16x16   | catálogo                    |                |
 | `crystal.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
 | `cupcake.bmp`                   | 16x16   | catálogo                    |                |
-| `curativo.bmp`                  | 16x16   | **sem uso**                 |                |
 | `cursed.bmp`                    | 16x16   | firmware / jogos de exemplo |                |
 | `defense.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
-| `documento_desconhecido.bmp`    | 16x16   | **sem uso**                 |                |
 | `donut.bmp`                     | 16x16   | catálogo                    |                |
 | `drinking_water.bmp`            | 16x16   | catálogo                    |                |
 | `earth.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
@@ -148,7 +135,6 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `energy.bmp`                    | 16x16   | firmware / jogos de exemplo |                |
 | `energy_drink.bmp`              | 16x16   | catálogo                    |                |
 | `equipment.bmp`                 | 16x16   | firmware / jogos de exemplo |                |
-| `estado_sono_dormindo_16.bmp`   | 16x16   | **sem uso**                 |                |
 | `fainted.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
 | `fight.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
 | `file.bmp`                      | 16x16   | firmware / jogos de exemplo |                |
@@ -166,7 +152,6 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `ham.bmp`                       | 16x16   | catálogo                    |                |
 | `hamburger.bmp`                 | 16x16   | firmware / jogos de exemplo |                |
 | `happy.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
-| `hapy.bmp`                      | 16x16   | **sem uso**                 |                |
 | `health.bmp`                    | 16x16   | firmware / jogos de exemplo |                |
 | `hot_dog.bmp`                   | 16x16   | catálogo                    |                |
 | `hp.bmp`                        | 16x16   | firmware / jogos de exemplo |                |
@@ -191,7 +176,6 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `meat.bmp`                      | 16x16   | catálogo                    |                |
 | `mega_potion.bmp`               | 16x16   | catálogo                    |                |
 | `mega_tonic.bmp`                | 16x16   | catálogo                    |                |
-| `menu_guarda_roupas_16.bmp`     | 16x16   | **sem uso**                 |                |
 | `milk.bmp`                      | 16x16   | catálogo                    |                |
 | `moon_face.bmp`                 | 16x16   | firmware / jogos de exemplo |                |
 | `mp.bmp`                        | 16x16   | firmware / jogos de exemplo |                |
@@ -199,11 +183,9 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `mute.bmp`                      | 16x16   | firmware / jogos de exemplo |                |
 | `neutral.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
 | `not.bmp`                       | 16x16   | firmware                    |                |
-| `nota_musical_faixa_16.bmp`     | 16x16   | **sem uso**                 |                |
 | `on_off.bmp`                    | 16x16   | firmware / jogos de exemplo |                |
 | `onion.bmp`                     | 16x16   | catálogo                    |                |
 | `orange.bmp`                    | 16x16   | catálogo                    |                |
-| `paralisia_paralisado_16.bmp`   | 16x16   | **sem uso**                 |                |
 | `paralyzed.bmp`                 | 16x16   | firmware / jogos de exemplo |                |
 | `peas.bmp`                      | 16x16   | catálogo                    |                |
 | `pie.bmp`                       | 16x16   | catálogo                    |                |
@@ -218,11 +200,9 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `potion.bmp`                    | 16x16   | catálogo                    |                |
 | `psychic.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
 | `pumpkin.bmp`                   | 16x16   | catálogo                    |                |
-| `queimadura_queimado_16.bmp`    | 16x16   | **sem uso**                 |                |
 | `radish.bmp`                    | 16x16   | catálogo                    |                |
 | `sad.bmp`                       | 16x16   | firmware / jogos de exemplo |                |
 | `satellite.bmp`                 | 16x16   | firmware / jogos de exemplo |                |
-| `saude_desmaio_16.bmp`          | 16x16   | **sem uso**                 |                |
 | `save.bmp`                      | 16x16   | firmware / jogos de exemplo |                |
 | `sd_card.bmp`                   | 16x16   | firmware / jogos de exemplo |                |
 | `search.bmp`                    | 16x16   | firmware / jogos de exemplo |                |
@@ -230,11 +210,7 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `shrimp.bmp`                    | 16x16   | catálogo                    |                |
 | `skewer.bmp`                    | 16x16   | catálogo                    |                |
 | `sleeping.bmp`                  | 16x16   | firmware / jogos de exemplo |                |
-| `slot_cabeca_16.bmp`            | 16x16   | **sem uso**                 |                |
-| `slot_corpo_16.bmp`             | 16x16   | **sem uso**                 |                |
-| `slot_mao_ataque_16.bmp`        | 16x16   | **sem uso**                 |                |
-| `slot_mao_defesa_16.bmp`        | 16x16   | **sem uso**                 |                |
-| `slot_pes_16.bmp`               | 16x16   | **sem uso**                 |                |
+| `slot_mao_ataque_16.bmp`        | 16x16   | testes (catálogo de teste)  |                |
 | `soda.bmp`                      | 16x16   | catálogo                    |                |
 | `sound.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
 | `steak.bmp`                     | 16x16   | catálogo                    |                |
@@ -245,7 +221,6 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `sundae.bmp`                    | 16x16   | catálogo                    |                |
 | `super_potion.bmp`              | 16x16   | catálogo                    |                |
 | `super_tonic.bmp`               | 16x16   | catálogo                    |                |
-| `surpresa_susto_16.bmp`         | 16x16   | **sem uso**                 |                |
 | `taco.bmp`                      | 16x16   | catálogo                    |                |
 | `tape.bmp`                      | 16x16   | firmware / jogos de exemplo |                |
 | `tea.bmp`                       | 16x16   | catálogo                    |                |
@@ -254,11 +229,9 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `tonic.bmp`                     | 16x16   | catálogo                    |                |
 | `training.bmp`                  | 16x16   | firmware / jogos de exemplo |                |
 | `txt.bmp`                       | 16x16   | firmware / jogos de exemplo |                |
-| `txt_alt.bmp`                   | 16x16   | **sem uso**                 |                |
 | `ultra_potion.bmp`              | 16x16   | catálogo                    |                |
 | `ultra_tonic.bmp`               | 16x16   | catálogo                    |                |
 | `up.bmp`                        | 16x16   | firmware / jogos de exemplo |                |
-| `veneno_envenenado_16.bmp`      | 16x16   | **sem uso**                 |                |
 | `water.bmp`                     | 16x16   | firmware / jogos de exemplo |                |
 | `wifi.bmp`                      | 16x16   | firmware / jogos de exemplo |                |
 | `wristwatch.bmp`                | 16x16   | firmware / jogos de exemplo |                |
@@ -341,9 +314,7 @@ A coluna **Uso** foi gerada a partir do código, do catálogo e dos jogos de exe
 | `speech_balloon.bmp` | 20x24 | firmware / jogos de exemplo | Bruno Trócolis |
 | `status_alarm.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
 | `status_bateria_ausente_8x8.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
-| `status_bluetooth.bmp` | 8x8 | **sem uso** | Bruno Trócolis |
 | `status_mute.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
-| `status_relogio_8x8.bmp` | 8x8 | **sem uso** | Bruno Trócolis |
 | `status_timer.bmp` | 8x8 | firmware / jogos de exemplo | Bruno Trócolis |
 | `wifi_1.bmp` | 8x8 | barra superior | Bruno Trócolis |
 | `wifi_2.bmp` | 8x8 | barra superior | Bruno Trócolis |
