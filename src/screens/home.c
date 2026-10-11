@@ -15,7 +15,6 @@
 #include "radio_link.h"
 #include "item_fx.h"
 #include "modal.h"
-#include "persistence.h"
 #include "rtc_clock.h"
 #include "sprite.h"
 #include "storage.h"
@@ -231,18 +230,11 @@ static void on_draw(gfx_t *g, uint32_t now)
     draw_home_scene(g, now, true);
 }
 
-/* Ao voltar do menu, grava se houver alterações (Pilar 2). */
-static void on_resume(void)
-{
-    /* Voltou do menu: grava se algo mudou (Pilar 2) */
-    persist_save_if_dirty(&g_guara);
-}
 
 const screen_t SCREEN_HOME = {
     .name = "principal",
     .on_key = on_key,
     .on_draw = on_draw,
-    .on_resume = on_resume,
 };
 
 /* ------------------------------------------------------------------------- */

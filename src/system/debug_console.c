@@ -16,6 +16,7 @@
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "persistence.h"
 #include "rtc_clock.h"
 
 /* Imprime o último quadro como 'FB:' + 2048 dígitos hexadecimais. */
@@ -42,10 +43,11 @@ static void print_state(void)
     char hour[8];
     clock_format_hhmm(hour, sizeof(hour));
     printf("ST: guara=%d nome=%s nv=%d xp=%lu hp=%d/%d en=%d hu=%d al=%d sa=%d estados=0x%08lx nat=%d est=%d "
-           "hora=%s bat=%dmV(%d%%) chrg=%d heap=%u\n",
+           "hora=%s bat=%dmV(%d%%) chrg=%d heap=%u gravacoes=%lu pendente=%d\n",
            g_has_guara, g->name, g->level, (unsigned long)g->xp, g->hp, g->hp_max, g->energy / 100, g->mood / 100,
            g->satiety / 100, g->health / 100, (unsigned long)g->states, g->nature, g->stage, hour, battery_mv(),
-           battery_percent(), battery_charging(), (unsigned)esp_get_free_heap_size());
+           battery_percent(), battery_charging(), (unsigned)esp_get_free_heap_size(), (unsigned long)persist_counter(),
+           persist_dirty());
     fflush(stdout);
 }
 

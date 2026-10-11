@@ -1,6 +1,7 @@
 /*
- * Persistência em 3 pilares (README > Proteção da Memória Flash): espelho na
- * RTC RAM, gravação por eventos e anel de 16 slots na partição 'save'.
+ * Persistência em 3 pilares (README > Proteção da Flash): espelho na RTC RAM,
+ * gravação por eventos (e a cada 6 h com alterações) e anel de 16 slots na
+ * partição 'save'.
  * Também mapeia a partição 'storage' (VROM + catálogo).
  */
 #include "persistence.h"
@@ -10,6 +11,7 @@
 #include "esp_attr.h"
 #include "esp_log.h"
 #include "esp_partition.h"
+#include "rtc_clock.h"
 #include "save.h"
 
 static const char *TAG = "persist";
@@ -21,7 +23,14 @@ static const esp_partition_t *part_save;
 static ring_t ring;
 static bool dirty;
 
-static RTC_DATA_ATTR uint8_t rtc_mirror[SAVE_SIZE];
+/*
+ * Espelho fora da inicialização do bootloader: sobrevive ao deep sleep e também
+ * a travamentos, watchdog e esp_restart. Só some sem energia; o CRC do save
+ * descarta o lixo do boot frio.
+ */
+static RTC_NOINIT_ATTR uint8_t rtc_mirror[SAVE_SIZE];
+/* Hora (clock_now) da última gravação na Flash; 0 = ainda não conhecida neste boot */
+static RTC_DATA_ATTR uint32_t saved_at;
 
 /* Mapeia a partição storage na memória e abre VROM e catálogo. */
 storage_status_t persist_open_storage(void)
@@ -121,6 +130,7 @@ bool persist_save(const guara_t *g)
         return false;
     }
     dirty = false;
+    saved_at = clock_is_valid() ? clock_now() : 0;
     ESP_LOGI(TAG, "Save gravado (slot %d, gravação %lu)", ring.last_slot, (unsigned long)ring.counter);
     return true;
 }
@@ -131,6 +141,24 @@ void persist_save_if_dirty(const guara_t *g)
     if (dirty) {
         persist_save(g);
     }
+}
+
+/*
+ * Verdadeiro se há alterações pendentes e a última gravação tem `interval_s`
+ * segundos ou mais (save periódico). Sem a hora da última gravação (boot frio,
+ * hora inválida até agora), começa a contar a partir de agora.
+ */
+bool persist_save_due(uint32_t interval_s)
+{
+    if (!dirty || !clock_is_valid()) {
+        return false;
+    }
+    uint32_t now = clock_now();
+    if (saved_at == 0 || saved_at > now) {
+        saved_at = now;
+        return false;
+    }
+    return now - saved_at >= interval_s;
 }
 
 /* Apaga o anel e invalida o espelho (Factory Rebirth). */

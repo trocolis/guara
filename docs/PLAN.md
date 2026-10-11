@@ -10,7 +10,7 @@ Legenda: `[ ]` pendente · `[x]` feito · ✅ decidido/adotado · ⏳ pendente
 
 | Fase | Status |
 |---|---|
-| 0 — Decisões | ✅ exceto D7 e D10 (hardware) |
+| 0 — Decisões | ✅ exceto D7, D10 e D11 (hardware) |
 | 1 — Esqueleto | ✅ |
 | 2 — HAL | ✅ display, botões, buzzer, bateria, SD, relógio, deep sleep. Medir FPS e consumo no hardware |
 | 3 — Storage | ✅ packer v2, VROM, catálogo, save em anel, NVS, `upload_storage` |
@@ -42,6 +42,7 @@ Decisões caras de mudar depois. Nenhum código de firmware antes delas.
 | D8 | Formato gráfico na VROM | ✅ **Adotado (padrão):** O packer converte os BMPs para 1 bpp compactado em linhas (row-major, sem cabeçalho BMP). O firmware desenha direto no framebuffer, sem converter nada em runtime. |
 | D9 | Transparência 1-bit | ✅ **Adotado (padrão):** Modos de desenho `COPY`, `OR` (só pixels brancos), `AND` (pixels pretos apagam) e `XOR`. A composição cabeça+corpo+olhos e a mordida usam esses modos, com máscara opcional por sprite (`<nome>_mask.bmp`). |
 | D10 | Despertar por alarme do DS3231 | ⏳ **Pendente:** O timer de deep sleep do ESP32 usa o oscilador RC interno e pode atrasar despertadores longos em minutos. **(R)** Ligar o pino INT/SQW do DS3231 ao GPIO4 (pino RTC livre, com pull-up) e acordar pelo alarme do próprio DS3231. |
+| D11 | Desligamento com save | ⏳ **Pendente (em projeto pelo autor):** bateria interna; o botão de desligar avisa o ESP32, que grava o save pendente e devolve um sinal confirmando o corte da energia. Com isso, o save periódico de 6 h vira só a proteção contra falta de energia abrupta. |
 
 Tabela de partições proposta (4 MB):
 

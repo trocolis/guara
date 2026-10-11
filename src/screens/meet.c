@@ -101,8 +101,7 @@ static void offer_answer(int r, void *ctx)
     int have = g_guara.inventory[o->item_id];
     int added = have + o->count > 255 ? 255 - have : o->count;
     g_guara.inventory[o->item_id] = (uint8_t)(have + added);
-    app_mark_changed();
-    app_save();
+    app_mark_changed(); /* só o espelho: grava na Flash no próximo save (periódico ou deep sleep) */
     link_tx_log_add(&accepted, o->from.uid, o->tx);
     remember(&o->from);
     reply(meet.prompt_mac, LINK_ACCEPT, o->tx);
@@ -227,7 +226,6 @@ static void handle_answer(const uint8_t mac[6], const link_msg_t *m)
         int have = g_guara.inventory[meet.item_id];
         g_guara.inventory[meet.item_id] = (uint8_t)(have > meet.count ? have - meet.count : 0);
         app_mark_changed();
-        app_save();
         audio_level_up();
         snprintf(msg, sizeof(msg), "%s recebeu %d %s!", meet.to_name, meet.count, name);
         ui_alert("CONECTAR", "inventory", msg, "OK", sent_done, NULL);

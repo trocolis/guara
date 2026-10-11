@@ -17,7 +17,7 @@ Guará is a virtual-pet / RPG handheld built on an ESP32 (NodeMCU-32S) with a 12
 - **Code:** identifiers, functions, files and folders are descriptive and in **English**; comments are in **Portuguese** and abundant: a header comment per file and a comment before every function. UI text shown on the device stays in Portuguese.
 - **Versioning:** `v#.#.#` = release.feature.patch (`-DGUARA_VERSION` in `platformio.ini`, history in `CHANGELOG.md`). Bump only for firmware or storage changes; documentation-only changes are just committed.
 - **Every executed scope** gets its own commit and a `CHANGELOG.md` entry.
-- **0.x.x builds** unlock the whole catalog (every item at 255 units, all equipment and skills) at birth and on every boot (`guara_is_development_version` / `guara_unlock_catalog`).
+- **0.x.x builds** unlock the whole catalog (every item at 255 units, all equipment and skills) at birth only, so inventory consumption can be tested (`guara_is_development_version` / `guara_unlock_catalog`).
 
 **Side convention:** whenever the README says "direita"/"esquerda", it means the **device's** side — the device's right is the user's left (e.g. the clock "no canto superior direito" is drawn at the viewer's top-left). Pixel coordinates are plain screen coordinates (X=0 at the viewer's left). **Exception:** the d-pad buttons are named by screen direction from the user's view (button "Direita", GPIO27, moves +X). In code, `KEY_LEFT`/`KEY_RIGHT` are screen directions; the GPIO mapping is in `src/hal/pins.h`. Check `bitmaps/exemple/*.bmp` mockups when in doubt.
 
@@ -80,7 +80,7 @@ python3 tools/bmp-builder/bmp_builder.py in.png -o bitmaps/icons/x.bmp --preset 
 UI patterns:
 - A screen is a `screen_t` with callbacks (`on_open`, `on_resume`, `on_close`, `on_key`, `on_draw`, and the optional `on_draw_over`, drawn on top of the modals above the screen). After 1 min without keys the app returns to the home screen, except while sleep is blocked or on screens with `keep_open` (reader, image viewer). Reusable screens that can be stacked (modals, `submenu`) keep per-layer state indexed by `ui_current_layer()`.
 - Modal results arrive through a callback *after* the modal has been popped, so the callback may open new screens.
-- Call `app_mark_changed()` after changing `g_guara`. It mirrors to RTC RAM and sets the dirty flag; the flash save happens when returning to the menu or main screen. Use `app_save()` for critical events.
+- Call `app_mark_changed()` after changing `g_guara`. It mirrors to RTC RAM (`RTC_NOINIT_ATTR`, survives deep sleep and resets) and sets the dirty flag; the flash save happens on deep sleep or every 6 h (`PERSIST_SAVE_INTERVAL_S`), never on navigation. Use `app_save()` only for critical events (birth, level up, evolution, fainting, critical battery, before OTA); avoid flash writes for data that changes often.
 
 The firmware builds with `-Werror` from ESP-IDF; `-Wno-format-truncation` is intentional (`snprintf` truncation into fixed buffers). `-Wshadow` is enabled (as a warning) to catch shadowing bugs.
 

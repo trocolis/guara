@@ -95,7 +95,7 @@ O protótipo é montado numa estrutura impressa em 3D, com os módulos ligados p
 		- As telas que impedem o deep sleep (jogos, combate, cronômetro e alarme tocando) também impedem o modo Ocioso.
 		- O primeiro toque em qualquer botão só volta ao modo Ativo, sem agir na tela; a tecla é ignorada até ser solta.
 		- O modo Ocioso não depende da configuração de Economia e vale também com o USB ligado.
-	3. **Deep sleep:** entra após o tempo de **Economia** sem uso (Ajustes > Energia: 1, 2, 5 ou 10 min, ou desativado). Antes de dormir, o sistema grava o save pendente, desmonta o cartão SD e desliga o Wi-Fi. A CPU e os rádios desligam; ficam ligados o domínio RTC e a RTC RAM, com o estado do Guará. O display fica desligado (comando `0xAE`).
+	3. **Deep sleep:** entra após o tempo de **Economia** sem uso (Ajustes > Energia: 1, 2, 5 ou 10 min, ou desativado). Antes de dormir, o sistema grava o save, se houver alterações pendentes, desmonta o cartão SD e desliga o Wi-Fi. A CPU e os rádios desligam; ficam ligados o domínio RTC e a RTC RAM, com o estado do Guará. O display fica desligado (comando `0xAE`).
 		> ⏳ Pendente (decisão D7 em `docs/PLAN.md`): o consumo real em deep sleep ainda precisa ser medido. Com a montagem atual (divisor da bateria ligado direto, conversor USB-serial do NodeMCU, OLED e SD sem corte de energia), ele fica bem acima dos ~10 µA do ESP32 sozinho.
 	4. **Despertar:** pelos botões Cima, Baixo, A e B, ou pelo timer, no horário do próximo despertador ou do fim do temporizador.
 		- O coprocessador **ULP** confere os quatro botões a cada ~20–30 ms e acorda o chip quando um deles vai a nível baixo. No ESP32, o `ext1` só acorda com "todos os pinos em nível baixo" ou "algum pino em nível alto", o que não serve para vários botões ligados ao GND, e o `ext0` não pode ser usado junto com o ULP. Se o ULP falhar, o Cima volta a acordar pelo `ext0`. Esquerda e Direita não acordam o aparelho.
@@ -152,8 +152,8 @@ graph TD
     RTC -->|acordar do deep sleep| RAM
 ```
 
-1. **RTC RAM:** toda alteração no Guará é espelhada na RTC RAM (`RTC_DATA_ATTR`), que sobrevive ao deep sleep. A rotina normal (alimentar, brincar, dormir) não grava na Flash.
-2. **Gravação por eventos:** a gravação na Flash acontece só quando há alterações pendentes (*dirty flag*) e ocorre um destes eventos: voltar ao menu principal ou à tela principal, subir de nível, evoluir, desmaiar, entrar em deep sleep ou bateria crítica.
+1. **RTC RAM:** toda alteração no Guará é espelhada na RTC RAM (`RTC_NOINIT_ATTR`), que sobrevive ao deep sleep e também a travamentos, watchdog e reinícios (`esp_restart`); só some sem energia, e o CRC descarta o conteúdo inválido do boot frio. A rotina normal (alimentar, brincar, usar itens, trocar, dormir) e a recuperação temporal ao acordar não gravam na Flash: num boot frio, a simulação é refeita a partir do horário do último save.
+2. **Gravação por eventos:** grava na hora ao nascer, subir de nível, evoluir, desmaiar, com bateria crítica e antes de uma atualização. As outras alterações ficam pendentes (*dirty flag*) e são gravadas ao entrar em deep sleep (com a CPU desligada, ninguém mede a bateria) ou pelo **save periódico**, quando a última gravação tem **6 h** ou mais (`PERSIST_SAVE_INTERVAL_S`, conferido a cada minuto acordado). Navegar pelos menus não grava. Uma falta de energia abrupta perde no máximo o que mudou desde a última gravação.
 3. **Anel com nivelamento de desgaste:** a partição `save` tem 2 setores de 4 KB com 8 slots de 512 bytes cada, 16 slots no total. Cada gravação usa o próximo slot, e um setor só é apagado quando o anel volta a ele. No boot vale o slot com CRC válido e o maior contador de gravações. Isso multiplica a vida útil por 16: cerca de 1.600.000 gravações.
 
 ### Formato do `storage.bin`
@@ -296,7 +296,7 @@ Versão no formato `v#.#.#` (lançamento.funcionalidade.correção), definida em
 - **Funcionalidade (`#.+1.0`):** novas funcionalidades, mecânicas ou itens no catálogo.
 - **Lançamento (`+1.0.0`):** versões oficiais.
 - A versão só muda com alterações no firmware ou no storage (VROM, catálogo, formato do save). Mudanças só na documentação geram apenas um commit.
-- **Versões `0.x.x`:** o Guará tem todo o catálogo liberado, com todos os itens com 255 unidades e todos os equipamentos e habilidades possuídos. A liberação acontece no nascimento e a cada boot, para facilitar os testes (`guara_is_development_version` e `guara_unlock_catalog`). A regra deixa de valer a partir da `1.0.0`.
+- **Versões `0.x.x`:** o Guará tem todo o catálogo liberado, com todos os itens com 255 unidades e todos os equipamentos e habilidades possuídos. A liberação acontece só no nascimento, para facilitar os testes sem impedir o teste do controle de inventário: os itens gastos não voltam (um Factory Rebirth libera tudo de novo) (`guara_is_development_version` e `guara_unlock_catalog`). A regra deixa de valer a partir da `1.0.0`.
 
 ### Wi-Fi sob demanda
 
@@ -334,8 +334,8 @@ Implementação: `src/screens/meet.c` (tela), `src/system/radio_link.c` (rádio)
 	- por **Inventário > Compartilhar**: depois da quantidade, o mesmo modal mostra "Buscando... Dar 3 Maçã" e, com os resultados, DAR (A); A no Guará escolhido envia a oferta e mostra "Aguardando Fulano..." (B cancela a espera).
 - **Troca de itens:**
 	1. Quem envia sorteia um `tx` e repete o `OFFER` a cada 700 ms até a resposta, por até 30 s ("Fulano não respondeu.").
-	2. Quem recebe, com a tela Conectar aberta, toca um bipe e pergunta "Fulano quer te dar 3 Maçã. Aceitar?". SIM soma os itens (limitado a 255 por item; o excedente se perde), grava o save e responde `ACCEPT`; NAO responde `DECLINE`. Itens que o catálogo de quem recebe não tem são recusados sozinhos.
-	3. Quem envia só desconta os itens ao receber o `ACCEPT`, uma vez por `tx`, grava o save e mostra "Fulano recebeu 3 Maçã!"; o OK volta ao Inventário. Um `ACCEPT` que chegar depois de cancelar a espera ainda desconta.
+	2. Quem recebe, com a tela Conectar aberta, toca um bipe e pergunta "Fulano quer te dar 3 Maçã. Aceitar?". SIM soma os itens (limitado a 255 por item; o excedente se perde), espelha na RTC RAM (a Flash grava no próximo save) e responde `ACCEPT`; NAO responde `DECLINE`. Itens que o catálogo de quem recebe não tem são recusados sozinhos.
+	3. Quem envia só desconta os itens ao receber o `ACCEPT`, uma vez por `tx`, e mostra "Fulano recebeu 3 Maçã!"; o OK volta ao Inventário. Um `ACCEPT` que chegar depois de cancelar a espera ainda desconta.
 	4. As respostas ficam registradas pelo par (UID, `tx`) nas 8 últimas ofertas aceitas e recusadas: uma oferta repetida porque a resposta se perdeu recebe a mesma resposta, sem somar de novo.
 	- Limite conhecido: se quem envia fechar a tela antes de o `ACCEPT` chegar, quem recebeu fica com os itens e quem enviou também.
 - **Ao terminar:** o fim de uma troca (o OK do aviso, dos dois lados, ou recusar a oferta) e o fim do combate (vitória, derrota ou conexão perdida) fecham também a busca e voltam à tela em que se estava antes: a tela principal, o Inventário, o sub-menu Conectar etc. Quem ofereceu ou desafiou e recebeu um "não" continua na busca, para escolher outro Guará.
@@ -381,7 +381,7 @@ As capturas desta seção estão em `bitmaps/exemple/`, ampliadas 4x (512x256).
 	![Teclado virtual](./bitmaps/exemple/screen_keyboard.bmp)
 
 - **Comportamento padrão:** B, "voltar" ou o fim de uma ação sempre retornam à tela anterior pelo caminho inverso, com a mesma posição e o mesmo item selecionado. Exemplo: depois de comer um item, a animação aparece na tela principal e o inventário volta com o item ainda selecionado.
-- **Volta automática:** com qualquer menu ou modal aberto por **1 minuto** sem nenhum botão, o aparelho fecha tudo e volta à tela principal (gravando o save pendente, como ao voltar com B). Não vale nas telas que impedem o sono (jogos, combate e cronômetro contando), com alarme tocando, antes do nascimento e nas telas de leitura, marcadas com `keep_open` (o leitor da Biblioteca e o visualizador de imagens).
+- **Volta automática:** com qualquer menu ou modal aberto por **1 minuto** sem nenhum botão, o aparelho fecha tudo e volta à tela principal. Não vale nas telas que impedem o sono (jogos, combate e cronômetro contando), com alarme tocando, antes do nascimento e nas telas de leitura, marcadas com `keep_open` (o leitor da Biblioteca e o visualizador de imagens).
 
 ### Boot
 

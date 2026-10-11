@@ -3,6 +3,15 @@
 Versionamento `v#.#.#` (release.feature.patch) conforme README > Implementação > Versionamento.
 Cada escopo executado gera um commit e uma entrada aqui.
 
+## v0.18.2 — 2026-10-10
+
+### Proteção da Flash
+- **Catálogo das 0.x.x só no nascimento:** deixa de ser liberado (e de marcar o save) a cada boot. Os itens gastos não voltam, o que permite testar o controle de inventário.
+- **Recuperação temporal sem gravar:** ao acordar, só atualiza o espelho da RTC RAM; o boot frio refaz a simulação a partir do último save.
+- **Espelho em `RTC_NOINIT_ATTR`:** sobrevive também a travamentos, watchdog e `esp_restart`, não só ao deep sleep.
+- **Save periódico de 6 h** (`PERSIST_SAVE_INTERVAL_S`) com alterações pendentes. Voltar ao menu ou à tela principal e as trocas de itens deixam de gravar; o deep sleep continua gravando se houver alterações.
+- **Console:** o `S` mostra `gravacoes` (contador do anel) e `pendente`.
+
 ## v0.18.1 — 2026-10-10
 
 ### Proteção da Flash

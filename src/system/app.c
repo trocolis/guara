@@ -216,11 +216,6 @@ void app_init(void)
 
     persist_init();
     g_has_guara = persist_load(&g_guara);
-    /* Regra das versões 0.x.x: todo o catálogo liberado (itens com 255 unidades) a cada boot */
-    if (g_has_guara && guara_is_development_version(GUARA_VERSION)) {
-        guara_unlock_catalog(&g_guara);
-        app_mark_changed();
-    }
     if (cold) {
         draw_boot(65);
     }
@@ -233,7 +228,8 @@ void app_init(void)
                                              g_cfg.wake_minute);
         if (min > 0) {
             ESP_LOGI(TAG, "Recuperação temporal: %lu minutos", (unsigned long)min);
-            app_mark_changed();
+            /* Só o espelho: sem a Flash, o boot frio refaz a simulação a partir do último save */
+            persist_mirror(&g_guara);
         }
     }
 
@@ -273,6 +269,8 @@ static void run_pet_minute(void)
     persist_mirror(&g_guara);
     if (!states_before && guara_has_state(&g_guara, ST_FAINTED)) {
         app_save(); /* desmaio é um evento crítico */
+    } else if (persist_save_due(PERSIST_SAVE_INTERVAL_S)) {
+        app_save(); /* save periódico: alterações pendentes há 6 h ou mais */
     }
 }
 

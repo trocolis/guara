@@ -5,7 +5,6 @@
 
 #include "app.h"
 #include "widgets.h"
-#include "persistence.h"
 #include "screens.h"
 
 /* Menu principal em carrossel (mockup bitmaps/exemple/main_menu.bmp). */
@@ -140,15 +139,9 @@ static void on_draw(gfx_t *g, uint32_t now)
     }
 }
 
-/* Ao voltar de um menu, grava se houver alterações (Pilar 2). */
-static void on_resume(void)
-{
-    persist_save_if_dirty(&g_guara);
-}
 
 const screen_t SCREEN_MENU = {
     .name = "menu",
     .on_key = on_key,
     .on_draw = on_draw,
-    .on_resume = on_resume,
 };
